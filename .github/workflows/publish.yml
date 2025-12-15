@@ -25,6 +25,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Configure npm for Trusted Publishing (OIDC)
+        # Create .npmrc with just the registry - NO token placeholder
+        # npm will use OIDC automatically when --provenance is used and id-token: write is set
+        run: |
+          echo "registry=https://registry.npmjs.org/" > ~/.npmrc
+          cat ~/.npmrc
+
       - name: Ensure tag matches package version
         run: |
           node - <<'NODE'
@@ -51,14 +58,19 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Show npm versions (debug)
+      - name: Debug npm config
         run: |
-          node --version
-          npm --version
-          npm config get registry
+          echo "Node version: $(node --version)"
+          echo "npm version: $(npm --version)"
+          echo "Registry: $(npm config get registry)"
+          echo "--- .npmrc contents ---"
+          cat ~/.npmrc 2>/dev/null || echo "(no ~/.npmrc)"
+          cat .npmrc 2>/dev/null || echo "(no .npmrc in project)"
+          echo "--- End .npmrc ---"
 
-      - name: Publish (Trusted Publishing)
-        # Uses npm Trusted Publishing (OIDC) - no npm token required.
-        run: npm publish --provenance --access public --ignore-scripts
+      - name: Publish (Trusted Publishing via OIDC)
+        # Uses npm Trusted Publishing (OIDC) - no NODE_AUTH_TOKEN needed.
+        # The --provenance flag triggers OIDC authentication when id-token: write is set.
+        run: npm publish --provenance --access public
 
 
