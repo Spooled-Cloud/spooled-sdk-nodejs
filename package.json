@@ -59,7 +59,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build && npm run test",
+    "prepublishOnly": "npm run lint && npm run typecheck && npm run build && npm run test",
     "clean": "rm -rf dist"
   },
   "dependencies": {

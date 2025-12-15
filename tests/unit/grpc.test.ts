@@ -16,8 +16,6 @@ import {
   GrpcJobStatus,
   timestampToDate,
   dateToTimestamp,
-  loadProtoDefinition,
-  clearProtoCache,
 } from '../../src/grpc/index.js';
 
 // Mock grpc-js to avoid actual network calls
@@ -46,7 +44,7 @@ vi.mock('../../src/grpc/loader.js', () => {
     getChannel() {
       return { getConnectivityState: () => 0 };
     }
-    waitForReady(_deadline: Date, callback: (err: Error | null) => void) {
+    waitForReady(_deadline: Date, callback: any) {
       callback(null);
     }
     // Queue methods

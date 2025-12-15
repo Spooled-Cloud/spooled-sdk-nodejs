@@ -4,6 +4,8 @@
  * Dynamically loads the Spooled proto file for gRPC communication.
  */
 
+/* global __dirname */
+
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
 import { fileURLToPath } from 'url';
