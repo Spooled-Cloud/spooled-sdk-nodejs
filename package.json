@@ -13,6 +13,9 @@
   "bugs": {
     "url": "https://github.com/spooled-cloud/spooled-sdk-nodejs/issues"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "spooled",
     "job-queue",
