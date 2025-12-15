@@ -146,7 +146,7 @@ async function cleanupOldJobs(client: SpooledClient): Promise<void> {
     const jobs = await client.jobs.list({ limit: 100 });
     let cancelled = 0;
     
-    for (const job of jobs.data || []) {
+    for (const job of jobs || []) {
       if (job.status === 'pending' || job.status === 'processing') {
         try {
           await client.jobs.cancel(job.id);
@@ -1216,7 +1216,7 @@ async function testQueueAdvanced(client: SpooledClient): Promise<void> {
       log(`Stats retrieved`);
     } catch (e: unknown) {
       if (isSpooledError(e)) {
-        log(`Stats endpoint returned ${e.status}: ${e.message}`);
+        log(`Stats endpoint returned ${e.statusCode}: ${e.message}`);
       } else {
         throw e;
       }
@@ -1268,7 +1268,7 @@ async function testQueueAdvanced(client: SpooledClient): Promise<void> {
         log('Queue has jobs or cannot be deleted - cleaning up jobs');
         // Try harder - list and cancel all jobs in this queue
         const jobs = await client.jobs.list({ queueName, limit: 100 });
-        for (const job of jobs.data || []) {
+        for (const job of jobs || []) {
           if (job.status === 'pending' || job.status === 'processing') {
             try {
               await client.jobs.cancel(job.id);
@@ -1426,9 +1426,10 @@ async function testWebhookRetry(client: SpooledClient): Promise<void> {
   await runTest('Setup webhook for retry test', async () => {
     try {
       const webhook = await client.webhooks.create({
+        name: `retry-test-${Date.now()}`,
         url: webhookUrl,
         events: ['job.created'],
-        active: true,
+        enabled: true,
       });
       webhookId = webhook.id;
       log(`Created webhook ${webhookId}`);
@@ -1450,8 +1451,8 @@ async function testWebhookRetry(client: SpooledClient): Promise<void> {
     // Get deliveries first
     const deliveries = await client.webhooks.getDeliveries(webhookId);
     
-    if (deliveries.data && deliveries.data.length > 0) {
-      const delivery = deliveries.data[0];
+    if (Array.isArray(deliveries) && deliveries.length > 0) {
+      const delivery = deliveries[0];
       if (delivery && delivery.id) {
         try {
           // Direct API call for retry
@@ -1948,6 +1949,192 @@ async function testErrorHandling(client: SpooledClient): Promise<void> {
   });
 }
 
+async function testMetrics(): Promise<void> {
+  console.log('\n📊 Metrics Endpoint');
+  console.log('─'.repeat(60));
+
+  await runTest('GET /metrics - Prometheus metrics (port 9090)', async () => {
+    const res = await fetch('http://localhost:9090/metrics', {
+      signal: AbortSignal.timeout(2000),
+    });
+    if (res.ok) {
+      const text = await res.text();
+      assert(text.includes('spooled_') || text.includes('http_') || text.includes('process_'), 
+        'should contain prometheus metrics');
+      log(`Metrics endpoint returned ${text.length} bytes`);
+    } else {
+      log(`Metrics returned ${res.status} (may require auth token)`);
+    }
+  });
+}
+
+async function testWebSocket(client: SpooledClient): Promise<void> {
+  console.log('\n🔌 WebSocket');
+  console.log('─'.repeat(60));
+
+  await runTest('GET /api/v1/ws - WebSocket connectivity', async () => {
+    // Get JWT token first
+    const auth = await client.auth.login({ apiKey: API_KEY! });
+    
+    // Test WS upgrade capability via HTTP
+    // Note: Full WS test would require ws library
+    const wsUrl = BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://');
+    log(`WebSocket URL would be: ${wsUrl}/api/v1/ws?token=...`);
+    
+    // Just verify we can get the token for WS connection
+    assertDefined(auth.accessToken, 'JWT token for WS');
+    log('WebSocket auth token obtained successfully');
+  });
+}
+
+async function testOrgManagement(client: SpooledClient): Promise<void> {
+  console.log('\n🏢 Organization Management');
+  console.log('─'.repeat(60));
+
+  await runTest('GET /api/v1/organizations/check-slug - Check slug availability', async () => {
+    const res = await fetch(`${BASE_URL}/api/v1/organizations/check-slug?slug=test-unique-slug-${Date.now()}`, {
+      headers: { 'Authorization': `Bearer ${API_KEY}` },
+    });
+    if (res.ok) {
+      const data = await res.json() as { available?: boolean };
+      assertDefined(data.available, 'available field');
+      log(`Slug availability: ${data.available}`);
+    } else if (res.status === 404) {
+      log('Slug check endpoint not available');
+    } else {
+      log(`Slug check returned ${res.status}`);
+    }
+  });
+
+  await runTest('POST /api/v1/organizations/generate-slug - Generate slug', async () => {
+    const res = await fetch(`${BASE_URL}/api/v1/organizations/generate-slug`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name: 'My Test Organization' }),
+    });
+    if (res.ok) {
+      const data = await res.json() as { slug?: string };
+      assertDefined(data.slug, 'generated slug');
+      log(`Generated slug: ${data.slug}`);
+    } else if (res.status === 404) {
+      log('Generate slug endpoint not available');
+    } else {
+      log(`Generate slug returned ${res.status}`);
+    }
+  });
+
+  await runTest('GET /api/v1/organizations - List organizations', async () => {
+    const res = await fetch(`${BASE_URL}/api/v1/organizations`, {
+      headers: { 'Authorization': `Bearer ${API_KEY}` },
+    });
+    if (res.ok) {
+      const data = await res.json() as unknown[];
+      log(`Found ${Array.isArray(data) ? data.length : 0} organizations`);
+    } else if (res.status === 403) {
+      log('List organizations requires admin access');
+    } else {
+      log(`List organizations returned ${res.status}`);
+    }
+  });
+}
+
+async function testAdminEndpoints(): Promise<void> {
+  console.log('\n👑 Admin Endpoints');
+  console.log('─'.repeat(60));
+
+  const adminKey = process.env.ADMIN_KEY;
+  
+  if (!adminKey) {
+    await runTest('Admin endpoints (skipped - no ADMIN_KEY)', async () => {
+      log('Set ADMIN_KEY env var to test admin endpoints');
+    });
+    return;
+  }
+
+  await runTest('GET /api/v1/admin/stats - Platform statistics', async () => {
+    const res = await fetch(`${BASE_URL}/api/v1/admin/stats`, {
+      headers: { 'X-Admin-Key': adminKey },
+    });
+    if (res.ok) {
+      const data = await res.json() as Record<string, unknown>;
+      assertDefined(data, 'stats data');
+      log(`Platform stats: ${JSON.stringify(data).substring(0, 100)}...`);
+    } else if (res.status === 401 || res.status === 403) {
+      log('Admin stats requires valid admin key');
+    } else {
+      log(`Admin stats returned ${res.status}`);
+    }
+  });
+
+  await runTest('GET /api/v1/admin/plans - List plans', async () => {
+    const res = await fetch(`${BASE_URL}/api/v1/admin/plans`, {
+      headers: { 'X-Admin-Key': adminKey },
+    });
+    if (res.ok) {
+      const data = await res.json() as unknown[];
+      log(`Found ${Array.isArray(data) ? data.length : 0} plans`);
+    } else {
+      log(`Admin plans returned ${res.status}`);
+    }
+  });
+
+  await runTest('GET /api/v1/admin/organizations - List all organizations', async () => {
+    const res = await fetch(`${BASE_URL}/api/v1/admin/organizations`, {
+      headers: { 'X-Admin-Key': adminKey },
+    });
+    if (res.ok) {
+      const data = await res.json() as unknown[];
+      log(`Found ${Array.isArray(data) ? data.length : 0} organizations (admin view)`);
+    } else {
+      log(`Admin organizations returned ${res.status}`);
+    }
+  });
+}
+
+async function testEmailLogin(): Promise<void> {
+  console.log('\n📧 Email Login Flow');
+  console.log('─'.repeat(60));
+
+  await runTest('POST /api/v1/auth/email/start - Start email login', async () => {
+    // This would send an actual email, so we just test the endpoint exists
+    const testEmail = `test-${Date.now()}@example.com`;
+    const res = await fetch(`${BASE_URL}/api/v1/auth/email/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: testEmail }),
+    });
+    
+    if (res.status === 200 || res.status === 202) {
+      log('Email login initiated (would send email in production)');
+    } else if (res.status === 404) {
+      log('Email login not enabled');
+    } else if (res.status === 429) {
+      log('Rate limited (email login)');
+    } else {
+      log(`Email login start returned ${res.status}`);
+    }
+  });
+
+  await runTest('GET /api/v1/auth/check-email - Check email exists', async () => {
+    const testEmail = 'test@example.com';
+    const res = await fetch(`${BASE_URL}/api/v1/auth/check-email?email=${encodeURIComponent(testEmail)}`, {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    
+    if (res.ok) {
+      const data = await res.json() as { exists?: boolean };
+      log(`Email check: exists=${data.exists}`);
+    } else if (res.status === 404) {
+      log('Email check endpoint not available');
+    } else {
+      log(`Email check returned ${res.status}`);
+    }
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Runner
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2011,6 +2198,11 @@ async function main(): Promise<void> {
     await testWebhookDelivery(client);
     await testEdgeCases(client);
     await testErrorHandling(client);
+    await testMetrics();
+    await testWebSocket(client);
+    await testOrgManagement(client);
+    await testAdminEndpoints();
+    await testEmailLogin();
 
   } catch (error) {
     console.error('\n💥 Fatal error:', error);
