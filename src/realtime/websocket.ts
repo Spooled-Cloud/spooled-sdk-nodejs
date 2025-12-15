@@ -214,8 +214,9 @@ export class WebSocketRealtimeClient {
   // Private methods
 
   private buildWsUrl(): string {
-    const baseUrl = this.options.baseUrl.replace(/^http/, 'ws');
-    return `${baseUrl}/api/v1/ws?token=${encodeURIComponent(this.options.token)}`;
+    // wsUrl should already be ws:// or wss://
+    const wsBase = this.options.wsUrl;
+    return `${wsBase}/api/v1/ws?token=${encodeURIComponent(this.options.token)}`;
   }
 
   private setState(state: ConnectionState): void {

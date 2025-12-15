@@ -15,7 +15,8 @@ const client = new SpooledClient({
   adminKey: 'admin_...',            // Optional: for admin endpoints
 
   // === API Settings ===
-  baseUrl: 'https://api.spooled.cloud',  // API base URL (default)
+  baseUrl: 'https://api.spooled.cloud',  // REST API base URL (default)
+  wsUrl: 'wss://api.spooled.cloud',      // WebSocket URL for realtime (default: derived from baseUrl)
   grpcAddress: 'grpc.spooled.cloud:443', // gRPC server address (default)
   timeout: 30000,                         // Request timeout in ms (default: 30000)
 
@@ -63,6 +64,7 @@ SPOOLED_API_KEY=sk_live_your_api_key
 
 # Optional
 SPOOLED_API_URL=https://api.spooled.cloud
+SPOOLED_WS_URL=wss://api.spooled.cloud
 SPOOLED_GRPC_ADDRESS=grpc.spooled.cloud:443
 SPOOLED_TIMEOUT=30000
 SPOOLED_DEBUG=true
@@ -74,7 +76,52 @@ Example usage:
 const client = new SpooledClient({
   apiKey: process.env.SPOOLED_API_KEY!,
   baseUrl: process.env.SPOOLED_API_URL,
+  wsUrl: process.env.SPOOLED_WS_URL,
+  grpcAddress: process.env.SPOOLED_GRPC_ADDRESS,
   debug: process.env.SPOOLED_DEBUG === 'true',
+});
+```
+
+## Self-Hosted Deployment
+
+If you're running your own Spooled instance, configure the SDK to point to your server:
+
+```typescript
+const client = new SpooledClient({
+  apiKey: 'sk_live_your_key',
+  
+  // Point to your self-hosted instance
+  baseUrl: 'https://spooled.your-company.com',
+  
+  // WebSocket URL (optional - derived from baseUrl if not set)
+  // Only needed if WebSocket is on a different host
+  wsUrl: 'wss://spooled.your-company.com',
+  
+  // gRPC address (optional - only if using gRPC workers)
+  grpcAddress: 'grpc.your-company.com:443',
+});
+```
+
+### URL Derivation
+
+If `wsUrl` is not explicitly set, it's automatically derived from `baseUrl`:
+
+| `baseUrl`                         | Derived `wsUrl`                 |
+|-----------------------------------|---------------------------------|
+| `https://api.example.com`         | `wss://api.example.com`         |
+| `http://localhost:8080`           | `ws://localhost:8080`           |
+| `https://spooled.company.com:443` | `wss://spooled.company.com:443` |
+
+### Local Development
+
+For local development, you might use:
+
+```typescript
+const client = new SpooledClient({
+  apiKey: 'sk_test_local_dev_key',
+  baseUrl: 'http://localhost:8080',
+  grpcAddress: 'localhost:50051',
+  debug: true,
 });
 ```
 
@@ -225,15 +272,24 @@ const client = new SpooledClient({
 You can create multiple clients for different environments or API keys:
 
 ```typescript
-// Production client
-const prodClient = new SpooledClient({
+// Spooled Cloud (production)
+const cloudClient = new SpooledClient({
   apiKey: 'sk_live_production_key',
 });
 
-// Staging client
-const stagingClient = new SpooledClient({
-  apiKey: 'sk_test_staging_key',
-  baseUrl: 'https://staging-api.spooled.cloud',
+// Self-hosted instance
+const selfHostedClient = new SpooledClient({
+  apiKey: 'sk_live_self_hosted_key',
+  baseUrl: 'https://spooled.your-company.com',
+  grpcAddress: 'grpc.your-company.com:443',
+});
+
+// Local development
+const localClient = new SpooledClient({
+  apiKey: 'sk_test_dev_key',
+  baseUrl: 'http://localhost:8080',
+  grpcAddress: 'localhost:50051',
+  debug: true,
 });
 
 // Admin client

@@ -3,6 +3,25 @@
 This document describes the API endpoints and request/response shapes that the SDK implements.
 Source of truth: `spooled-backend/src/api/mod.rs` (routes) and `spooled-backend/src/models/*.rs` (types).
 
+## Base URLs
+
+| Service | Spooled Cloud | Self-Hosted Example |
+|---------|---------------|---------------------|
+| REST API | `https://api.spooled.cloud` | `https://your-server.com` |
+| WebSocket | `wss://api.spooled.cloud` | `wss://your-server.com` |
+| gRPC | `grpc.spooled.cloud:443` | `grpc.your-server.com:443` |
+
+For self-hosted deployments, configure the SDK with your custom endpoints:
+
+```typescript
+const client = new SpooledClient({
+  apiKey: 'sk_live_...',
+  baseUrl: 'https://your-server.com',        // REST API
+  wsUrl: 'wss://your-server.com',            // WebSocket (optional, derived from baseUrl)
+  grpcAddress: 'grpc.your-server.com:443',   // gRPC
+});
+```
+
 ## Authentication
 
 All protected endpoints require `Authorization: Bearer <token>` header.

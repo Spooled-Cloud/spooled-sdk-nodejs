@@ -41,6 +41,7 @@ export interface SpooledRealtimeOptions {
 /** Full options including internal fields */
 interface FullRealtimeOptions extends SpooledRealtimeOptions {
   baseUrl: string;
+  wsUrl: string;
   token: string;
   debug?: (message: string, meta?: unknown) => void;
 }
@@ -64,6 +65,7 @@ export class SpooledRealtime {
   constructor(options: FullRealtimeOptions) {
     const connectionOptions: RealtimeConnectionOptions = {
       baseUrl: options.baseUrl,
+      wsUrl: options.wsUrl,
       token: options.token,
       autoReconnect: options.autoReconnect,
       maxReconnectAttempts: options.maxReconnectAttempts,

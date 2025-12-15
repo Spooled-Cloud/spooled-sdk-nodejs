@@ -209,6 +209,7 @@ export class SpooledClient {
 
     return new SpooledRealtime({
       baseUrl: this.config.baseUrl,
+      wsUrl: this.config.wsUrl,
       token,
       ...options,
       debug: this.config.debug ?? undefined,

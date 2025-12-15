@@ -45,10 +45,12 @@ export interface SpooledClientConfig {
   refreshToken?: string;
   /** Admin API key (for /api/v1/admin/* endpoints; uses X-Admin-Key header) */
   adminKey?: string;
+  /** Base URL for the REST API (default: https://api.spooled.cloud) */
+  baseUrl?: string;
+  /** WebSocket URL for realtime events (default: derived from baseUrl, e.g., wss://api.spooled.cloud) */
+  wsUrl?: string;
   /** gRPC server address (default: grpc.spooled.cloud:443) */
   grpcAddress?: string;
-  /** Base URL for the API (default: https://api.spooled.cloud) */
-  baseUrl?: string;
   /** Request timeout in milliseconds (default: 30000) */
   timeout?: number;
   /** Number of retry attempts (shorthand for retry.maxRetries) */
@@ -77,8 +79,9 @@ export interface ResolvedConfig {
   accessToken?: string;
   refreshToken?: string;
   adminKey?: string;
-  grpcAddress: string;
   baseUrl: string;
+  wsUrl: string;
+  grpcAddress: string;
   timeout: number;
   retry: RetryConfig;
   circuitBreaker: CircuitBreakerConfig;
@@ -92,6 +95,7 @@ export interface ResolvedConfig {
 /** Default configuration values */
 export const DEFAULT_CONFIG = {
   baseUrl: 'https://api.spooled.cloud',
+  wsUrl: 'wss://api.spooled.cloud',
   grpcAddress: 'grpc.spooled.cloud:443',
   timeout: 30000,
   retry: {
@@ -157,13 +161,22 @@ export function resolveConfig(options: SpooledClientConfig): ResolvedConfig {
     ...options.headers,
   };
 
+  // Resolve base URL first
+  const baseUrl = options.baseUrl ?? DEFAULT_CONFIG.baseUrl;
+  
+  // Derive WebSocket URL from base URL if not explicitly set
+  // Replace http(s):// with ws(s)://
+  const derivedWsUrl = baseUrl.replace(/^http/, 'ws');
+  const wsUrl = options.wsUrl ?? derivedWsUrl;
+
   return {
     apiKey: options.apiKey,
     accessToken: options.accessToken,
     refreshToken: options.refreshToken,
     adminKey: options.adminKey,
+    baseUrl,
+    wsUrl,
     grpcAddress: options.grpcAddress ?? DEFAULT_CONFIG.grpcAddress,
-    baseUrl: options.baseUrl ?? DEFAULT_CONFIG.baseUrl,
     timeout: options.timeout ?? DEFAULT_CONFIG.timeout,
     retry,
     circuitBreaker,

@@ -44,15 +44,25 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
 const spooled = grpc.loadPackageDefinition(packageDefinition).spooled.v1 as any;
 
 // Create clients
+// For Spooled Cloud:
+const GRPC_ADDRESS = 'grpc.spooled.cloud:443';
+// For self-hosted: 'your-server.com:443' or 'localhost:50051'
+
 const queueClient = new spooled.QueueService(
-  'grpc.spooled.cloud:443',
+  GRPC_ADDRESS,
   grpc.credentials.createSsl()
 );
 
 const workerClient = new spooled.WorkerService(
-  'grpc.spooled.cloud:443',
+  GRPC_ADDRESS,
   grpc.credentials.createSsl()
 );
+
+// For local development without TLS:
+// const localClient = new spooled.QueueService(
+//   'localhost:50051',
+//   grpc.credentials.createInsecure()
+// );
 
 // Create metadata with API key
 function createMetadata(apiKey: string): grpc.Metadata {
@@ -507,6 +517,45 @@ async function processEmail(payload: any) {
 }
 
 main().catch(console.error);
+```
+
+## Self-Hosted gRPC
+
+For self-hosted deployments, configure the gRPC address to point to your server:
+
+```typescript
+// Self-hosted with TLS
+const client = new spooled.QueueService(
+  'grpc.your-company.com:443',
+  grpc.credentials.createSsl()
+);
+
+// Self-hosted without TLS (development only)
+const devClient = new spooled.QueueService(
+  'localhost:50051',
+  grpc.credentials.createInsecure()
+);
+
+// With custom root certificate
+const fs = require('fs');
+const rootCert = fs.readFileSync('/path/to/ca.pem');
+const credentials = grpc.credentials.createSsl(rootCert);
+const customTlsClient = new spooled.QueueService(
+  'grpc.your-company.com:443',
+  credentials
+);
+```
+
+### Environment-Based Configuration
+
+```typescript
+const grpcAddress = process.env.SPOOLED_GRPC_ADDRESS || 'grpc.spooled.cloud:443';
+const useTls = !grpcAddress.startsWith('localhost');
+
+const client = new spooled.QueueService(
+  grpcAddress,
+  useTls ? grpc.credentials.createSsl() : grpc.credentials.createInsecure()
+);
 ```
 
 ## Proto File Reference

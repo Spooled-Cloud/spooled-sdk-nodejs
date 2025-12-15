@@ -173,8 +173,10 @@ export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'rec
 
 /** Realtime connection options */
 export interface RealtimeConnectionOptions {
-  /** Base URL for the API */
+  /** Base URL for the REST API (e.g., https://api.spooled.cloud) - used for SSE */
   baseUrl: string;
+  /** WebSocket URL for realtime connection (e.g., wss://api.spooled.cloud) - used for WebSocket */
+  wsUrl: string;
   /** JWT token for authentication */
   token: string;
   /** Auto-reconnect on disconnect (default: true) */

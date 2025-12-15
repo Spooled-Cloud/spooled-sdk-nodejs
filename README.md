@@ -29,7 +29,8 @@ npm install @spooled/sdk
 import { SpooledClient } from '@spooled/sdk';
 
 const client = new SpooledClient({
-  apiKey: 'sk_live_your_api_key'
+  apiKey: 'sk_live_your_api_key',
+  // For self-hosted: baseUrl: 'https://your-spooled-server.com'
 });
 
 // Create a job
