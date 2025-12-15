@@ -147,14 +147,14 @@ describe('SpooledGrpcClient', () => {
   describe('queue operations', () => {
     let client: SpooledGrpcClient;
 
-    beforeEach(() => {
+beforeEach(() => {
       client = new SpooledGrpcClient({
         address: 'localhost:50051',
         apiKey: 'sk_test_123',
       });
-    });
+});
 
-    afterEach(() => {
+afterEach(() => {
       client.close();
     });
 
@@ -175,7 +175,7 @@ describe('SpooledGrpcClient', () => {
       });
 
       expect(result.jobs).toEqual([]);
-    });
+});
 
     it('should complete a job', async () => {
       const result = await client.queue.complete({
@@ -216,7 +216,7 @@ describe('SpooledGrpcClient', () => {
     beforeEach(() => {
       client = new SpooledGrpcClient({
         address: 'localhost:50051',
-        apiKey: 'sk_test_123',
+      apiKey: 'sk_test_123',
       });
     });
 

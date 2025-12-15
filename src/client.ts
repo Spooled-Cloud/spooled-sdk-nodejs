@@ -346,7 +346,7 @@ export class SpooledClient {
    */
   private resolveGrpcAddress(): string {
     return this.config.grpcAddress;
-  }
+    }
 
   /**
    * Close all connections including gRPC

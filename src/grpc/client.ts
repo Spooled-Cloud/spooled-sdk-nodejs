@@ -130,7 +130,7 @@ export class GrpcQueueOperations {
    */
   async fail(params: GrpcFailRequest): Promise<GrpcFailResponse> {
     return promisify(this.client, this.client.Fail, params, this.metadata);
-  }
+}
 
   /**
    * Renew a job's lease
