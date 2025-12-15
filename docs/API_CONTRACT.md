@@ -912,18 +912,47 @@ interface RecentActivity {
 
 ## Webhook Ingestion
 
-These endpoints allow organizations to receive events from external sources.
+Each organization gets a unique webhook URL for receiving events from external sources.
 
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/api/v1/webhooks/{org_id}/custom` | Custom webhook ingestion |
 
-**Note:** GitHub and Stripe webhook ingestion endpoints were removed. Custom webhooks
-provide a flexible alternative for receiving events from any source. The billing
-webhook (`/api/v1/billing/webhook`) handles Stripe subscription events separately.
+### Configuring Webhook Authentication
 
-Required headers:
-- Custom: `X-Webhook-Token` (if configured in organization settings)
+To secure your webhook endpoint, configure a `webhook_token` in your organization settings:
+
+```typescript
+// Using the SDK
+await client.organizations.update(orgId, {
+  settings: {
+    webhook_token: 'your-secret-token-min-16-chars'
+  }
+});
+
+// Or via curl
+curl -X PUT /api/v1/organizations/{org_id} \
+  -H "Authorization: Bearer sk_live_xxx" \
+  -d '{"settings": {"webhook_token": "your-secret-token"}}'
+```
+
+When configured, all incoming webhooks must include the `X-Webhook-Token` header.
+
+### Sending Webhooks to Spooled
+
+Configure your external service to POST to your webhook URL:
+
+```bash
+curl -X POST https://api.spooled.cloud/api/v1/webhooks/{org_id}/custom \
+  -H "X-Webhook-Token: your-secret-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "queue_name": "my-events",
+    "event_type": "order.created",
+    "payload": {"order_id": 123},
+    "idempotency_key": "order-123"
+  }'
+```
 
 Custom webhook request shape:
 
