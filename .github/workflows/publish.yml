@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   publish:
@@ -25,10 +26,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Runs lint + typecheck + build + test via prepublishOnly
-      - name: Publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish
+      - name: Ensure tag matches package version
+        run: node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync('package.json','utf8')); const tag=process.env.GITHUB_REF_NAME; const expected=`v${pkg.version}`; if(tag!==expected){ console.error(`Tag (${tag}) does not match package.json version (${pkg.version}). Expected ${expected}.`); process.exit(1);} console.log(`OK: ${tag} matches package.json version ${pkg.version}`);"
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Publish (Trusted Publishing)
+        # Uses npm Trusted Publishing (OIDC) - no npm token required.
+        run: npm publish --provenance --access public --ignore-scripts
 
 
