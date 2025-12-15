@@ -1,6 +1,6 @@
 {
   "name": "@spooled/sdk",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "type": "module",
   "description": "Official Node.js/TypeScript SDK for Spooled Cloud job queue service",
   "author": "Spooled Cloud <support@spooled.cloud>",
