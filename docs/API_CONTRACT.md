@@ -912,17 +912,18 @@ interface RecentActivity {
 
 ## Webhook Ingestion
 
-These endpoints are public and authenticated via signature headers (not API keys).
+These endpoints allow organizations to receive events from external sources.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/v1/webhooks/{org_id}/github` | GitHub webhook ingestion |
-| POST | `/api/v1/webhooks/{org_id}/stripe` | Stripe webhook ingestion |
 | POST | `/api/v1/webhooks/{org_id}/custom` | Custom webhook ingestion |
 
+**Note:** GitHub and Stripe webhook ingestion endpoints were removed. Custom webhooks
+provide a flexible alternative for receiving events from any source. The billing
+webhook (`/api/v1/billing/webhook`) handles Stripe subscription events separately.
+
 Required headers:
-- GitHub: `X-Hub-Signature-256`, `X-GitHub-Event` (and optional `X-Webhook-Token`)
-- Stripe: `Stripe-Signature` (and optional `X-Webhook-Token`)
+- Custom: `X-Webhook-Token` (if configured in organization settings)
 
 Custom webhook request shape:
 
