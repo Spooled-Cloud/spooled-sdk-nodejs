@@ -918,22 +918,29 @@ Each organization gets a unique webhook URL for receiving events from external s
 |--------|------|-------------|
 | POST | `/api/v1/webhooks/{org_id}/custom` | Custom webhook ingestion |
 
-### Configuring Webhook Authentication
+### Webhook Token Management
 
-To secure your webhook endpoint, configure a `webhook_token` in your organization settings:
+A webhook token is automatically generated when your organization is created.
+Use these endpoints to manage it:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/organizations/webhook-token` | Get current token and URL |
+| POST | `/api/v1/organizations/webhook-token/regenerate` | Generate new token |
+| POST | `/api/v1/organizations/webhook-token/clear` | Remove token (not recommended) |
 
 ```typescript
-// Using the SDK
-await client.organizations.update(orgId, {
-  settings: {
-    webhook_token: 'your-secret-token-min-16-chars'
-  }
+// Get your webhook token and URL
+const response = await fetch('/api/v1/organizations/webhook-token', {
+  headers: { 'Authorization': `Bearer ${apiKey}` }
 });
+const { webhook_token, webhook_url } = await response.json();
 
-// Or via curl
-curl -X PUT /api/v1/organizations/{org_id} \
-  -H "Authorization: Bearer sk_live_xxx" \
-  -d '{"settings": {"webhook_token": "your-secret-token"}}'
+// Regenerate the token
+await fetch('/api/v1/organizations/webhook-token/regenerate', {
+  method: 'POST',
+  headers: { 'Authorization': `Bearer ${apiKey}` }
+});
 ```
 
 When configured, all incoming webhooks must include the `X-Webhook-Token` header.
