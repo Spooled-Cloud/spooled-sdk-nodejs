@@ -26,7 +26,7 @@ describe('DashboardResource', () => {
       http.get('https://api.spooled.cloud/api/v1/dashboard', () => {
         return HttpResponse.json({
           system: {
-            version: '1.0.2',
+            version: '1.0.3',
             uptime_seconds: 123,
             started_at: '2025-01-01T00:00:00Z',
             database_status: 'healthy',
