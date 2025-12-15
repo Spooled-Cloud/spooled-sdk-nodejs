@@ -8,7 +8,7 @@
   "homepage": "https://spooled.cloud",
   "repository": {
     "type": "git",
-    "url": "https://github.com/spooled-cloud/spooled-sdk-nodejs.git"
+    "url": "git+https://github.com/spooled-cloud/spooled-sdk-nodejs.git"
   },
   "bugs": {
     "url": "https://github.com/spooled-cloud/spooled-sdk-nodejs/issues"
@@ -87,4 +87,3 @@
   "peerDependencies": {},
   "optionalDependencies": {}
 }
-
