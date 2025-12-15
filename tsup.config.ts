@@ -14,6 +14,12 @@ export default defineConfig({
   minify: false, // Keep readable for debugging
   target: 'node18',
   outDir: 'dist',
-  external: ['ws', 'eventsource'],
+  // External modules - not bundled
+  external: [
+    'ws',
+    'eventsource',
+    '@grpc/grpc-js',
+    '@grpc/proto-loader',
+  ],
 });
 

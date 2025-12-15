@@ -32,7 +32,7 @@ import {
 } from './resources/index.js';
 import { SpooledRealtime } from './realtime/index.js';
 import type { SpooledRealtimeOptions } from './realtime/index.js';
-import { SpooledGrpcClient } from './grpc/index.js';
+import { SpooledGrpcClient } from './grpc/client.js';
 
 /**
  * Spooled Cloud SDK Client
@@ -57,7 +57,7 @@ export class SpooledClient {
   private readonly config: ResolvedConfig;
   private readonly http: HttpClient;
   private readonly circuitBreaker: CircuitBreaker;
-  private readonly grpcHttp: HttpClient;
+  private _grpc: SpooledGrpcClient | null = null;
 
   /** Authentication operations */
   readonly auth: AuthResource;
@@ -104,9 +104,6 @@ export class SpooledClient {
   /** Webhook ingestion endpoints (signature-based) */
   readonly ingest: WebhookIngestionResource;
 
-  /** gRPC (HTTP gateway) endpoints */
-  readonly grpc: SpooledGrpcClient;
-
   /** Token refresh state */
   private refreshPromise: Promise<string> | null = null;
   private tokenExpiresAt: number | null = null;
@@ -121,11 +118,6 @@ export class SpooledClient {
 
     // Create HTTP client
     this.http = createHttpClient(this.config, this.circuitBreaker);
-
-    // Create gRPC HTTP client (separate circuit breaker)
-    const grpcCircuitBreaker = createCircuitBreaker(this.config.circuitBreaker);
-    const grpcBaseUrl = this.resolveGrpcBaseUrl();
-    this.grpcHttp = createHttpClient({ ...this.config, baseUrl: grpcBaseUrl }, grpcCircuitBreaker);
 
     // Set up token refresh if using JWT
     if (this.config.accessToken && this.config.refreshToken && this.config.autoRefreshToken) {
@@ -148,13 +140,52 @@ export class SpooledClient {
     this.metrics = new MetricsResource(this.http);
     this.admin = new AdminResource(this.http, this.config.adminKey);
     this.ingest = new WebhookIngestionResource(this.http);
-    this.grpc = new SpooledGrpcClient(this.grpcHttp);
 
     this.config.debug?.('SpooledClient initialized', {
       baseUrl: this.config.baseUrl,
       hasApiKey: !!this.config.apiKey,
       hasAccessToken: !!this.config.accessToken,
     });
+  }
+
+  /**
+   * Real gRPC client for high-performance operations (HTTP/2 + Protobuf)
+   *
+   * The gRPC client is created lazily on first access to avoid
+   * loading the proto file unless it's actually needed.
+   *
+   * @example
+   * ```typescript
+   * // Enqueue via gRPC
+   * const { jobId } = await client.grpc.queue.enqueue({
+   *   queueName: 'my-queue',
+   *   payload: { message: 'Hello!' },
+   * });
+   *
+   * // Stream jobs
+   * for await (const job of client.grpc.queue.streamJobs({
+   *   queueName: 'my-queue',
+   *   workerId: 'worker-1',
+   * })) {
+   *   console.log('Job:', job);
+   * }
+   * ```
+   */
+  get grpc(): SpooledGrpcClient {
+    if (!this._grpc) {
+      const grpcAddress = this.resolveGrpcAddress();
+      const apiKey = this.config.apiKey;
+
+      if (!apiKey) {
+        throw new AuthenticationError('gRPC client requires an API key');
+      }
+
+      this._grpc = new SpooledGrpcClient({
+        address: grpcAddress,
+        apiKey,
+      });
+    }
+    return this._grpc;
   }
 
   /**
@@ -310,15 +341,28 @@ export class SpooledClient {
     });
   }
 
-  private resolveGrpcBaseUrl(): string {
+  /**
+   * Resolve gRPC address (host:port format)
+   */
+  private resolveGrpcAddress(): string {
     if (this.config.grpcBaseUrl) {
-      return this.config.grpcBaseUrl;
+      // If provided as URL, extract host:port
+      const url = new URL(this.config.grpcBaseUrl);
+      return `${url.hostname}:${url.port || '50051'}`;
     }
     // Derive from API base URL by using port 50051 on same host.
     const u = new URL(this.config.baseUrl);
-    u.port = '50051';
-    // Ensure no trailing slash
-    return u.toString().replace(/\/$/, '');
+    return `${u.hostname}:50051`;
+  }
+
+  /**
+   * Close all connections including gRPC
+   */
+  close(): void {
+    if (this._grpc) {
+      this._grpc.close();
+      this._grpc = null;
+    }
   }
 }
 

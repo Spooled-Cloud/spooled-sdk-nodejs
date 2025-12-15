@@ -40,6 +40,7 @@
   },
   "files": [
     "dist",
+    "proto",
     "README.md",
     "LICENSE"
   ],
@@ -62,6 +63,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.10.0",
+    "@grpc/proto-loader": "^0.7.0",
     "ws": "^8.16.0",
     "eventsource": "^2.0.2"
   },

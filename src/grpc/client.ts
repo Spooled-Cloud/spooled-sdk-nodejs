@@ -1,132 +1,340 @@
 /**
- * gRPC Client (backend gRPC HTTP gateway)
+ * gRPC Client
  *
- * The backend listens on port 50051 and exposes gRPC-style service paths over HTTP+JSON.
- * This is NOT standard gRPC over HTTP/2, so we implement it via the existing HttpClient.
+ * Real gRPC client using @grpc/grpc-js for HTTP/2 + Protobuf communication.
+ * Supports unary calls, server streaming, and bidirectional streaming.
  */
 
-import type { HttpClient } from '../utils/http.js';
+import * as grpc from '@grpc/grpc-js';
+import { loadProtoDefinition } from './loader.js';
+import {
+  createJobStream,
+  createProcessJobsStream,
+  type JobStream,
+  type ProcessJobsStream,
+  type StreamOptions,
+} from './streaming.js';
 import type {
-  GrpcEnqueueJobParams,
-  GrpcEnqueueJobResponse,
-  GrpcDequeueJobParams,
-  GrpcDequeueJobResponse,
-  GrpcCompleteJobParams,
-  GrpcCompleteJobResponse,
-  GrpcFailJobParams,
-  GrpcFailJobResponse,
-  GrpcRenewLeaseParams,
+  GrpcClientOptions,
+  GrpcEnqueueRequest,
+  GrpcEnqueueResponse,
+  GrpcDequeueRequest,
+  GrpcDequeueResponse,
+  GrpcCompleteRequest,
+  GrpcCompleteResponse,
+  GrpcFailRequest,
+  GrpcFailResponse,
+  GrpcRenewLeaseRequest,
   GrpcRenewLeaseResponse,
+  GrpcGetJobRequest,
   GrpcGetJobResponse,
+  GrpcGetQueueStatsRequest,
   GrpcGetQueueStatsResponse,
-  GrpcRegisterWorkerParams,
+  GrpcStreamJobsRequest,
+  GrpcRegisterWorkerRequest,
   GrpcRegisterWorkerResponse,
-  GrpcHeartbeatParams,
+  GrpcHeartbeatRequest,
   GrpcHeartbeatResponse,
+  GrpcDeregisterRequest,
   GrpcDeregisterResponse,
+  GrpcProcessRequest,
+  GrpcProcessResponse,
+  GrpcJob,
 } from './types.js';
 
-function toIsoDate(value?: Date | string): string | undefined {
-  if (!value) return undefined;
-  return value instanceof Date ? value.toISOString() : value;
+// Type definitions for dynamic gRPC clients
+type UnaryCallback<T> = (error: grpc.ServiceError | null, response: T) => void;
+
+interface QueueServiceClient extends grpc.Client {
+  Enqueue(request: GrpcEnqueueRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcEnqueueResponse>): void;
+  Dequeue(request: GrpcDequeueRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcDequeueResponse>): void;
+  Complete(request: GrpcCompleteRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcCompleteResponse>): void;
+  Fail(request: GrpcFailRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcFailResponse>): void;
+  RenewLease(request: GrpcRenewLeaseRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcRenewLeaseResponse>): void;
+  GetJob(request: GrpcGetJobRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcGetJobResponse>): void;
+  GetQueueStats(request: GrpcGetQueueStatsRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcGetQueueStatsResponse>): void;
+  StreamJobs(request: GrpcStreamJobsRequest, metadata: grpc.Metadata): grpc.ClientReadableStream<GrpcJob>;
+  ProcessJobs(metadata: grpc.Metadata): grpc.ClientDuplexStream<GrpcProcessRequest, GrpcProcessResponse>;
 }
 
-function jsonString(value: unknown): string {
-  if (typeof value === 'string') return value;
-  return JSON.stringify(value ?? null);
+interface WorkerServiceClient extends grpc.Client {
+  Register(request: GrpcRegisterWorkerRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcRegisterWorkerResponse>): void;
+  Heartbeat(request: GrpcHeartbeatRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcHeartbeatResponse>): void;
+  Deregister(request: GrpcDeregisterRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcDeregisterResponse>): void;
 }
 
+/**
+ * Wrap a callback-based gRPC call in a Promise
+ */
+function promisify<TReq, TRes>(
+  client: grpc.Client,
+  method: (request: TReq, metadata: grpc.Metadata, callback: UnaryCallback<TRes>) => void,
+  request: TReq,
+  metadata: grpc.Metadata
+): Promise<TRes> {
+  return new Promise((resolve, reject) => {
+    method.call(client, request, metadata, (error, response) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve(response);
+      }
+    });
+  });
+}
+
+/**
+ * Determine if TLS should be used based on address
+ */
+function shouldUseTls(address: string, explicitTls?: boolean): boolean {
+  if (explicitTls !== undefined) {
+    return explicitTls;
+  }
+  // Default to insecure for localhost/127.0.0.1
+  const host = address.split(':')[0].toLowerCase();
+  return host !== 'localhost' && host !== '127.0.0.1' && !host.startsWith('[::1]');
+}
+
+/**
+ * Queue operations for the gRPC client
+ */
+export class GrpcQueueOperations {
+  constructor(
+    private readonly client: QueueServiceClient,
+    private readonly metadata: grpc.Metadata
+  ) {}
+
+  /**
+   * Enqueue a new job
+   */
+  async enqueue(params: GrpcEnqueueRequest): Promise<GrpcEnqueueResponse> {
+    return promisify(this.client, this.client.Enqueue, params, this.metadata);
+  }
+
+  /**
+   * Dequeue a job (for workers)
+   */
+  async dequeue(params: GrpcDequeueRequest): Promise<GrpcDequeueResponse> {
+    return promisify(this.client, this.client.Dequeue, params, this.metadata);
+  }
+
+  /**
+   * Complete a job successfully
+   */
+  async complete(params: GrpcCompleteRequest): Promise<GrpcCompleteResponse> {
+    return promisify(this.client, this.client.Complete, params, this.metadata);
+  }
+
+  /**
+   * Fail a job
+   */
+  async fail(params: GrpcFailRequest): Promise<GrpcFailResponse> {
+    return promisify(this.client, this.client.Fail, params, this.metadata);
+  }
+
+  /**
+   * Renew a job's lease
+   */
+  async renewLease(params: GrpcRenewLeaseRequest): Promise<GrpcRenewLeaseResponse> {
+    return promisify(this.client, this.client.RenewLease, params, this.metadata);
+  }
+
+  /**
+   * Get a job by ID
+   */
+  async getJob(jobId: string): Promise<GrpcGetJobResponse> {
+    return promisify(this.client, this.client.GetJob, { jobId }, this.metadata);
+  }
+
+  /**
+   * Get queue statistics
+   */
+  async getQueueStats(queueName: string): Promise<GrpcGetQueueStatsResponse> {
+    return promisify(this.client, this.client.GetQueueStats, { queueName }, this.metadata);
+  }
+
+  /**
+   * Stream jobs from a queue (server-side streaming)
+   *
+   * @example
+   * ```typescript
+   * const stream = client.grpc.queue.streamJobs({
+   *   queueName: 'my-queue',
+   *   workerId: 'worker-1',
+   * });
+   *
+   * for await (const job of stream) {
+   *   console.log('Received job:', job.id);
+   * }
+   * ```
+   */
+  streamJobs(params: GrpcStreamJobsRequest, options?: StreamOptions): JobStream {
+    const call = this.client.StreamJobs(params, this.metadata);
+    return createJobStream(call, options);
+  }
+
+  /**
+   * Open a bidirectional stream for processing jobs
+   *
+   * @example
+   * ```typescript
+   * const stream = client.grpc.queue.processJobs();
+   *
+   * // Request jobs
+   * stream.send({ dequeue: { queueName: 'my-queue', workerId: 'worker-1' } });
+   *
+   * // Process responses
+   * for await (const response of stream.receive()) {
+   *   if (response.job) {
+   *     // Process the job
+   *     stream.send({ complete: { jobId: response.job.id, workerId: 'worker-1' } });
+   *   }
+   * }
+   *
+   * stream.end();
+   * ```
+   */
+  processJobs(options?: StreamOptions): ProcessJobsStream {
+    const call = this.client.ProcessJobs(this.metadata);
+    return createProcessJobsStream(call, options);
+  }
+}
+
+/**
+ * Worker operations for the gRPC client
+ */
+export class GrpcWorkerOperations {
+  constructor(
+    private readonly client: WorkerServiceClient,
+    private readonly metadata: grpc.Metadata
+  ) {}
+
+  /**
+   * Register a new worker
+   */
+  async register(params: GrpcRegisterWorkerRequest): Promise<GrpcRegisterWorkerResponse> {
+    return promisify(this.client, this.client.Register, params, this.metadata);
+  }
+
+  /**
+   * Send heartbeat
+   */
+  async heartbeat(params: GrpcHeartbeatRequest): Promise<GrpcHeartbeatResponse> {
+    return promisify(this.client, this.client.Heartbeat, params, this.metadata);
+  }
+
+  /**
+   * Deregister a worker
+   */
+  async deregister(workerId: string): Promise<GrpcDeregisterResponse> {
+    return promisify(this.client, this.client.Deregister, { workerId }, this.metadata);
+  }
+}
+
+/**
+ * Spooled gRPC Client
+ *
+ * Real gRPC client for high-performance job queue operations.
+ *
+ * @example
+ * ```typescript
+ * const client = new SpooledGrpcClient({
+ *   address: 'grpc.spooled.cloud:50051',
+ *   apiKey: 'sk_live_...',
+ * });
+ *
+ * // Enqueue a job
+ * const { jobId } = await client.queue.enqueue({
+ *   queueName: 'my-queue',
+ *   payload: { message: 'Hello!' },
+ * });
+ *
+ * // Stream jobs
+ * for await (const job of client.queue.streamJobs({
+ *   queueName: 'my-queue',
+ *   workerId: 'worker-1',
+ * })) {
+ *   console.log('Job:', job);
+ * }
+ * ```
+ */
 export class SpooledGrpcClient {
-  constructor(private readonly http: HttpClient) {}
+  private readonly queueClient: QueueServiceClient;
+  private readonly workerClient: WorkerServiceClient;
+  private readonly metadata: grpc.Metadata;
 
-  readonly queue = {
-    enqueue: async (params: GrpcEnqueueJobParams): Promise<GrpcEnqueueJobResponse> => {
-      return this.http.post<GrpcEnqueueJobResponse>('/spooled.v1.QueueService/Enqueue', {
-        organizationId: params.organizationId ?? '',
-        queueName: params.queueName,
-        payload: jsonString(params.payload),
-        priority: params.priority ?? 0,
-        maxRetries: params.maxRetries ?? 3,
-        timeoutSeconds: params.timeoutSeconds ?? 300,
-        scheduledAt: toIsoDate(params.scheduledAt),
-        idempotencyKey: params.idempotencyKey,
-        tags: params.tags === undefined ? undefined : (typeof params.tags === 'string' ? params.tags : JSON.stringify(params.tags)),
-        completionWebhook: params.completionWebhook,
-        parentJobId: params.parentJobId,
-        expiresAt: toIsoDate(params.expiresAt),
-      }, { skipApiPrefix: true });
-    },
+  /** Queue operations */
+  readonly queue: GrpcQueueOperations;
 
-    dequeue: async (params: GrpcDequeueJobParams): Promise<GrpcDequeueJobResponse> => {
-      return this.http.post<GrpcDequeueJobResponse>('/spooled.v1.QueueService/Dequeue', {
-        organizationId: params.organizationId ?? '',
-        queueName: params.queueName,
-        workerId: params.workerId,
-        leaseDurationSeconds: params.leaseDurationSeconds ?? 30,
-      }, { skipApiPrefix: true });
-    },
+  /** Worker operations */
+  readonly workers: GrpcWorkerOperations;
 
-    complete: async (params: GrpcCompleteJobParams): Promise<GrpcCompleteJobResponse> => {
-      return this.http.post<GrpcCompleteJobResponse>('/spooled.v1.QueueService/Complete', {
-        jobId: params.jobId,
-        workerId: params.workerId,
-        result: params.result === undefined ? undefined : jsonString(params.result),
-      }, { skipApiPrefix: true });
-    },
+  constructor(options: GrpcClientOptions) {
+    const { address, apiKey, useTls, credentials, channelOptions } = options;
 
-    fail: async (params: GrpcFailJobParams): Promise<GrpcFailJobResponse> => {
-      return this.http.post<GrpcFailJobResponse>('/spooled.v1.QueueService/Fail', {
-        jobId: params.jobId,
-        workerId: params.workerId,
-        errorMessage: params.errorMessage,
-      }, { skipApiPrefix: true });
-    },
+    // Create credentials
+    const creds = credentials ?? (shouldUseTls(address, useTls)
+      ? grpc.credentials.createSsl()
+      : grpc.credentials.createInsecure());
 
-    renewLease: async (params: GrpcRenewLeaseParams): Promise<GrpcRenewLeaseResponse> => {
-      return this.http.post<GrpcRenewLeaseResponse>('/spooled.v1.QueueService/RenewLease', {
-        jobId: params.jobId,
-        workerId: params.workerId,
-        leaseDurationSeconds: params.leaseDurationSeconds,
-      }, { skipApiPrefix: true });
-    },
+    // Create metadata with API key
+    this.metadata = new grpc.Metadata();
+    this.metadata.add('x-api-key', apiKey);
 
-    getJob: async (jobId: string): Promise<GrpcGetJobResponse> => {
-      return this.http.post<GrpcGetJobResponse>('/spooled.v1.QueueService/GetJob', {
-        jobId,
-      }, { skipApiPrefix: true });
-    },
+    // Load proto definition
+    const proto = loadProtoDefinition();
 
-    getQueueStats: async (queueName: string): Promise<GrpcGetQueueStatsResponse> => {
-      return this.http.post<GrpcGetQueueStatsResponse>('/spooled.v1.QueueService/GetQueueStats', {
-        queueName,
-      }, { skipApiPrefix: true });
-    },
-  };
+    // Create service clients
+    this.queueClient = new proto.spooled.v1.QueueService(
+      address,
+      creds,
+      channelOptions
+    ) as unknown as QueueServiceClient;
 
-  readonly workers = {
-    register: async (params: GrpcRegisterWorkerParams): Promise<GrpcRegisterWorkerResponse> => {
-      return this.http.post<GrpcRegisterWorkerResponse>('/spooled.v1.WorkerService/Register', {
-        workerId: params.workerId,
-        organizationId: params.organizationId ?? '',
-        queueNames: params.queueNames,
-        maxConcurrentJobs: params.maxConcurrentJobs ?? 5,
-        hostname: params.hostname,
-        metadata: params.metadata === undefined ? undefined : (typeof params.metadata === 'string' ? params.metadata : JSON.stringify(params.metadata)),
-      }, { skipApiPrefix: true });
-    },
+    this.workerClient = new proto.spooled.v1.WorkerService(
+      address,
+      creds,
+      channelOptions
+    ) as unknown as WorkerServiceClient;
 
-    heartbeat: async (params: GrpcHeartbeatParams): Promise<GrpcHeartbeatResponse> => {
-      return this.http.post<GrpcHeartbeatResponse>('/spooled.v1.WorkerService/Heartbeat', {
-        workerId: params.workerId,
-        currentJobIds: params.currentJobIds,
-        status: params.status,
-      }, { skipApiPrefix: true });
-    },
+    // Initialize operation namespaces
+    this.queue = new GrpcQueueOperations(this.queueClient, this.metadata);
+    this.workers = new GrpcWorkerOperations(this.workerClient, this.metadata);
+  }
 
-    deregister: async (workerId: string): Promise<GrpcDeregisterResponse> => {
-      return this.http.post<GrpcDeregisterResponse>('/spooled.v1.WorkerService/Deregister', {
-        workerId,
-      }, { skipApiPrefix: true });
-    },
-  };
+  /**
+   * Close all gRPC connections
+   */
+  close(): void {
+    this.queueClient.close();
+    this.workerClient.close();
+  }
+
+  /**
+   * Wait for the clients to be ready
+   */
+  async waitForReady(deadline?: Date): Promise<void> {
+    const d = deadline ?? new Date(Date.now() + 10000);
+    await Promise.all([
+      new Promise<void>((resolve, reject) => {
+        this.queueClient.waitForReady(d, (error) => {
+          if (error) reject(error);
+          else resolve();
+        });
+      }),
+      new Promise<void>((resolve, reject) => {
+        this.workerClient.waitForReady(d, (error) => {
+          if (error) reject(error);
+          else resolve();
+        });
+      }),
+    ]);
+  }
+
+  /**
+   * Get the current connection state
+   */
+  getState(tryToConnect?: boolean): grpc.connectivityState {
+    return this.queueClient.getChannel().getConnectivityState(tryToConnect ?? false);
+  }
 }
