@@ -327,7 +327,7 @@ export class SpooledClient {
       accessToken: this.config.accessToken,
       refreshToken: this.config.refreshToken,
       adminKey: this.config.adminKey,
-      grpcBaseUrl: this.config.grpcBaseUrl,
+      grpcAddress: this.config.grpcAddress,
       baseUrl: this.config.baseUrl,
       timeout: this.config.timeout,
       retry: this.config.retry,
@@ -345,14 +345,7 @@ export class SpooledClient {
    * Resolve gRPC address (host:port format)
    */
   private resolveGrpcAddress(): string {
-    if (this.config.grpcBaseUrl) {
-      // If provided as URL, extract host:port
-      const url = new URL(this.config.grpcBaseUrl);
-      return `${url.hostname}:${url.port || '50051'}`;
-    }
-    // Derive from API base URL by using port 50051 on same host.
-    const u = new URL(this.config.baseUrl);
-    return `${u.hostname}:50051`;
+    return this.config.grpcAddress;
   }
 
   /**

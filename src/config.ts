@@ -45,8 +45,8 @@ export interface SpooledClientConfig {
   refreshToken?: string;
   /** Admin API key (for /api/v1/admin/* endpoints; uses X-Admin-Key header) */
   adminKey?: string;
-  /** Base URL for the gRPC HTTP gateway (default: derived from baseUrl with port 50051) */
-  grpcBaseUrl?: string;
+  /** gRPC server address (default: grpc.spooled.cloud:443) */
+  grpcAddress?: string;
   /** Base URL for the API (default: https://api.spooled.cloud) */
   baseUrl?: string;
   /** Request timeout in milliseconds (default: 30000) */
@@ -77,7 +77,7 @@ export interface ResolvedConfig {
   accessToken?: string;
   refreshToken?: string;
   adminKey?: string;
-  grpcBaseUrl?: string;
+  grpcAddress: string;
   baseUrl: string;
   timeout: number;
   retry: RetryConfig;
@@ -92,6 +92,7 @@ export interface ResolvedConfig {
 /** Default configuration values */
 export const DEFAULT_CONFIG = {
   baseUrl: 'https://api.spooled.cloud',
+  grpcAddress: 'grpc.spooled.cloud:443',
   timeout: 30000,
   retry: {
     maxRetries: 3,
@@ -161,7 +162,7 @@ export function resolveConfig(options: SpooledClientConfig): ResolvedConfig {
     accessToken: options.accessToken,
     refreshToken: options.refreshToken,
     adminKey: options.adminKey,
-    grpcBaseUrl: options.grpcBaseUrl,
+    grpcAddress: options.grpcAddress ?? DEFAULT_CONFIG.grpcAddress,
     baseUrl: options.baseUrl ?? DEFAULT_CONFIG.baseUrl,
     timeout: options.timeout ?? DEFAULT_CONFIG.timeout,
     retry,

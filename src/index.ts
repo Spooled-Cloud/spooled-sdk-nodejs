@@ -69,7 +69,7 @@ export type { ApiErrorBody, RateLimitInfo } from './errors.js';
 // Types
 export * from './types/index.js';
 
-// gRPC (HTTP gateway)
+// gRPC (HTTP/2 + Protobuf)
 export * from './grpc/index.js';
 
 // Resources
