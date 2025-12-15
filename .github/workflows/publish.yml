@@ -20,20 +20,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          registry-url: "https://registry.npmjs.org"
           cache: "npm"
-          # DO NOT set registry-url here - it creates an .npmrc with legacy auth tokens
-          # We will create a clean .npmrc manually below
-
-      - name: Configure npm for Trusted Publishing
-        # Create .npmrc in home directory
-        # We explicitly set the registry
-        # IMPORTANT: We add an empty _authToken line. This signals to npm that we intend to auth
-        # against this registry, which helps trigger the OIDC logic when --provenance is present,
-        # without actually providing a token.
-        run: |
-          echo "registry=https://registry.npmjs.org/" > ~/.npmrc
-          echo "//registry.npmjs.org/:_authToken=" >> ~/.npmrc
-          chmod 0600 ~/.npmrc
 
       - name: Upgrade npm for Trusted Publishing support
         # Trusted Publishing requires npm >= 11.5.1
