@@ -594,6 +594,53 @@ const client = new spooled.QueueService(
 );
 ```
 
+### gRPC TLS with Cloudflare Tunnel
+
+If you're using Cloudflare Tunnel to expose your self-hosted gRPC server:
+
+1. **Enable TLS on the backend** (enabled by default in `docker-compose.prod.yml`):
+   ```yaml
+   environment:
+     GRPC_TLS_ENABLED: "true"
+   ```
+
+2. **Configure Cloudflare Tunnel**:
+   - Service Type: `HTTPS`
+   - URL: `backend:50051`
+   - HTTP2 connection: `ON`
+   - No TLS Verify: `ON` (accepts self-signed certs)
+
+3. **Connect with TLS from SDK**:
+   ```typescript
+   const client = new spooled.QueueService(
+     'grpc.your-domain.com:443',
+     grpc.credentials.createSsl()
+   );
+   ```
+
+The backend includes self-signed certificates in `./certs/` that work with Cloudflare Tunnel's "No TLS Verify" option.
+
+### Disabling gRPC TLS
+
+For local development or when TLS terminates at a load balancer:
+
+```bash
+# Backend
+GRPC_TLS_ENABLED=false cargo run
+
+# Or in docker-compose:
+environment:
+  GRPC_TLS_ENABLED: "false"
+```
+
+Then connect without TLS:
+```typescript
+const client = new spooled.QueueService(
+  'localhost:50051',
+  grpc.credentials.createInsecure()
+);
+```
+
 ## Proto File Reference
 
 The full proto file is available at:
