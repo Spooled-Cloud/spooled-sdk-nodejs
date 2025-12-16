@@ -186,12 +186,96 @@ const result = await client.jobs.create({
 console.log(result.created); // false if job already exists
 ```
 
+## Plan Limits
+
+All operations automatically enforce tier-based limits:
+
+```typescript
+try {
+  await client.jobs.create({ /* ... */ });
+} catch (error) {
+  if (error.statusCode === 403 && error.code === 'limit_exceeded') {
+    console.log(`Limit: ${error.message}`);
+    console.log(`Current: ${error.current}/${error.limit}`);
+    console.log(`Upgrade to: ${error.upgradeTo}`);
+  }
+}
+```
+
+| Tier | Active Jobs | Daily Jobs | Queues | Workers |
+|------|-------------|------------|--------|---------|
+| **Free** | 10 | 1,000 | 5 | 3 |
+| **Starter** | 100 | 100,000 | 25 | 25 |
+| **Enterprise** | Unlimited | Unlimited | Unlimited | Unlimited |
+
+Limits are enforced on:
+- ✅ Job creation (HTTP & gRPC)
+- ✅ Workflow creation
+- ✅ Schedule triggers
+- ✅ DLQ retry operations
+- ✅ Worker registration
+
+## Organization Management
+
+Track usage and manage your organization:
+
+```typescript
+// Get current usage and limits
+const usage = await client.organizations.getUsage();
+console.log(`Active jobs: ${usage.active_jobs.current}/${usage.active_jobs.limit}`);
+console.log(`Plan: ${usage.plan.tier}`);
+
+// Check if at risk of hitting limits
+if (usage.active_jobs.percentage && usage.active_jobs.percentage > 80) {
+  console.warn('Approaching active jobs limit!');
+}
+```
+
+## Dead Letter Queue
+
+Manage failed jobs that have exhausted retries:
+
+```typescript
+// List jobs in DLQ
+const dlqJobs = await client.jobs.dlq.list({ limit: 100 });
+
+// Retry failed jobs
+await client.jobs.dlq.retry({
+  queueName: 'emails',
+  limit: 50
+});
+
+// Purge old failures
+await client.jobs.dlq.purge({
+  queueName: 'emails',
+  confirm: true,
+  olderThan: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // 7 days old
+});
+```
+
+## Webhooks
+
+Get notified when job events occur:
+
+```typescript
+// Create webhook for job events
+const webhook = await client.webhooks.create({
+  url: 'https://your-app.com/webhooks/spooled',
+  events: ['job.completed', 'job.failed'],
+  queueName: 'my-queue',
+  secret: 'webhook_secret_key'
+});
+
+// Retry a failed delivery
+await client.webhooks.retryDelivery(webhookId, deliveryId);
+```
+
 ## What's Next?
 
 - [Configuration Guide](./configuration.md) - All configuration options
 - [Workers Guide](./workers.md) - Advanced worker patterns
 - [Workflows Guide](./workflows.md) - Building DAGs and job dependencies
-- [gRPC Guide](./grpc.md) - High-performance streaming
+- [gRPC Guide](./grpc.md) - High-performance streaming (~28x faster)
 - [Resources Reference](./resources.md) - Complete API reference
 
 ## Examples

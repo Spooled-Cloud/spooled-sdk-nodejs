@@ -345,6 +345,13 @@ const result = await client.webhooks.test('webhook_id');
 const deliveries = await client.webhooks.getDeliveries('webhook_id', { limit: 50 });
 ```
 
+### Retry Delivery
+
+```typescript
+const result = await client.webhooks.retryDelivery('webhook_id', 'delivery_id');
+// { success, message }
+```
+
 ---
 
 ## Workers
@@ -447,6 +454,29 @@ const usage = await client.organizations.getUsage();
 // { plan, planDisplayName, usage: { jobsToday, queues, workers, ... } }
 ```
 
+### List Organizations
+
+```typescript
+const orgs = await client.organizations.list();
+// Returns list of organizations accessible to your API key
+```
+
+### Check Slug Availability
+
+```typescript
+const { available, valid, suggestion } = await client.organizations.checkSlug('my-company');
+// available: boolean - whether slug is available
+// valid: boolean - whether slug format is valid
+// suggestion: string | null - alternative slug if not available
+```
+
+### Generate Slug
+
+```typescript
+const { slug } = await client.organizations.generateSlug('My Company Name');
+// Returns a unique, URL-safe slug generated from the name
+```
+
 ---
 
 ## Billing
@@ -465,6 +495,57 @@ const portal = await client.billing.createPortal({
   returnUrl: 'https://yourapp.com/billing',
 });
 // { url } - Redirect user to this Stripe portal URL
+```
+
+---
+
+## Authentication
+
+### Login with API Key
+
+```typescript
+const { accessToken, refreshToken } = await client.auth.login({
+  apiKey: 'sk_live_...'
+});
+
+// Use JWT for subsequent requests
+const jwtClient = new SpooledClient({ accessToken });
+```
+
+### Validate Token
+
+```typescript
+const { valid } = await client.auth.validate({ token: accessToken });
+```
+
+### Refresh Token
+
+```typescript
+const { accessToken } = await client.auth.refresh({ refreshToken });
+```
+
+### Get Current User
+
+```typescript
+const user = await client.auth.me(); // Requires JWT token
+// { organizationId, ... }
+```
+
+### Logout
+
+```typescript
+await client.auth.logout();
+```
+
+### Email-Based Login
+
+```typescript
+// Start email login flow (sends magic link)
+const result = await client.auth.startEmailLogin('user@example.com');
+// { success, message }
+
+// Check if email exists in system
+const { exists } = await client.auth.checkEmail('user@example.com');
 ```
 
 ---
