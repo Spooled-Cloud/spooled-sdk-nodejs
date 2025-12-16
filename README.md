@@ -14,7 +14,13 @@ Official Node.js/TypeScript SDK for [Spooled Cloud](https://spooled.cloud) - a m
 - **Realtime events** via WebSocket and SSE
 - **Worker runtime** for processing jobs
 - **Workflow DAGs** for complex job dependencies
-- **gRPC streaming** for high-performance workers
+- **gRPC streaming** for high-performance workers (with automatic limit enforcement)
+- **Tier-based limits** with automatic enforcement across all endpoints
+- **Organization management** with usage tracking
+- **Webhook management** with automatic retries
+- **Dead Letter Queue (DLQ)** operations
+- **API Key management** with Redis caching (~28x faster authentication)
+- **Billing integration** via Stripe
 - **Automatic case conversion** between camelCase (SDK) and snake_case (API)
 
 ## Installation
@@ -165,6 +171,161 @@ await realtime.connect();
 await realtime.subscribe({ queueName: 'my-queue' });
 ```
 
+### Organization Management
+
+Manage your organization and track usage:
+
+```typescript
+// Get current usage and limits
+const usage = await client.organizations.getUsage();
+console.log(`Active jobs: ${usage.active_jobs.current}/${usage.active_jobs.limit}`);
+console.log(`Plan: ${usage.plan.tier}`);
+
+// Generate a unique slug for a new organization
+const { slug } = await client.organizations.generateSlug('My Company');
+
+// Check if a slug is available
+const { available } = await client.organizations.checkSlug('my-company');
+```
+
+### Webhooks
+
+Configure outgoing webhooks for job events:
+
+```typescript
+// Create webhook
+const webhook = await client.webhooks.create({
+  url: 'https://your-app.com/webhooks/spooled',
+  events: ['job.completed', 'job.failed'],
+  queueName: 'my-queue',
+  secret: 'webhook_secret_key'
+});
+
+// Retry a failed delivery
+await client.webhooks.retryDelivery(webhookId, deliveryId);
+
+// Get delivery history
+const deliveries = await client.webhooks.getDeliveries(webhookId);
+```
+
+### Dead Letter Queue (DLQ)
+
+Manage jobs that have exhausted all retries:
+
+```typescript
+// List DLQ jobs
+const dlqJobs = await client.jobs.dlq.list({ limit: 100 });
+
+// Retry specific jobs from DLQ
+await client.jobs.dlq.retry({
+  jobIds: ['job-1', 'job-2'],
+});
+
+// Retry jobs by queue
+await client.jobs.dlq.retry({
+  queueName: 'my-queue',
+  limit: 50
+});
+
+// Purge DLQ (requires confirmation)
+await client.jobs.dlq.purge({
+  queueName: 'my-queue',
+  confirm: true
+});
+```
+
+### API Key Management
+
+Manage API keys programmatically:
+
+```typescript
+// Create a new API key
+const apiKey = await client.apiKeys.create({
+  name: 'Production Worker',
+  queues: ['emails', 'notifications'],
+  rateLimit: 1000
+});
+
+console.log(`Save this key: ${apiKey.key}`); // Only shown once!
+
+// List all API keys
+const keys = await client.apiKeys.list();
+
+// Revoke a key
+await client.apiKeys.revoke(keyId);
+```
+
+### Billing & Subscriptions
+
+Manage billing via Stripe integration:
+
+```typescript
+// Get billing status
+const status = await client.billing.getStatus();
+
+// Create customer portal session
+const { url } = await client.billing.createPortal({
+  returnUrl: 'https://your-app.com/settings'
+});
+
+// Redirect user to: url
+```
+
+### Authentication
+
+Email-based passwordless authentication:
+
+```typescript
+// Start email login flow
+await client.auth.startEmailLogin('user@example.com');
+// User receives email with login link
+
+// Check if email exists
+const { exists } = await client.auth.checkEmail('user@example.com');
+
+// Exchange API key for JWT
+const { accessToken, refreshToken } = await client.auth.login({
+  apiKey: 'sk_live_...'
+});
+
+// Use JWT for subsequent requests
+const jwtClient = new SpooledClient({ accessToken });
+```
+
+## Plan Limits
+
+All operations automatically enforce tier-based limits:
+
+| Tier | Active Jobs | Daily Jobs | Queues | Workers | Webhooks |
+|------|-------------|------------|--------|---------|----------|
+| **Free** | 10 | 1,000 | 5 | 3 | 2 |
+| **Starter** | 100 | 100,000 | 25 | 25 | 10 |
+| **Enterprise** | Unlimited | Unlimited | Unlimited | Unlimited | Unlimited |
+
+**Limits are enforced on:**
+- ✅ HTTP job creation (`POST /jobs`, `POST /jobs/bulk`)
+- ✅ gRPC job enqueue
+- ✅ Workflow creation (counts all jobs in workflow)
+- ✅ Schedule triggers
+- ✅ DLQ retry operations
+- ✅ Worker registration
+- ✅ Queue creation
+- ✅ Webhook creation
+
+When limits are exceeded, you'll receive a `403 Forbidden` response with details:
+
+```typescript
+try {
+  await client.jobs.create({ /* ... */ });
+} catch (error) {
+  if (error.statusCode === 403 && error.code === 'limit_exceeded') {
+    console.log(`Limit: ${error.message}`);
+    console.log(`Current: ${error.current}, Max: ${error.limit}`);
+    console.log(`Upgrade to: ${error.upgradeTo}`);
+  }
+}
+```
+
 ## Error Handling
 
 All errors extend `SpooledError` with specific subclasses:
@@ -174,6 +335,7 @@ import {
   NotFoundError,
   RateLimitError,
   ValidationError,
+  LimitExceededError,
   isSpooledError,
 } from '@spooled/sdk';
 
@@ -182,6 +344,9 @@ try {
 } catch (error) {
   if (error instanceof NotFoundError) {
     console.log('Job not found');
+  } else if (error instanceof LimitExceededError) {
+    console.log(`Plan limit: ${error.message}`);
+    console.log(`Upgrade to ${error.upgradeTo} for more capacity`);
   } else if (error instanceof RateLimitError) {
     console.log(`Retry after ${error.getRetryAfter()} seconds`);
   } else if (isSpooledError(error)) {
@@ -192,34 +357,56 @@ try {
 
 ## gRPC API
 
-For high-throughput workers, use the native gRPC API:
+For high-throughput workers, use the native gRPC API with the included gRPC client:
 
 ```typescript
-import * as grpc from '@grpc/grpc-js';
-import * as protoLoader from '@grpc/proto-loader';
+import { SpooledGrpcClient } from '@spooled/sdk';
 
-const packageDefinition = protoLoader.loadSync('spooled.proto');
-const spooled = grpc.loadPackageDefinition(packageDefinition).spooled.v1;
-
-const client = new spooled.QueueService(
+// Connect to gRPC server
+const grpcClient = new SpooledGrpcClient(
   'grpc.spooled.cloud:443',
-  grpc.credentials.createSsl()
+  'sk_live_your_key'
 );
 
-const metadata = new grpc.Metadata();
-metadata.add('x-api-key', 'sk_live_your_key');
-
-// Stream jobs
-const stream = client.StreamJobs({
-  queue_name: 'emails',
-  worker_id: 'worker-1',
-  lease_duration_secs: 300,
-}, metadata);
-
-stream.on('data', (job) => {
-  console.log('Received job:', job.id);
+// Register worker
+const { workerId } = await grpcClient.workers.register({
+  queueName: 'emails',
+  hostname: 'worker-1',
+  maxConcurrency: 10
 });
+
+// Enqueue job (enforces plan limits automatically)
+const { jobId } = await grpcClient.queue.enqueue({
+  queueName: 'emails',
+  payload: { to: 'user@example.com' },
+  priority: 5
+});
+
+// Dequeue jobs in batch
+const { jobs } = await grpcClient.queue.dequeue({
+  queueName: 'emails',
+  workerId,
+  batchSize: 10,
+  leaseDurationSecs: 300
+});
+
+// Process and complete
+for (const job of jobs) {
+  await processJob(job);
+  await grpcClient.queue.complete({
+    jobId: job.id,
+    workerId,
+    result: { success: true }
+  });
+}
 ```
+
+**gRPC Features:**
+- ⚡ **~28x faster** than HTTP (with Redis cache: ~50ms vs 1400ms)
+- 🛡️ **Automatic plan limit enforcement** on enqueue operations
+- 📦 **Batch operations** for higher throughput
+- 🔄 **Streaming support** for real-time job processing
+- 🔐 **Secure authentication** via API key metadata
 
 See [gRPC Guide](docs/grpc.md) for complete documentation.
 
