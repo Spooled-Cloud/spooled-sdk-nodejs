@@ -20,8 +20,6 @@
  *   SKIP_STRESS=0|1
  */
 import { spawn } from 'child_process';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
 
 const argv = new Set(process.argv.slice(2));
 const isFull = argv.has('--full');
@@ -42,15 +40,13 @@ const skipGrpc = process.env.SKIP_GRPC ?? '0';
 // Default to skipping stress tests in production (can be overridden or --full)
 const skipStress = isFull ? '0' : (process.env.SKIP_STRESS ?? '1');
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const testLocalPath = join(__dirname, 'test-local.ts');
-
+// Run test-local.ts from the scripts directory
 const child = spawn(
   'npx',
-  ['tsx', testLocalPath],
+  ['tsx', 'scripts/test-local.ts'],
   {
     stdio: 'inherit',
+    cwd: process.cwd().includes('scripts') ? '..' : '.',
     env: {
       ...process.env,
       API_KEY: apiKey,
