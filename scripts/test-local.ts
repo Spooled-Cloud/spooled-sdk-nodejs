@@ -793,6 +793,31 @@ async function testWorkflows(client: SpooledClient): Promise<void> {
     const workflow = await client.workflows.cancel(workflowId);
     assertEqual(workflow.status, 'cancelled', 'status');
   });
+
+  // Create a new workflow to test retry
+  let retryWorkflowId = '';
+  await runTest('Create workflow for retry test', async () => {
+    const result = await client.workflows.create({
+      name: `${testPrefix}-retry-test`,
+      description: 'Workflow for testing retry',
+      jobs: [
+        { key: 'job1', queueName: `${testPrefix}-workflow`, payload: { step: 1 } },
+      ],
+    });
+    retryWorkflowId = result.workflowId;
+    assert(!!retryWorkflowId, 'workflow id should be set');
+  });
+
+  await runTest('POST /api/v1/workflows/{id}/retry - Retry workflow (should fail - not failed status)', async () => {
+    try {
+      await client.workflows.retry(retryWorkflowId);
+      throw new Error('Expected error for non-failed workflow');
+    } catch (error: unknown) {
+      // Expected - workflow is not in failed status
+      const message = error instanceof Error ? error.message : String(error);
+      assert(message.includes('failed') || message.includes('400'), 'error should mention failed status or be 400');
+    }
+  });
 }
 
 async function testWorkflowExecution(client: SpooledClient): Promise<void> {

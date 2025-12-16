@@ -529,6 +529,7 @@ interface ScheduleRun {
 | POST | `/api/v1/workflows` | Create workflow |
 | GET | `/api/v1/workflows/{id}` | Get workflow |
 | POST | `/api/v1/workflows/{id}/cancel` | Cancel workflow |
+| POST | `/api/v1/workflows/{id}/retry` | Retry failed workflow |
 | GET | `/api/v1/jobs/{id}/dependencies` | Get job dependencies |
 | POST | `/api/v1/jobs/{id}/dependencies` | Add job dependencies |
 

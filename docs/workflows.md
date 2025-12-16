@@ -226,26 +226,31 @@ When a job in a workflow fails:
 
 ### Retry Failed Workflows
 
+The simplest way to retry a failed workflow is to use the `retry` method:
+
 ```typescript
 // Get the failed workflow
 const status = await client.workflows.get(workflowId);
 
 if (status.status === 'failed') {
-  // Find failed jobs and retry them
-  for (const job of status.jobs) {
-    if (job.status === 'failed') {
-      await client.jobs.retry(job.id);
-    }
-  }
+  // Retry all failed jobs in one call
+  const workflow = await client.workflows.retry(workflowId);
+  console.log(`Workflow ${workflow.status}`); // 'running'
 }
 ```
 
+This will:
+- Reset all failed/deadletter jobs back to pending
+- Clear retry counts and error messages
+- Resume the workflow (status changes to 'running')
+- Notify workers that jobs are ready for processing
+
 ### Partial Workflow Recovery
 
-For complex workflows, you may want to resume from a specific point:
+For more granular control, you can retry individual jobs:
 
 ```typescript
-// Re-run only the failed job and its dependents
+// Re-run only a specific failed job and its dependents
 const failedJobKey = 'transform';
 const jobId = workflow.jobMappings[failedJobKey];
 

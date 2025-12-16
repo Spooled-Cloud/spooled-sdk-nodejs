@@ -145,6 +145,30 @@ describe('WorkflowsResource', () => {
     });
   });
 
+  describe('retry', () => {
+    it('should retry a failed workflow', async () => {
+      server.use(
+        http.post('https://api.spooled.cloud/api/v1/workflows/workflow_123/retry', () => {
+          return HttpResponse.json({
+            id: 'workflow_123',
+            name: 'My Workflow',
+            status: 'running',
+            total_jobs: 5,
+            completed_jobs: 2,
+            failed_jobs: 0,
+            progress_percent: 40,
+            created_at: '2024-01-01T00:00:00Z',
+          });
+        })
+      );
+
+      const client = createClient();
+      const workflow = await client.workflows.retry('workflow_123');
+
+      expect(workflow.status).toBe('running');
+    });
+  });
+
   describe('job dependencies', () => {
     it('should get job dependencies', async () => {
       server.use(

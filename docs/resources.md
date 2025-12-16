@@ -292,6 +292,16 @@ const status = await client.workflows.get('workflow_id');
 await client.workflows.cancel('workflow_id');
 ```
 
+### Retry Failed Workflow
+
+Retry all failed jobs in a workflow. Only works on workflows with status `failed`.
+
+```typescript
+const workflow = await client.workflows.retry('workflow_id');
+// Workflow status changes from 'failed' to 'running'
+// Failed jobs are reset to 'pending' and reprocessed
+```
+
 ### Job Dependencies
 
 ```typescript
