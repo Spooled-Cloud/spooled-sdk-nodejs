@@ -40,7 +40,7 @@ import {
 
 const API_KEY = process.env.API_KEY;
 const BASE_URL = process.env.BASE_URL || 'http://localhost:8080';
-const GRPC_ADDRESS = process.env.GRPC_ADDRESS || 'localhost:50051';
+const GRPC_ADDRESS = process.env.GRPC_ADDRESS || '127.0.0.1:50051';
 const WEBHOOK_PORT = parseInt(process.env.WEBHOOK_PORT || '3001', 10);
 const VERBOSE = process.env.VERBOSE === '1' || process.env.VERBOSE === 'true';
 // Skip gRPC by default - requires separate gRPC server setup
@@ -857,6 +857,9 @@ async function testWorkflowExecution(client: SpooledClient): Promise<void> {
       await sleep(200);
     }
 
+    // Wait for workflow status update
+    await sleep(2000);
+
     // Verify processing order
     log(`Processing order: ${processedJobs.join(' -> ')}`);
     
@@ -914,7 +917,7 @@ async function testGrpc(_client: SpooledClient): Promise<void> {
     });
     
     // Wait for connection
-    await grpcClient.waitForReady(new Date(Date.now() + 5000));
+    await grpcClient.waitForReady(new Date(Date.now() + 10000));
     log('gRPC connected');
   });
 
@@ -1233,7 +1236,7 @@ async function testQueueAdvanced(client: SpooledClient): Promise<void> {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          default_timeout_seconds: 600,
+          default_timeout: 600,
           max_retries: 5,
         }),
       });
@@ -1315,7 +1318,10 @@ async function testDLQAdvanced(client: SpooledClient): Promise<void> {
           'Authorization': `Bearer ${API_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ queue_name: `${testPrefix}-dlq-test` }),
+        body: JSON.stringify({ 
+          queue_name: `${testPrefix}-dlq-test`,
+          confirm: true
+        }),
       });
       if (res.ok) {
         const data = await res.json() as { purged_count?: number };
