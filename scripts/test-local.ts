@@ -23,6 +23,7 @@
  *   GRPC_ADDRESS=localhost:50051  - gRPC server address (local/self-hosted)
  *   GRPC_ADDRESS=grpc.spooled.cloud:443 - Spooled Cloud gRPC endpoint (TLS)
  *   SKIP_GRPC=1                   - Skip gRPC tests
+ *   SKIP_STRESS=1                 - Skip stress/load tests (recommended for production)
  *   VERBOSE=1                     - Enable debug logging
  *   WEBHOOK_PORT=3001             - Custom webhook server port
  */
@@ -46,6 +47,8 @@ const WEBHOOK_PORT = parseInt(process.env.WEBHOOK_PORT || '3001', 10);
 const VERBOSE = process.env.VERBOSE === '1' || process.env.VERBOSE === 'true';
 // Skip gRPC by default - requires separate gRPC server setup
 const SKIP_GRPC = process.env.SKIP_GRPC !== '0' && process.env.SKIP_GRPC !== 'false';
+// Skip stress tests (recommended for production)
+const SKIP_STRESS = process.env.SKIP_STRESS === '1' || process.env.SKIP_STRESS === 'true';
 
 if (!API_KEY) {
   console.error('❌ API_KEY environment variable is required');
@@ -3543,7 +3546,13 @@ async function main(): Promise<void> {
     await testTierLimits(client);
     await testGrpcTierLimits(client);
     await testConcurrentOperations(client);
-    await testStressLoad(client);
+    if (SKIP_STRESS) {
+      console.log('\n🔥 Stress & Load Testing');
+      console.log('─'.repeat(60));
+      console.log('  ⏭️  Stress tests skipped (set SKIP_STRESS=0 to enable)');
+    } else {
+      await testStressLoad(client);
+    }
 
   } catch (error) {
     console.error('\n💥 Fatal error:', error);
