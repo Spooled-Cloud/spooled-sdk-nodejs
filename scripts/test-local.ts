@@ -844,10 +844,11 @@ async function testWorkflowExecution(client: SpooledClient): Promise<void> {
 
     worker.process(async (ctx) => {
       const payload = ctx.payload as Record<string, unknown>;
-      processedJobs.push(payload.step as string);
-      log(`Processing step ${payload.step}`);
+      const step = String(payload.step);
+      processedJobs.push(step);
+      log(`Processing step ${step}`);
       await sleep(100);
-      return { step: payload.step, completed: true };
+      return { step, completed: true };
     });
 
     await worker.start();
@@ -892,7 +893,7 @@ async function testWorkflowExecution(client: SpooledClient): Promise<void> {
   });
 
   // Cleanup
-  if (worker) await worker.stop();
+  if (worker) await (worker as SpooledWorker).stop();
 }
 
 async function testGrpc(_client: SpooledClient): Promise<void> {
@@ -931,10 +932,8 @@ async function testGrpc(_client: SpooledClient): Promise<void> {
       log('gRPC connected');
     } catch (e) {
       // Clean up on failure
-      if (grpcClient) {
-        try { grpcClient.close(); } catch { /* ignore */ }
-        grpcClient = null;
-      }
+      try { grpcClient?.close(); } catch { /* ignore */ }
+      grpcClient = null;
       throw e;
     }
   });
@@ -1130,12 +1129,10 @@ async function testGrpc(_client: SpooledClient): Promise<void> {
     });
   } finally {
     // Always close gRPC connection
-    if (grpcClient) {
-      try {
-        grpcClient.close();
-      } catch {
-        // Ignore close errors
-      }
+    try {
+      if (grpcClient) (grpcClient as SpooledGrpcClient).close();
+    } catch {
+      // Ignore close errors
     }
   }
 }
@@ -1171,10 +1168,8 @@ async function testGrpcAdvanced(_client: SpooledClient): Promise<void> {
       ]);
       grpcConnected = true;
     } catch (e) {
-      if (grpcClient) {
-        try { grpcClient.close(); } catch { /* ignore */ }
-        grpcClient = null;
-      }
+      try { grpcClient?.close(); } catch { /* ignore */ }
+      grpcClient = null;
       throw e;
     }
   });
@@ -1631,7 +1626,7 @@ async function testGrpcAdvanced(_client: SpooledClient): Promise<void> {
       // Check stats
       const stats = await grpcClient.queue.getQueueStats(mixedQueue);
       log(`Mixed queue stats: pending=${stats.pending}, processing=${stats.processing}, completed=${stats.completed}`);
-      assert(stats.total >= 3, 'total should be at least 3');
+      assert(Number(stats.total) >= 3, 'total should be at least 3');
 
       // Cleanup
       await grpcClient.workers.deregister(wId);
@@ -1841,12 +1836,10 @@ async function testGrpcAdvanced(_client: SpooledClient): Promise<void> {
     });
 
   } finally {
-    if (grpcClient) {
-      try {
-        grpcClient.close();
-      } catch {
-        // Ignore close errors
-      }
+    try {
+      if (grpcClient) (grpcClient as SpooledGrpcClient).close();
+    } catch {
+      // Ignore close errors
     }
   }
 }
@@ -1881,10 +1874,8 @@ async function testGrpcErrorHandling(_client: SpooledClient): Promise<void> {
       ]);
       grpcConnected = true;
     } catch (e) {
-      if (grpcClient) {
-        try { grpcClient.close(); } catch { /* ignore */ }
-        grpcClient = null;
-      }
+      try { grpcClient?.close(); } catch { /* ignore */ }
+      grpcClient = null;
       throw e;
     }
   });
@@ -2024,12 +2015,10 @@ async function testGrpcErrorHandling(_client: SpooledClient): Promise<void> {
     });
 
   } finally {
-    if (grpcClient) {
-      try {
-        grpcClient.close();
-      } catch {
-        // Ignore close errors
-      }
+    try {
+      if (grpcClient) (grpcClient as SpooledGrpcClient).close();
+    } catch {
+      // Ignore close errors
     }
   }
 }
@@ -2153,6 +2142,7 @@ async function testQueueAdvanced(client: SpooledClient): Promise<void> {
   await runTest('PUT /api/v1/queues/{name}/config - Update queue config', async () => {
     try {
       const config = await client.queues.updateConfig(queueName, {
+        queueName,
         defaultTimeout: 600,
         maxRetries: 5,
       });
@@ -2232,7 +2222,7 @@ async function testBilling(client: SpooledClient): Promise<void> {
   await runTest('GET /api/v1/billing/status - Get billing status', async () => {
     try {
       const status = await client.billing.getStatus();
-      log(`Billing status: plan=${status.plan || 'N/A'}`);
+      log(`Billing status: plan=${status.planTier || 'N/A'}`);
     } catch (e: unknown) {
       if (isSpooledError(e) && (e.statusCode === 404 || e.statusCode === 501)) {
         log('Billing not configured (expected in local dev)');
@@ -2498,8 +2488,8 @@ async function testWorkerIntegration(client: SpooledClient): Promise<void> {
       await sleep(100);
     }
 
-    // Worker.isRunning may not be immediately true; check state or workerStarted flag
-    assert(workerStarted || worker.isRunning, 'worker should be running');
+    // Worker state may not be immediately 'running'; check state or workerStarted flag
+    assert(workerStarted || worker.getState() === 'running', 'worker should be running');
   });
 
   await runTest('Process multiple jobs through worker', async () => {
@@ -2552,7 +2542,7 @@ async function testWorkerIntegration(client: SpooledClient): Promise<void> {
   await runTest('Stop worker gracefully', async () => {
     if (worker) {
       await worker.stop();
-      assert(!worker.isRunning, 'worker should be stopped');
+      assert(worker.getState() === 'stopped', 'worker should be stopped');
     }
   });
 }
@@ -2625,7 +2615,7 @@ async function testWebhookDelivery(client: SpooledClient): Promise<void> {
   });
 
   // Cleanup
-  if (worker) await worker.stop();
+  if (worker) await (worker as SpooledWorker).stop();
   if (webhookId) {
     try { await client.webhooks.delete(webhookId); } catch { /* ignore */ }
   }
@@ -3012,7 +3002,7 @@ async function testTierLimits(mainClient: SpooledClient): Promise<void> {
     assertDefined(usage.plan, 'should have plan');
     assertDefined(usage.limits.tier, 'should have limits tier');
     // Note: limits can be null for enterprise tier (unlimited)
-    const limits = usage.limits as Record<string, unknown>;
+    const limits = usage.limits as unknown as Record<string, unknown>;
     assert('max_active_jobs' in limits || 'maxActiveJobs' in limits, 'should have job limit field');
     assert('max_queues' in limits || 'maxQueues' in limits, 'should have queues limit field');
     assert('max_workers' in limits || 'maxWorkers' in limits, 'should have workers limit field');
@@ -3173,7 +3163,7 @@ async function testConcurrentOperations(client: SpooledClient): Promise<void> {
 
   await runTest('Concurrent job creation', async () => {
     const numJobs = 20;
-    const promises = [];
+    const promises: Promise<{ id: string }>[] = [];
 
     for (let i = 0; i < numJobs; i++) {
       promises.push(
@@ -3195,7 +3185,7 @@ async function testConcurrentOperations(client: SpooledClient): Promise<void> {
 
   await runTest('Concurrent worker registration', async () => {
     const numWorkers = 10;
-    const promises = [];
+    const promises: Promise<{ id: string }>[] = [];
 
     for (let i = 0; i < numWorkers; i++) {
       promises.push(
@@ -3278,7 +3268,7 @@ async function testConcurrentOperations(client: SpooledClient): Promise<void> {
     }
 
     // Try to complete the same job multiple times concurrently
-    const completePromises = [];
+    const completePromises: Promise<string>[] = [];
     for (let i = 0; i < 5; i++) {
       completePromises.push(
           client.jobs.complete(jobId, { workerId: worker.id, result: { attempt: i } })
@@ -3323,7 +3313,7 @@ async function testStressLoad(client: SpooledClient): Promise<void> {
   const queueName = `${testPrefix}-stress`;
 
   await runTest('Bulk enqueue 100 jobs', async () => {
-    const jobs = [];
+    const jobs: { payload: { index: number; stress: string } }[] = [];
     for (let i = 0; i < 100; i++) {
       jobs.push({ payload: { index: i, stress: 'test' } });
     }
