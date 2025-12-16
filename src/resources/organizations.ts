@@ -76,4 +76,11 @@ export class OrganizationsResource {
       params: { slug },
     });
   }
+
+  /**
+   * Generate a unique slug from an organization name
+   */
+  async generateSlug(name: string): Promise<{ slug: string }> {
+    return this.http.post<{ slug: string }>('/organizations/generate-slug', { name });
+  }
 }

@@ -52,4 +52,20 @@ export class AuthResource {
   async validate(params: ValidateTokenParams): Promise<ValidateTokenResponse> {
     return this.http.post<ValidateTokenResponse>('/auth/validate', params);
   }
+
+  /**
+   * Start email-based login flow (sends magic link)
+   */
+  async startEmailLogin(email: string): Promise<{ success: boolean; message: string }> {
+    return this.http.post<{ success: boolean; message: string }>('/auth/email/start', { email });
+  }
+
+  /**
+   * Check if an email address exists in the system
+   */
+  async checkEmail(email: string): Promise<{ exists: boolean }> {
+    return this.http.get<{ exists: boolean }>('/auth/check-email', {
+      params: { email },
+    });
+  }
 }

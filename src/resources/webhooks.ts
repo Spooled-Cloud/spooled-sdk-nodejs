@@ -64,4 +64,13 @@ export class WebhooksResource {
   async getDeliveries(id: string): Promise<OutgoingWebhookDelivery[]> {
     return this.http.get<OutgoingWebhookDelivery[]>(`/outgoing-webhooks/${id}/deliveries`);
   }
+
+  /**
+   * Retry a specific webhook delivery
+   */
+  async retryDelivery(webhookId: string, deliveryId: string): Promise<{ success: boolean; message: string }> {
+    return this.http.post<{ success: boolean; message: string }>(
+      `/outgoing-webhooks/${webhookId}/retry/${deliveryId}`
+    );
+  }
 }
