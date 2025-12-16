@@ -124,7 +124,7 @@ describe('SpooledGrpcClient', () => {
 
     it('should use SSL credentials for non-localhost', () => {
       const client = new SpooledGrpcClient({
-        address: 'grpc.spooled.cloud:50051',
+        address: 'grpc.spooled.cloud:443',
         apiKey: 'sk_test_123',
       });
 

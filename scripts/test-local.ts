@@ -20,7 +20,8 @@
  *   API_KEY=sk_test_... BASE_URL=http://localhost:8080 npx tsx scripts/test-local.ts
  *
  * Options:
- *   GRPC_ADDRESS=localhost:50051  - gRPC server address
+ *   GRPC_ADDRESS=localhost:50051  - gRPC server address (local/self-hosted)
+ *   GRPC_ADDRESS=grpc.spooled.cloud:443 - Spooled Cloud gRPC endpoint (TLS)
  *   SKIP_GRPC=1                   - Skip gRPC tests
  *   VERBOSE=1                     - Enable debug logging
  *   WEBHOOK_PORT=3001             - Custom webhook server port
