@@ -362,11 +362,14 @@ For high-throughput workers, use the native gRPC API with the included gRPC clie
 ```typescript
 import { SpooledGrpcClient } from '@spooled/sdk';
 
-// Connect to gRPC server
-const grpcClient = new SpooledGrpcClient(
-  'grpc.spooled.cloud:443',
-  'sk_live_your_key'
-);
+// Connect to gRPC server (Optimized for Cloudflare Tunnel)
+// useTls: true if connecting to grpc.spooled.cloud:443 (Cloudflare terminates TLS)
+// useTls: false if connecting to localhost or direct backend
+const grpcClient = new SpooledGrpcClient({
+  address: 'grpc.spooled.cloud:443',
+  apiKey: 'sk_live_your_key',
+  useTls: true
+});
 
 // Register worker
 const { workerId } = await grpcClient.workers.register({
