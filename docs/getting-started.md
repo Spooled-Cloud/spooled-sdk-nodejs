@@ -289,4 +289,3 @@ Check out the [examples](../examples/) directory for runnable code:
 - `realtime.ts` - Real-time event streaming
 - `schedules.ts` - Cron schedules
 - `error-handling.ts` - Error handling patterns
-

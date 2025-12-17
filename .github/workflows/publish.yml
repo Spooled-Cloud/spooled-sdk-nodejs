@@ -72,5 +72,3 @@ jobs:
         # The --provenance flag with id-token: write triggers OIDC authentication
         # DO NOT set NODE_AUTH_TOKEN - let npm use OIDC instead
         run: npm publish --provenance --access public
-
-

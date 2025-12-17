@@ -22,4 +22,3 @@ export default defineConfig({
     '@grpc/proto-loader',
   ],
 });
-

@@ -650,4 +650,3 @@ The full proto file is available at:
 Key services:
 - `QueueService`: Enqueue, Dequeue, StreamJobs, Complete, Fail, RenewLease
 - `WorkerService`: ProcessJobs (bidirectional streaming)
-

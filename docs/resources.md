@@ -700,4 +700,3 @@ import type {
   JsonObject,
 } from '@spooled/sdk';
 ```
-

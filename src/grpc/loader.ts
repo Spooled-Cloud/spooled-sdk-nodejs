@@ -89,4 +89,3 @@ export async function loadProtoDefinitionAsync(): Promise<SpooledProtoDefinition
 export function clearProtoCache(): void {
   cachedDefinition = null;
 }
-

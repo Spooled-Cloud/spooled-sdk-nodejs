@@ -316,4 +316,3 @@ const config: SpooledClientConfig = {
   timeout: 60000,
 };
 ```
-

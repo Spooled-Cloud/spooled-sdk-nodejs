@@ -1112,4 +1112,3 @@ The following endpoints exist in backend routes but are missing from `docs/opena
    - `POST /api/v1/billing/portal`
 
 These are implemented in the SDK based on backend behavior.
-
