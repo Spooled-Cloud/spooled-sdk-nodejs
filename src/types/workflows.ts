@@ -112,3 +112,51 @@ export interface AddDependenciesResponse {
     dependencyType: string;
   }>;
 }
+
+/** Job within a workflow */
+export interface WorkflowJob {
+  /** Job ID */
+  id: string;
+  /** Workflow ID this job belongs to */
+  workflowId: string;
+  /** Job key within the workflow */
+  key: string;
+  /** Queue name */
+  queueName: string;
+  /** Current job status */
+  status: 'pending' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'deadletter';
+  /** Job payload */
+  payload: JsonObject;
+  /** Job result (if completed) */
+  result?: JsonObject;
+  /** Error message (if failed) */
+  error?: string;
+  /** Job IDs this job depends on */
+  dependsOn: string[];
+  /** Job priority */
+  priority: number;
+  /** Maximum retries */
+  maxRetries: number;
+  /** Current attempt number */
+  attempt: number;
+  /** Timeout in seconds */
+  timeoutSeconds?: number;
+  /** When the job was created */
+  createdAt: string;
+  /** When the job started running */
+  startedAt?: string;
+  /** When the job completed */
+  completedAt?: string;
+}
+
+/** Workflow job status summary */
+export interface WorkflowJobStatus {
+  /** Job ID */
+  jobId: string;
+  /** Job key within the workflow */
+  key: string;
+  /** Current status */
+  status: string;
+  /** Progress percentage (0-100) */
+  progress?: number;
+}

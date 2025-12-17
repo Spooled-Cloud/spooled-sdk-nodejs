@@ -1,7 +1,7 @@
 /**
  * Organizations Resource
  *
- * Handles organization operations.
+ * Handles organization operations including webhook token management.
  */
 
 import type { HttpClient } from '../utils/http.js';
@@ -14,6 +14,7 @@ import type {
   OrganizationUsage,
   OrganizationMember,
   CheckSlugResponse,
+  WebhookTokenResponse,
 } from '../types/organizations.js';
 
 export class OrganizationsResource {
@@ -82,5 +83,52 @@ export class OrganizationsResource {
    */
   async generateSlug(name: string): Promise<{ slug: string }> {
     return this.http.post<{ slug: string }>('/organizations/generate-slug', { name });
+  }
+
+  /**
+   * Get the webhook token for the current organization.
+   *
+   * This token is used to verify incoming webhook payloads from Spooled.
+   * Use this token to validate webhook signatures.
+   *
+   * @example
+   * ```typescript
+   * const { token } = await client.organizations.getWebhookToken();
+   * console.log('Webhook token:', token);
+   * ```
+   */
+  async getWebhookToken(): Promise<WebhookTokenResponse> {
+    return this.http.get<WebhookTokenResponse>('/organizations/webhook-token');
+  }
+
+  /**
+   * Regenerate the webhook token for the current organization.
+   *
+   * This invalidates the old token immediately. All webhook signature
+   * verification using the old token will fail after regeneration.
+   *
+   * @example
+   * ```typescript
+   * const { token: newToken } = await client.organizations.regenerateWebhookToken();
+   * console.log('New webhook token:', newToken);
+   * ```
+   */
+  async regenerateWebhookToken(): Promise<WebhookTokenResponse> {
+    return this.http.post<WebhookTokenResponse>('/organizations/webhook-token/regenerate');
+  }
+
+  /**
+   * Clear/delete the webhook token for the current organization.
+   *
+   * After this, webhook signature verification will fail until a new
+   * token is generated via regenerateWebhookToken().
+   *
+   * @example
+   * ```typescript
+   * await client.organizations.clearWebhookToken();
+   * ```
+   */
+  async clearWebhookToken(): Promise<void> {
+    await this.http.post('/organizations/webhook-token/clear');
   }
 }

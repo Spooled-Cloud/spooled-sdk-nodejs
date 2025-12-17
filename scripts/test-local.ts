@@ -2940,6 +2940,140 @@ async function testOrgManagement(client: SpooledClient): Promise<void> {
   });
 }
 
+async function testOrganizationWebhookToken(client: SpooledClient): Promise<void> {
+  console.log('\n🔐 Organization Webhook Token');
+  console.log('─'.repeat(60));
+
+  let initialToken: string | null = null;
+
+  await runTest('GET /api/v1/organizations/webhook-token - Get webhook token', async () => {
+    try {
+      const result = await client.organizations.getWebhookToken();
+      assertDefined(result.token, 'webhook token');
+      initialToken = result.token;
+      log(`Webhook token (first 8 chars): ${result.token.substring(0, 8)}...`);
+    } catch (e: unknown) {
+      if (isSpooledError(e) && e.statusCode === 404) {
+        log('Webhook token not set yet (expected for new orgs)');
+      } else {
+        throw e;
+      }
+    }
+  });
+
+  await runTest('POST /api/v1/organizations/webhook-token/regenerate - Regenerate token', async () => {
+    try {
+      const result = await client.organizations.regenerateWebhookToken();
+      assertDefined(result.token, 'regenerated webhook token');
+      log(`New token (first 8 chars): ${result.token.substring(0, 8)}...`);
+      if (initialToken && result.token === initialToken) {
+        throw new Error('Token should be different after regeneration');
+      }
+    } catch (e: unknown) {
+      if (isSpooledError(e) && e.statusCode === 404) {
+        log('Regenerate webhook token endpoint not available');
+      } else {
+        throw e;
+      }
+    }
+  });
+
+  await runTest('POST /api/v1/organizations/webhook-token/clear - Clear token', async () => {
+    try {
+      await client.organizations.clearWebhookToken();
+      log('Webhook token cleared successfully');
+    } catch (e: unknown) {
+      if (isSpooledError(e) && e.statusCode === 404) {
+        log('Clear webhook token endpoint not available');
+      } else {
+        throw e;
+      }
+    }
+  });
+}
+
+async function testWorkflowJobs(client: SpooledClient): Promise<void> {
+  console.log('\n📋 Workflow Jobs Sub-resource');
+  console.log('─'.repeat(60));
+
+  const queueName = `${testPrefix}-wf-jobs-queue`;
+  let workflowId = '';
+  let jobId = '';
+
+  // Create a workflow with multiple jobs first
+  await runTest('Create workflow for jobs testing', async () => {
+    const workflow = await client.workflows.create({
+      name: `${testPrefix}-jobs-test`,
+      jobs: [
+        { key: 'job-a', queueName, payload: { step: 'A' } },
+        { key: 'job-b', queueName, payload: { step: 'B' }, dependsOn: ['job-a'] },
+        { key: 'job-c', queueName, payload: { step: 'C' }, dependsOn: ['job-a'] },
+      ],
+    });
+    assertDefined(workflow.workflowId, 'workflow id');
+    workflowId = workflow.workflowId;
+    jobId = workflow.jobIds.find(j => j.key === 'job-a')?.jobId ?? '';
+    log(`Created workflow ${workflowId} with ${workflow.jobIds.length} jobs`);
+  });
+
+  await runTest('GET /api/v1/workflows/{id}/jobs - List workflow jobs', async () => {
+    try {
+      const jobs = await client.workflows.jobs.list(workflowId);
+      if (jobs.length !== 3) {
+        throw new Error(`Expected 3 jobs, got ${jobs.length}`);
+      }
+      log(`Listed ${jobs.length} jobs: ${jobs.map(j => j.key).join(', ')}`);
+    } catch (e: unknown) {
+      if (isSpooledError(e) && e.statusCode === 404) {
+        log('Workflow jobs list endpoint not available');
+      } else {
+        throw e;
+      }
+    }
+  });
+
+  await runTest('GET /api/v1/workflows/{id}/jobs/{job_id} - Get specific job', async () => {
+    try {
+      const job = await client.workflows.jobs.get(workflowId, jobId);
+      assertDefined(job.id, 'job id');
+      assertDefined(job.status, 'job status');
+      log(`Got job ${job.key} with status: ${job.status}`);
+    } catch (e: unknown) {
+      if (isSpooledError(e) && e.statusCode === 404) {
+        log('Workflow job get endpoint not available');
+      } else {
+        throw e;
+      }
+    }
+  });
+
+  await runTest('GET /api/v1/workflows/{id}/jobs/status - Get jobs status', async () => {
+    try {
+      const statuses = await client.workflows.jobs.getStatus(workflowId);
+      if (statuses.length !== 3) {
+        throw new Error(`Expected 3 job statuses, got ${statuses.length}`);
+      }
+      log(`Job statuses: ${statuses.map(s => `${s.key}=${s.status}`).join(', ')}`);
+    } catch (e: unknown) {
+      if (isSpooledError(e) && e.statusCode === 404) {
+        log('Workflow jobs status endpoint not available');
+      } else {
+        throw e;
+      }
+    }
+  });
+
+  // Cleanup
+  await runTest('Cleanup - Cancel workflow', async () => {
+    try {
+      await client.workflows.cancel(workflowId);
+      log('Workflow cancelled');
+    } catch {
+      log('Workflow cancel failed (may already be completed)');
+    }
+  });
+}
+
 async function testAdminEndpoints(): Promise<void> {
   console.log('\n👑 Admin Endpoints');
   console.log('─'.repeat(60));
@@ -3524,6 +3658,7 @@ async function main(): Promise<void> {
     await testSchedules(client);
     await testWorkflows(client);
     await testWorkflowExecution(client);
+    await testWorkflowJobs(client);
     await testQueueAdvanced(client);
     await testDLQAdvanced(client);
     await testBilling(client);
@@ -3541,6 +3676,7 @@ async function main(): Promise<void> {
     await testMetrics();
     await testWebSocket(client);
     await testOrgManagement(client);
+    await testOrganizationWebhookToken(client);
     await testAdminEndpoints();
     await testEmailLogin(client);
     await testTierLimits(client);

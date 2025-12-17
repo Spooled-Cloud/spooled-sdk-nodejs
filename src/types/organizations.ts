@@ -138,3 +138,9 @@ export interface CheckSlugResponse {
   error?: string;
   suggestion?: string;
 }
+
+/** Webhook token response */
+export interface WebhookTokenResponse {
+  /** The webhook verification token */
+  token: string;
+}
