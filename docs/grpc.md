@@ -596,34 +596,9 @@ const client = new spooled.QueueService(
 
 ### gRPC TLS with Cloudflare Tunnel
 
-If you're using Cloudflare Tunnel to expose your self-hosted gRPC server, there are two options:
+Cloudflare Tunnel **requires HTTPS** for HTTP/2 connections (which gRPC uses). You cannot use plaintext HTTP for gRPC through Cloudflare Tunnel.
 
-#### Option A: Optimized (Recommended) - Disable Internal TLS
-
-For best performance (~100ms latency savings), disable internal TLS and let Cloudflare handle encryption:
-
-1. **Disable TLS on the backend**:
-   ```yaml
-   environment:
-     GRPC_TLS_ENABLED: "false"
-   ```
-
-2. **Configure Cloudflare Tunnel**:
-   - Service Type: `HTTP` (note: HTTP, not HTTPS)
-   - URL: `backend:50051`
-   - HTTP2 connection: `ON`
-
-3. **Connect with TLS from SDK** (Cloudflare provides the TLS):
-   ```typescript
-   const client = new spooled.QueueService(
-     'grpc.your-domain.com:443',
-     grpc.credentials.createSsl()
-   );
-   ```
-
-#### Option B: Legacy - Internal TLS
-
-If you need end-to-end encryption within your network:
+#### Required Configuration
 
 1. **Enable TLS on the backend** (default in `docker-compose.prod.yml`):
    ```yaml
@@ -635,9 +610,17 @@ If you need end-to-end encryption within your network:
    - Service Type: `HTTPS`
    - URL: `backend:50051`
    - HTTP2 connection: `ON`
-   - No TLS Verify: `ON` (accepts self-signed certs)
+   - No TLS Verify: `ON` (required for self-signed certs)
 
-The backend includes self-signed certificates in `./certs/` that work with Cloudflare Tunnel's "No TLS Verify" option.
+3. **Connect with TLS from SDK**:
+   ```typescript
+   const client = new spooled.QueueService(
+     'grpc.your-domain.com:443',
+     grpc.credentials.createSsl()
+   );
+   ```
+
+The backend includes self-signed certificates in `./certs/` (10-year validity) that work with Cloudflare Tunnel's "No TLS Verify" option.
 
 ### Disabling gRPC TLS
 
