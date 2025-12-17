@@ -49,6 +49,8 @@ const VERBOSE = process.env.VERBOSE === '1' || process.env.VERBOSE === 'true';
 const SKIP_GRPC = process.env.SKIP_GRPC !== '0' && process.env.SKIP_GRPC !== 'false';
 // Skip stress tests (recommended for production)
 const SKIP_STRESS = process.env.SKIP_STRESS === '1' || process.env.SKIP_STRESS === 'true';
+// Auto-detect TLS for gRPC: use TLS for production (port 443 or grpc.spooled domain)
+const GRPC_USE_TLS = GRPC_ADDRESS.includes(':443') || GRPC_ADDRESS.includes('grpc.spooled');
 
 if (!API_KEY) {
   console.error('❌ API_KEY environment variable is required');
@@ -947,7 +949,7 @@ async function testGrpc(client: SpooledClient): Promise<void> {
     grpcClient = new SpooledGrpcClient({
       address: GRPC_ADDRESS,
       apiKey: API_KEY!,
-      useTls: false, // localhost
+      useTls: GRPC_USE_TLS, // localhost
     });
 
     // Wait for connection with a timeout that won't freeze
@@ -1189,7 +1191,7 @@ async function testGrpcAdvanced(client: SpooledClient): Promise<void> {
     grpcClient = new SpooledGrpcClient({
       address: GRPC_ADDRESS,
       apiKey: API_KEY!,
-      useTls: false,
+      useTls: GRPC_USE_TLS,
     });
 
     const timeoutPromise = new Promise<never>((_, reject) => {
@@ -1898,7 +1900,7 @@ async function testGrpcErrorHandling(client: SpooledClient): Promise<void> {
     grpcClient = new SpooledGrpcClient({
       address: GRPC_ADDRESS,
       apiKey: API_KEY!,
-      useTls: false,
+      useTls: GRPC_USE_TLS,
     });
 
     const timeoutPromise = new Promise<never>((_, reject) => {
@@ -2007,7 +2009,7 @@ async function testGrpcErrorHandling(client: SpooledClient): Promise<void> {
       const badClient = new SpooledGrpcClient({
         address: GRPC_ADDRESS,
         apiKey: 'sk_test_invalid_key_that_does_not_exist',
-        useTls: false,
+        useTls: GRPC_USE_TLS,
       });
 
       try {
@@ -3324,7 +3326,7 @@ async function testGrpcTierLimits(client: SpooledClient): Promise<void> {
       testGrpcClient = new SpooledGrpcClient({
         address: GRPC_ADDRESS,
         apiKey: API_KEY || '',
-        useTls: false,
+        useTls: GRPC_USE_TLS,
       });
 
       await testGrpcClient.waitForReady(new Date(Date.now() + 5000));
