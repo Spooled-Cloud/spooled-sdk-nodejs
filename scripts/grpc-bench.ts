@@ -1,7 +1,9 @@
-import { SpooledGrpcClient } from '../src/index.js';
+import { SpooledGrpcClient } from "../src/index.js";
 
-const API_KEY = "sk_live_vbv9kNQc2bAJgpuim6nHTaFgJAHpptTfM1s1PY9Q_VU";
-const ADDRESS = "grpc.spooled.cloud:443";
+// IMPORTANT: Do not commit real API keys. GitHub push protection will block them.
+// Use env var for local benchmarks.
+const API_KEY = process.env.SPOOLED_API_KEY ?? "sp_test_your_api_key";
+const ADDRESS = process.env.SPOOLED_GRPC_ADDRESS ?? "grpc.spooled.cloud:443";
 
 async function main() {
   console.log("Creating gRPC client...");

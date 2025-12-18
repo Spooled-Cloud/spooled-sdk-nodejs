@@ -63,7 +63,7 @@ describe('ApiKeysResource', () => {
           receivedBody = await request.json();
           return HttpResponse.json({
             id: 'key_123',
-            key: 'sk_live_new_key_abc123',
+            key: 'sp_test_new_key_abc123',
             name: 'New Key',
             created_at: '2024-01-01T00:00:00Z',
           });
@@ -82,7 +82,7 @@ describe('ApiKeysResource', () => {
       expect(receivedBody.rate_limit).toBe(500);
 
       expect(result.id).toBe('key_123');
-      expect(result.key).toBe('sk_live_new_key_abc123');
+      expect(result.key).toBe('sp_test_new_key_abc123');
     });
   });
 
