@@ -75,7 +75,7 @@ export class SpooledWorker {
       ...DEFAULT_OPTIONS,
       hostname: osHostname(),
       workerType: 'nodejs',
-      version: '1.0.18',
+      version: '1.0.20',
       metadata: {},
       ...options,
     } as Required<SpooledWorkerOptions>;
