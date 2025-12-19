@@ -27,6 +27,7 @@ const { id, created } = await client.jobs.create({
 const jobs = await client.jobs.list({
   queueName: 'my-queue',            // Optional: filter by queue
   status: 'pending',                // Optional: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+  tag: 'billing',                   // Optional: filter by a single tag
   limit: 10,                        // Pagination limit
   offset: 0,                        // Pagination offset
 });

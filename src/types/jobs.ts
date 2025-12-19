@@ -88,6 +88,8 @@ export interface ListJobsParams extends ListParams {
   queueName?: string;
   /** Filter by status */
   status?: JobStatus;
+  /** Filter by a single tag (matches Postgres `tags ? tag` semantics) */
+  tag?: string;
 }
 
 /** Job statistics */

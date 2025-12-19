@@ -160,6 +160,7 @@ WebSocket endpoint requires JWT token in query string: `/api/v1/ws?token=<jwt>`.
 **Query params:**
 - `queue_name?: string`
 - `status?: 'pending' | 'scheduled' | 'processing' | 'completed' | 'failed' | 'deadletter' | 'cancelled'`
+- `tag?: string` — filter by a single tag (matches Postgres `tags ? tag` semantics)
 - `limit?: number` (default 50, max 100)
 - `offset?: number`
 - `order_by?: string`
