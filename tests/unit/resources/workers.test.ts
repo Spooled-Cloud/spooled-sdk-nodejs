@@ -72,8 +72,8 @@ describe('WorkersResource', () => {
             current_jobs: 5,
             status: 'healthy',
             last_heartbeat: '2024-01-01T12:00:00Z',
-            metadata: { version: '1.0.21' },
-            version: '1.0.21',
+            metadata: { version: '1.0.22' },
+            version: '1.0.22',
             registered_at: '2024-01-01T00:00:00Z',
           });
         })
@@ -85,7 +85,7 @@ describe('WorkersResource', () => {
       expect(worker.id).toBe('worker_123');
       expect(worker.queueName).toBe('my-queue');
       expect(worker.maxConcurrency).toBe(10);
-      expect(worker.metadata).toEqual({ version: '1.0.21' });
+      expect(worker.metadata).toEqual({ version: '1.0.22' });
     });
   });
 
@@ -111,7 +111,7 @@ describe('WorkersResource', () => {
         workerType: 'nodejs',
         maxConcurrency: 10,
         metadata: { custom: 'data' },
-        version: '1.0.21',
+        version: '1.0.22',
       });
 
       expect(receivedBody.queue_name).toBe('my-queue');
