@@ -37,7 +37,7 @@ export type DebugFn = (message: string, meta?: unknown) => void;
 
 /** Main SDK configuration options */
 export interface SpooledClientConfig {
-  /** API key for authentication (starts with sk_live_ or sk_test_) */
+  /** API key for authentication (starts with sp_live_, sp_test_, sk_live_, or sk_test_) */
   apiKey?: string;
   /** JWT access token (alternative to API key) */
   accessToken?: string;
@@ -201,9 +201,10 @@ export function validateConfig(config: ResolvedConfig): void {
   }
 
   // Validate API key format if provided
-  if (config.apiKey && !config.apiKey.startsWith('sk_')) {
+  // Accept both sp_ (new standard) and sk_ (legacy) prefixes
+  if (config.apiKey && !config.apiKey.startsWith('sp_') && !config.apiKey.startsWith('sk_')) {
     throw new Error(
-      'Invalid API key format. API keys should start with sk_live_ or sk_test_'
+      'Invalid API key format. API keys should start with sp_live_, sp_test_, sk_live_, or sk_test_'
     );
   }
 

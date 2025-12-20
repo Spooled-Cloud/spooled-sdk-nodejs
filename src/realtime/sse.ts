@@ -67,22 +67,43 @@ export class SseRealtimeClient {
 
     this.filter = filter || null;
 
-    return new Promise((resolve, reject) => {
-      this.setState('connecting');
+    this.setState('connecting');
 
-      const sseUrl = this.buildSseUrl(filter);
-      this.options.debug(`Connecting to SSE: ${sseUrl}`);
+    const sseUrl = this.buildSseUrl(filter);
+    this.options.debug(`Connecting to SSE: ${sseUrl}`);
 
+    // Use eventsource package in Node.js, native EventSource in browser
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let EventSourceImpl: any;
+    if (typeof EventSource !== 'undefined') {
+      EventSourceImpl = EventSource;
+    } else {
+      // Dynamic import for ESM compatibility
       try {
-        // Use eventsource package in Node.js, native EventSource in browser
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports
-        const EventSourceImpl = typeof EventSource !== 'undefined' ? EventSource : require('eventsource');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mod = await import('eventsource') as any;
+        EventSourceImpl = mod.default || mod.EventSource || mod;
+      } catch (importError) {
+        this.setState('disconnected');
+        throw new Error('eventsource package is required for SSE in Node.js. Install it with: npm install eventsource');
+      }
+    }
 
+    return new Promise((resolve, reject) => {
+      try {
         // Create EventSource with authorization header
+        // Note: eventsource v4 changed API - headers are now passed via custom fetch
+        const token = this.options.token;
         this.eventSource = new EventSourceImpl(sseUrl, {
-          headers: {
-            Authorization: `Bearer ${this.options.token}`,
-          },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          fetch: (input: any, init: any) =>
+            fetch(input, {
+              ...init,
+              headers: {
+                ...init?.headers,
+                Authorization: `Bearer ${token}`,
+              },
+            }),
         });
 
         this.eventSource.onopen = () => {
