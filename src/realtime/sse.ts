@@ -83,7 +83,7 @@ export class SseRealtimeClient {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const mod = await import('eventsource') as any;
         EventSourceImpl = mod.default || mod.EventSource || mod;
-      } catch (importError) {
+      } catch {
         this.setState('disconnected');
         throw new Error('eventsource package is required for SSE in Node.js. Install it with: npm install eventsource');
       }

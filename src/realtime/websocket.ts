@@ -80,7 +80,7 @@ export class WebSocketRealtimeClient {
 
       try {
         // Use ws package in Node.js, native WebSocket in browser
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const WebSocketImpl = typeof WebSocket !== 'undefined' ? WebSocket : require('ws');
 
         this.ws = new WebSocketImpl(wsUrl);
