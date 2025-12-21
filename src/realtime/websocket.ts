@@ -64,6 +64,18 @@ export class WebSocketRealtimeClient {
   }
 
   /**
+   * Get WebSocket implementation (browser native or Node.js ws package)
+   */
+  private async getWebSocketImpl(): Promise<typeof WebSocket> {
+    if (typeof WebSocket !== 'undefined') {
+      return WebSocket;
+    }
+    // Node.js environment - use ws package with dynamic import for ESM compatibility
+    const wsModule = await import('ws');
+    return wsModule.default as unknown as typeof WebSocket;
+  }
+
+  /**
    * Connect to the WebSocket server
    */
   async connect(): Promise<void> {
@@ -71,18 +83,23 @@ export class WebSocketRealtimeClient {
       return;
     }
 
+    this.setState('connecting');
+
+    // Build WebSocket URL with token
+    const wsUrl = this.buildWsUrl();
+    this.options.debug(`Connecting to ${wsUrl}`);
+
+    // Get WebSocket implementation (async for ESM compatibility in Node.js)
+    let WebSocketImpl: typeof WebSocket;
+    try {
+      WebSocketImpl = await this.getWebSocketImpl();
+    } catch (error) {
+      this.setState('disconnected');
+      throw new Error(`Failed to load WebSocket implementation: ${error}`);
+    }
+
     return new Promise((resolve, reject) => {
-      this.setState('connecting');
-
-      // Build WebSocket URL with token
-      const wsUrl = this.buildWsUrl();
-      this.options.debug(`Connecting to ${wsUrl}`);
-
       try {
-        // Use ws package in Node.js, native WebSocket in browser
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const WebSocketImpl = typeof WebSocket !== 'undefined' ? WebSocket : require('ws');
-
         this.ws = new WebSocketImpl(wsUrl);
 
         this.ws.onopen = () => {
