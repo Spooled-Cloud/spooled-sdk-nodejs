@@ -111,12 +111,12 @@ export const DEFAULT_CONFIG = {
     successThreshold: 3,
     timeout: 30000,
   } satisfies CircuitBreakerConfig,
-  userAgent: '@spooled/sdk-nodejs/1.0.23',
+  userAgent: '@spooled/sdk-nodejs/1.0.25',
   autoRefreshToken: true,
 } as const;
 
 /** SDK version */
-export const SDK_VERSION = '1.0.23';
+export const SDK_VERSION = '1.0.25';
 
 /** API version prefix */
 export const API_VERSION = 'v1';
