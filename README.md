@@ -413,11 +413,11 @@ for (const job of jobs) {
 ```
 
 **gRPC Features:**
-- ⚡ **~28x faster** than HTTP (with Redis cache: ~50ms vs 1400ms)
-- 🛡️ **Automatic plan limit enforcement** on enqueue operations
-- 📦 **Batch operations** for higher throughput
-- 🔄 **Streaming support** for real-time job processing
-- 🔐 **Secure authentication** via API key metadata
+- **~28x faster** than HTTP (with Redis cache: ~50ms vs 1400ms)
+- **Automatic plan limit enforcement** on enqueue operations
+- **Batch operations** for higher throughput
+- **Streaming support** for real-time job processing
+- **Secure authentication** via API key metadata
 
 See [gRPC Guide](docs/grpc.md) for complete documentation.
 
