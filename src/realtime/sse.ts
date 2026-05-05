@@ -258,7 +258,10 @@ export class SseRealtimeClient {
   }
 
   private handleDisconnect(): void {
-    this.eventSource = null;
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
+    }
 
     if (this.options.autoReconnect && this.reconnectAttempts < this.options.maxReconnectAttempts) {
       this.scheduleReconnect();
