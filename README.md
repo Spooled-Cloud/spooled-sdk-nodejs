@@ -37,7 +37,7 @@ npm install @spooled/sdk
 import { SpooledClient } from '@spooled/sdk';
 
 const client = new SpooledClient({
-  apiKey: 'sk_live_your_api_key',
+  apiKey: 'sp_live_your_api_key',
   // For self-hosted: baseUrl: 'https://your-spooled-server.com'
 });
 
@@ -116,7 +116,7 @@ Process jobs with the built-in worker runtime:
 ```typescript
 import { SpooledClient, SpooledWorker } from '@spooled/sdk';
 
-const client = new SpooledClient({ apiKey: 'sk_live_...' });
+const client = new SpooledClient({ apiKey: 'sp_live_...' });
 
 const worker = new SpooledWorker(client, {
   queueName: 'my-queue',
@@ -293,7 +293,7 @@ const { exists } = await client.auth.checkEmail('user@example.com');
 
 // Exchange API key for JWT
 const { accessToken, refreshToken } = await client.auth.login({
-  apiKey: 'sk_live_...'
+  apiKey: 'sp_live_...'
 });
 
 // Use JWT for subsequent requests
@@ -323,13 +323,15 @@ All operations automatically enforce tier-based limits:
 When limits are exceeded, you'll receive a `403 Forbidden` response with details:
 
 ```typescript
+import { AuthorizationError } from '@spooled/sdk';
+
 try {
   await client.jobs.create({ /* ... */ });
 } catch (error) {
-  if (error.statusCode === 403 && error.code === 'limit_exceeded') {
-    console.log(`Limit: ${error.message}`);
-    console.log(`Current: ${error.current}, Max: ${error.limit}`);
-    console.log(`Upgrade to: ${error.upgradeTo}`);
+  if (error instanceof AuthorizationError) {
+    // Plan limit reached (HTTP 403); the message describes the limit
+    console.log(`Plan limit: ${error.message}`);
+    console.log('Details:', error.details);
   }
 }
 ```
@@ -343,7 +345,7 @@ import {
   NotFoundError,
   RateLimitError,
   ValidationError,
-  LimitExceededError,
+  AuthorizationError,
   isSpooledError,
 } from '@spooled/sdk';
 
@@ -352,9 +354,8 @@ try {
 } catch (error) {
   if (error instanceof NotFoundError) {
     console.log('Job not found');
-  } else if (error instanceof LimitExceededError) {
-    console.log(`Plan limit: ${error.message}`);
-    console.log(`Upgrade to ${error.upgradeTo} for more capacity`);
+  } else if (error instanceof AuthorizationError) {
+    console.log(`Forbidden (e.g. plan limit): ${error.message}`);
   } else if (error instanceof RateLimitError) {
     console.log(`Retry after ${error.getRetryAfter()} seconds`);
   } else if (isSpooledError(error)) {
@@ -375,7 +376,7 @@ import { SpooledGrpcClient } from '@spooled/sdk';
 // useTls: false if connecting to localhost or direct backend
 const grpcClient = new SpooledGrpcClient({
   address: 'grpc.spooled.cloud:443',
-  apiKey: 'sk_live_your_key',
+  apiKey: 'sp_live_your_key',
   useTls: true
 });
 
