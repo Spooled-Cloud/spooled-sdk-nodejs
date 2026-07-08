@@ -150,6 +150,49 @@ describe('debug option default (regression)', () => {
   });
 });
 
+describe('reconnect option defaults (regression)', () => {
+  // Same clobber bug class as debug: SpooledRealtime forwards autoReconnect and
+  // the reconnect timings as possibly-undefined. A pre-spread default was
+  // overwritten by that explicit undefined, so autoReconnect resolved to
+  // undefined (falsy) — silently disabling reconnect despite the documented
+  // default of true. Defaults must survive an explicit undefined.
+  const base: RealtimeConnectionOptions = {
+    baseUrl: 'https://api.spooled.cloud',
+    wsUrl: 'wss://api.spooled.cloud',
+    token: 'static_token',
+  };
+
+  for (const [name, make] of [
+    ['WebSocket', (o: RealtimeConnectionOptions) => new WebSocketRealtimeClient(o)],
+    ['SSE', (o: RealtimeConnectionOptions) => new SseRealtimeClient(o)],
+  ] as const) {
+    it(`${name}: autoReconnect defaults to true and timings are set when omitted`, () => {
+      const opts = (make(base) as any).options;
+      expect(opts.autoReconnect).toBe(true);
+      expect(opts.maxReconnectAttempts).toBe(10);
+      expect(opts.reconnectDelay).toBe(1000);
+      expect(opts.maxReconnectDelay).toBe(30000);
+    });
+
+    it(`${name}: defaults survive explicit undefined (as SpooledRealtime forwards)`, () => {
+      const opts = (make({
+        ...base,
+        autoReconnect: undefined,
+        maxReconnectAttempts: undefined,
+        reconnectDelay: undefined,
+        maxReconnectDelay: undefined,
+      }) as any).options;
+      expect(opts.autoReconnect).toBe(true);
+      expect(opts.maxReconnectAttempts).toBe(10);
+    });
+
+    it(`${name}: honors an explicit autoReconnect:false`, () => {
+      const opts = (make({ ...base, autoReconnect: false }) as any).options;
+      expect(opts.autoReconnect).toBe(false);
+    });
+  }
+});
+
 describe('redactToken', () => {
   it('should redact the token query param', () => {
     const url = 'wss://api.spooled.cloud/api/v1/ws?token=secret.jwt.value';

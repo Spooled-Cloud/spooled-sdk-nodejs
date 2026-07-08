@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `debug` to a no-op after the spread (`options.debug ?? (() => {})`), so
   `debug` is always callable regardless of the caller. `SpooledClient.realtime()`
   also no longer forwards an explicit `debug: undefined`.
+- **Auto-reconnect now actually defaults on** (same clobber-by-`undefined` class
+  as the `debug` bug). `autoReconnect`, `maxReconnectAttempts`, `reconnectDelay`,
+  and `maxReconnectDelay` were defaulted *before* the `...options` spread, so the
+  `undefined` values `SpooledRealtime` forwards overwrote them — `autoReconnect`
+  resolved to `undefined` (falsy), silently disabling reconnect despite the
+  documented default of `true`. These defaults are now applied after the spread.
 
 ### Changed
 

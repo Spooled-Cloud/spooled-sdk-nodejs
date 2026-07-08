@@ -41,12 +41,16 @@ export class SseRealtimeClient {
   private stateChangeHandlers: Set<(state: ConnectionState) => void> = new Set();
 
   constructor(options: RealtimeConnectionOptions) {
+    // Defaults applied AFTER the spread — a pre-spread default is clobbered by an
+    // explicit `undefined` forwarded from SpooledRealtime (e.g. autoReconnect would
+    // resolve to undefined/falsy, silently disabling reconnect despite the
+    // documented default `true`).
     this.options = {
-      autoReconnect: true,
-      maxReconnectAttempts: 10,
-      reconnectDelay: 1000,
-      maxReconnectDelay: 30000,
       ...options,
+      autoReconnect: options.autoReconnect ?? true,
+      maxReconnectAttempts: options.maxReconnectAttempts ?? 10,
+      reconnectDelay: options.reconnectDelay ?? 1000,
+      maxReconnectDelay: options.maxReconnectDelay ?? 30000,
       // Always resolve to a provider so reconnects can mint a fresh token.
       // Falls back to the static token when no provider is supplied.
       tokenProvider: options.tokenProvider ?? (async () => options.token),
