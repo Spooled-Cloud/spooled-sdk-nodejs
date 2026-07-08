@@ -248,6 +248,23 @@ describe('Errors', () => {
       expect(error).toBeInstanceOf(AuthenticationError);
     });
 
+    it('should use `error` field when `message` is absent ({error, code, details} shape)', async () => {
+      const response = new Response(
+        JSON.stringify({ error: 'Queue not found', code: 'QUEUE_NOT_FOUND', details: { queue: 'q1' } }),
+        {
+          status: 404,
+          statusText: 'Not Found',
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+
+      const error = await createErrorFromResponse(response);
+      expect(error).toBeInstanceOf(NotFoundError);
+      expect(error.message).toBe('Queue not found');
+      expect(error.code).toBe('QUEUE_NOT_FOUND');
+      expect(error.details).toEqual({ queue: 'q1' });
+    });
+
     it('should create AuthorizationError for 403', async () => {
       const response = new Response(JSON.stringify({ message: 'Forbidden' }), {
         status: 403,

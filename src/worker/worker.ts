@@ -214,10 +214,16 @@ export class SpooledWorker {
         this.sleep(this.options.shutdownTimeout),
       ]);
 
-      // Force-fail any remaining jobs
-      for (const [jobId, active] of this.activeJobs.entries()) {
+      // Force-fail any remaining jobs. Snapshot the entries first because
+      // cleanupJob() mutates the activeJobs map as we go.
+      const remaining = Array.from(this.activeJobs.entries());
+      for (const [jobId, active] of remaining) {
         this.debug(`Force-failing job ${jobId} due to shutdown timeout`);
         await this.failJob(active.job, 'Worker shutdown timeout');
+        // Clear the per-job heartbeat interval and drop the job from the map.
+        // The handler's finally (which normally does this) may never run if
+        // user code ignores the abort signal, so the timer would leak forever.
+        this.cleanupJob(jobId);
       }
     }
 

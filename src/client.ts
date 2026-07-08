@@ -125,7 +125,7 @@ export class SpooledClient {
     }
 
     // Create resource instances
-    this.auth = new AuthResource(this.http);
+    this.auth = new AuthResource(this.http, () => this.config.refreshToken);
     this.jobs = new JobsResource(this.http);
     this.queues = new QueuesResource(this.http);
     this.workers = new WorkersResource(this.http);
@@ -204,13 +204,16 @@ export class SpooledClient {
    * ```
    */
   async realtime(options?: SpooledRealtimeOptions): Promise<SpooledRealtime> {
-    // Get JWT token for WebSocket auth
+    // Get an initial JWT (fails fast on auth errors at call time).
     const token = await this.getJwtToken();
 
     return new SpooledRealtime({
       baseUrl: this.config.baseUrl,
       wsUrl: this.config.wsUrl,
       token,
+      // Provider so each (re)connect mints a fresh JWT via login/refresh,
+      // rather than reusing the short-lived token captured above.
+      tokenProvider: () => this.getJwtToken(),
       ...options,
       debug: this.config.debug ?? undefined,
     });

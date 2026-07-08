@@ -11,6 +11,7 @@ import type {
   SubscriptionFilter,
   ConnectionState,
 } from './types.js';
+import { convertResponse } from '../utils/casing.js';
 
 /** Event handler type - simplified for internal use */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -47,6 +48,9 @@ export class SseRealtimeClient {
       maxReconnectDelay: 30000,
       debug: () => {},
       ...options,
+      // Always resolve to a provider so reconnects can mint a fresh token.
+      // Falls back to the static token when no provider is supplied.
+      tokenProvider: options.tokenProvider ?? (async () => options.token),
     };
   }
 
@@ -89,11 +93,19 @@ export class SseRealtimeClient {
       }
     }
 
+    // Mint a fresh token on every (re)connect so a stale token never blocks recovery.
+    let token: string;
+    try {
+      token = await this.options.tokenProvider();
+    } catch (error) {
+      this.setState('disconnected');
+      throw new Error(`Failed to acquire realtime token: ${error}`);
+    }
+
     return new Promise((resolve, reject) => {
       try {
         // Create EventSource with authorization header
         // Note: eventsource v4 changed API - headers are now passed via custom fetch
-        const token = this.options.token;
         this.eventSource = new EventSourceImpl(sseUrl, {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           fetch: (input: any, init: any) =>
@@ -123,6 +135,12 @@ export class SseRealtimeClient {
 
           if (this.state === 'connecting') {
             this.setState('disconnected');
+            // Close the abandoned EventSource so it doesn't keep auto-reconnecting
+            // in the background after we reject the initial connect promise.
+            if (this.eventSource) {
+              this.eventSource.close();
+              this.eventSource = null;
+            }
             reject(new Error('SSE connection failed'));
             return;
           }
@@ -227,7 +245,10 @@ export class SseRealtimeClient {
 
   private handleMessage(data: string): void {
     try {
-      const event = JSON.parse(data) as RealtimeEvent;
+      // Backend emits snake_case; convert to camelCase to match the typed
+      // event shapes. User blobs (`result`/`payload`) are preserved via
+      // SKIP_CONVERSION_KEYS.
+      const event = convertResponse(JSON.parse(data)) as RealtimeEvent;
       this.options.debug(`Received SSE event: ${event.type}`, event);
 
       // Emit to specific handlers
@@ -274,10 +295,13 @@ export class SseRealtimeClient {
     this.setState('reconnecting');
     this.reconnectAttempts++;
 
-    const delay = Math.min(
+    const baseDelay = Math.min(
       this.options.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
       this.options.maxReconnectDelay
     );
+    // Add randomized jitter (up to +25%) to avoid synchronized reconnect
+    // storms across clients. Matches utils/retry.ts.
+    const delay = Math.floor(baseDelay + Math.random() * baseDelay * 0.25);
 
     this.options.debug(`Scheduling SSE reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
 

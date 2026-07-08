@@ -342,9 +342,13 @@ async function parseErrorBody(response: Response): Promise<ApiErrorBody | null> 
   try {
     const body = await response.json() as Record<string, unknown>;
     if (typeof body === 'object' && body !== null) {
+      // Error bodies come in two shapes: {code, message} or {error, code, details}.
+      // Fall back to `error` when `message` is absent so the server's
+      // human-readable message is not lost.
+      const message = ((body.message as string) ?? (body.error as string)) || response.statusText;
       return {
         code: (body.code as string) || 'UNKNOWN_ERROR',
-        message: (body.message as string) || response.statusText,
+        message,
         details: body.details as Record<string, unknown> | undefined,
       };
     }

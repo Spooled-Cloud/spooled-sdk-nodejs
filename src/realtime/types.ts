@@ -177,8 +177,16 @@ export interface RealtimeConnectionOptions {
   baseUrl: string;
   /** WebSocket URL for realtime connection (e.g., wss://api.spooled.cloud) - used for WebSocket */
   wsUrl: string;
-  /** JWT token for authentication */
+  /** JWT token for authentication (used as a fallback when tokenProvider is not supplied) */
   token: string;
+  /**
+   * Async provider that mints a fresh JWT for each (re)connect.
+   *
+   * JWTs are short-lived, so a static token captured once will be stale by
+   * the time a long-running connection needs to reconnect. When provided,
+   * this is invoked before every connect/reconnect to obtain a valid token.
+   */
+  tokenProvider?: () => Promise<string>;
   /** Auto-reconnect on disconnect (default: true) */
   autoReconnect?: boolean;
   /** Maximum reconnect attempts (default: 10) */

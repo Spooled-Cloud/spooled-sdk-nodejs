@@ -13,6 +13,7 @@ import type {
   WebSocketCommand,
   WebSocketCommandResponse,
 } from './types.js';
+import { convertResponse } from '../utils/casing.js';
 
 /** Event handler type - simplified for internal use */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -53,6 +54,9 @@ export class WebSocketRealtimeClient {
       maxReconnectDelay: 30000,
       debug: () => {},
       ...options,
+      // Always resolve to a provider so reconnects can mint a fresh JWT.
+      // Falls back to the static token when no provider is supplied.
+      tokenProvider: options.tokenProvider ?? (async () => options.token),
     };
   }
 
@@ -85,9 +89,16 @@ export class WebSocketRealtimeClient {
 
     this.setState('connecting');
 
-    // Build WebSocket URL with token
-    const wsUrl = this.buildWsUrl();
-    this.options.debug(`Connecting to ${wsUrl}`);
+    // Build WebSocket URL with a freshly-minted token
+    let wsUrl: string;
+    try {
+      wsUrl = await this.buildWsUrl();
+    } catch (error) {
+      this.setState('disconnected');
+      throw new Error(`Failed to acquire realtime token: ${error}`);
+    }
+    // Redact the token query param so JWTs never land in logs.
+    this.options.debug(`Connecting to ${redactToken(wsUrl)}`);
 
     // Get WebSocket implementation (async for ESM compatibility in Node.js)
     let WebSocketImpl: typeof WebSocket;
@@ -230,10 +241,12 @@ export class WebSocketRealtimeClient {
 
   // Private methods
 
-  private buildWsUrl(): string {
+  private async buildWsUrl(): Promise<string> {
     // wsUrl should already be ws:// or wss://
     const wsBase = this.options.wsUrl;
-    return `${wsBase}/api/v1/ws?token=${encodeURIComponent(this.options.token)}`;
+    // Mint a fresh JWT on every (re)connect so a stale token never blocks recovery.
+    const token = await this.options.tokenProvider();
+    return `${wsBase}/api/v1/ws?token=${encodeURIComponent(token)}`;
   }
 
   private setState(state: ConnectionState): void {
@@ -245,7 +258,10 @@ export class WebSocketRealtimeClient {
 
   private handleMessage(data: string): void {
     try {
-      const message = JSON.parse(data);
+      // Backend emits snake_case; convert to camelCase to match the typed
+      // event shapes (jobId, queueName, durationMs, ...). User blobs like
+      // `result`/`payload` are preserved via SKIP_CONVERSION_KEYS.
+      const message = convertResponse(JSON.parse(data));
 
       // Check if this is a command response
       if (message.type === 'subscribed' || message.type === 'unsubscribed' || message.type === 'error') {
@@ -319,10 +335,13 @@ export class WebSocketRealtimeClient {
     this.setState('reconnecting');
     this.reconnectAttempts++;
 
-    const delay = Math.min(
+    const baseDelay = Math.min(
       this.options.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
       this.options.maxReconnectDelay
     );
+    // Add randomized jitter (up to +25%) to avoid a thundering-herd reconnect
+    // storm when many clients drop at the same moment. Matches utils/retry.ts.
+    const delay = Math.floor(baseDelay + Math.random() * baseDelay * 0.25);
 
     this.options.debug(`Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
 
@@ -380,4 +399,11 @@ export class WebSocketRealtimeClient {
   private generateRequestId(): string {
     return `req_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
   }
+}
+
+/**
+ * Redact sensitive auth query params (token/api_key) from a URL for logging.
+ */
+export function redactToken(url: string): string {
+  return url.replace(/([?&](?:token|api_key)=)[^&]*/gi, '$1***');
 }

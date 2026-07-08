@@ -259,6 +259,122 @@ describe('HttpClient', () => {
     });
   });
 
+  describe('retry idempotency', () => {
+    it('should NOT retry a non-idempotent POST on 5xx', async () => {
+      let calls = 0;
+      server.use(
+        http.post('https://api.spooled.cloud/api/v1/jobs', () => {
+          calls++;
+          return HttpResponse.json({ code: 'INTERNAL', message: 'boom' }, { status: 500 });
+        })
+      );
+
+      const client = createClient({ retries: 3, retryDelay: 1 });
+      await expect(client.post('/jobs', { queueName: 'q' })).rejects.toThrow(ServerError);
+      expect(calls).toBe(1); // no blind retry of a write
+    });
+
+    it('should retry an idempotent GET on 5xx', async () => {
+      let calls = 0;
+      server.use(
+        http.get('https://api.spooled.cloud/api/v1/jobs', () => {
+          calls++;
+          return HttpResponse.json({ code: 'INTERNAL', message: 'boom' }, { status: 500 });
+        })
+      );
+
+      const client = createClient({ retries: 2, retryDelay: 1 });
+      await expect(client.get('/jobs')).rejects.toThrow(ServerError);
+      expect(calls).toBe(3); // 1 initial + 2 retries
+    });
+
+    it('should retry a POST that carries an Idempotency-Key header', async () => {
+      let calls = 0;
+      server.use(
+        http.post('https://api.spooled.cloud/api/v1/jobs', () => {
+          calls++;
+          if (calls < 2) {
+            return HttpResponse.json({ code: 'INTERNAL', message: 'boom' }, { status: 500 });
+          }
+          return HttpResponse.json({ id: 'job_1' });
+        })
+      );
+
+      const client = createClient({ retries: 3, retryDelay: 1 });
+      const res = await client.request<{ id: string }>('/jobs', {
+        method: 'POST',
+        body: { queueName: 'q' },
+        headers: { 'Idempotency-Key': 'abc-123' },
+      });
+      expect(res.data.id).toBe('job_1');
+      expect(calls).toBe(2); // retried because it is safe
+    });
+
+    it('should retry a POST on 429 (rate limited, no side effect)', async () => {
+      let calls = 0;
+      server.use(
+        http.post('https://api.spooled.cloud/api/v1/jobs', () => {
+          calls++;
+          if (calls < 2) {
+            return HttpResponse.json({ code: 'RATE_LIMIT', message: 'slow down' }, {
+              status: 429,
+              headers: { 'Retry-After': '0' },
+            });
+          }
+          return HttpResponse.json({ id: 'job_1' });
+        })
+      );
+
+      const client = createClient({ retries: 3, retryDelay: 1 });
+      const result = await client.post<{ id: string }>('/jobs', { queueName: 'q' });
+      expect(result.id).toBe('job_1');
+      expect(calls).toBe(2);
+    });
+  });
+
+  describe('token refresh on 401', () => {
+    it('should refresh the token once and retry the original request', async () => {
+      let jobsCalls = 0;
+      let refreshCalls = 0;
+      server.use(
+        http.get('https://api.spooled.cloud/api/v1/test', ({ request }) => {
+          jobsCalls++;
+          if (request.headers.get('Authorization') === 'Bearer new_token') {
+            return HttpResponse.json({ ok: true });
+          }
+          return HttpResponse.json({ code: 'TOKEN_EXPIRED', message: 'expired' }, { status: 401 });
+        })
+      );
+
+      const client = createClient();
+      client.setRefreshTokenFn(async () => {
+        refreshCalls++;
+        return 'new_token';
+      });
+
+      const result = await client.get<{ ok: boolean }>('/test');
+      expect(result.ok).toBe(true);
+      expect(refreshCalls).toBe(1);
+      expect(jobsCalls).toBe(2); // initial 401 + retry with refreshed token
+    });
+
+    it('should not loop when refresh does not fix the 401', async () => {
+      let calls = 0;
+      server.use(
+        http.get('https://api.spooled.cloud/api/v1/test', () => {
+          calls++;
+          return HttpResponse.json({ code: 'TOKEN_EXPIRED', message: 'expired' }, { status: 401 });
+        })
+      );
+
+      const client = createClient();
+      client.setRefreshTokenFn(async () => 'still_bad_token');
+
+      await expect(client.get('/test')).rejects.toThrow();
+      expect(calls).toBe(2); // one refresh + retry, then give up
+    });
+  });
+
   describe('headers', () => {
     it('should include custom headers', async () => {
       let customHeader: string | null;

@@ -79,6 +79,38 @@ describe('AuthResource', () => {
       const client = createClient();
       await expect(client.auth.logout()).resolves.toBeUndefined();
     });
+
+    it('should send the client refresh token to revoke the session', async () => {
+      let receivedBody: any = null;
+      server.use(
+        http.post('https://api.spooled.cloud/api/v1/auth/logout', async ({ request }) => {
+          const text = await request.text();
+          receivedBody = text ? JSON.parse(text) : null;
+          return new HttpResponse(null, { status: 204 });
+        })
+      );
+
+      const client = new SpooledClient({ accessToken: 'jwt_token', refreshToken: 'refresh_123' });
+      await client.auth.logout();
+
+      expect(receivedBody?.refresh_token).toBe('refresh_123');
+    });
+
+    it('should prefer an explicitly provided refresh token', async () => {
+      let receivedBody: any = null;
+      server.use(
+        http.post('https://api.spooled.cloud/api/v1/auth/logout', async ({ request }) => {
+          const text = await request.text();
+          receivedBody = text ? JSON.parse(text) : null;
+          return new HttpResponse(null, { status: 204 });
+        })
+      );
+
+      const client = new SpooledClient({ accessToken: 'jwt_token', refreshToken: 'refresh_123' });
+      await client.auth.logout('explicit_refresh');
+
+      expect(receivedBody?.refresh_token).toBe('explicit_refresh');
+    });
   });
 
   describe('me', () => {

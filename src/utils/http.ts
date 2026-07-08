@@ -12,15 +12,25 @@
 
 import type { ResolvedConfig, DebugFn } from '../config.js';
 import { API_BASE_PATH } from '../config.js';
+import type { RetryConfig } from '../config.js';
 import {
   createErrorFromResponse,
   NetworkError,
+  RateLimitError,
   TimeoutError,
   SpooledError,
 } from '../errors.js';
 import { convertRequest, convertResponse, convertQueryParams } from './casing.js';
 import { withRetry } from './retry.js';
 import { CircuitBreaker } from './circuit-breaker.js';
+
+/**
+ * HTTP methods considered idempotent per HTTP semantics.
+ * Automatic retry on ambiguous failures (network/timeout/5xx) is only safe
+ * for these; non-idempotent methods (POST/PATCH) may cause duplicate side
+ * effects if retried after the request already reached the server.
+ */
+const IDEMPOTENT_METHODS = new Set<HttpMethod>(['GET', 'PUT', 'DELETE']);
 
 /** HTTP methods */
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -83,6 +93,12 @@ export class HttpClient {
   /** Current authentication token (API key or JWT) */
   private authToken: string | undefined;
 
+  /** Optional function to mint a fresh access token (set when auto-refresh is enabled) */
+  private refreshTokenFn: (() => Promise<string>) | null = null;
+
+  /** Guard to prevent a refresh request from recursively triggering another refresh */
+  private isRefreshing = false;
+
   constructor(
     config: ResolvedConfig,
     circuitBreaker: CircuitBreaker
@@ -103,10 +119,13 @@ export class HttpClient {
   }
 
   /**
-   * Set the token refresh function (for future use)
+   * Set the token refresh function.
+   *
+   * When set, an expired-token 401 on the data plane triggers a single
+   * refresh + retry of the original request with the new token.
    */
-  setRefreshTokenFn(_fn: () => Promise<string>): void {
-    // Reserved for automatic token refresh implementation
+  setRefreshTokenFn(fn: () => Promise<string>): void {
+    this.refreshTokenFn = fn;
   }
 
   /**
@@ -209,7 +228,8 @@ export class HttpClient {
    */
   private async executeRequest<T>(
     url: string,
-    options: HttpRequestOptions
+    options: HttpRequestOptions,
+    hasRefreshed = false
   ): Promise<HttpResponse<T>> {
     const method = options.method ?? 'GET';
     const headers = this.buildHeaders(options.headers);
@@ -249,6 +269,33 @@ export class HttpClient {
 
     // Handle non-OK responses
     if (!response.ok) {
+      // On an expired-token 401, try refreshing the access token once and
+      // retry the original request. Guarded so the refresh request itself
+      // (or a genuinely invalid credential) can't loop.
+      if (
+        response.status === 401 &&
+        this.refreshTokenFn &&
+        !hasRefreshed &&
+        !this.isRefreshing
+      ) {
+        let refreshed = false;
+        this.isRefreshing = true;
+        try {
+          const newToken = await this.refreshTokenFn();
+          this.setAuthToken(newToken);
+          refreshed = true;
+        } catch (refreshError) {
+          const message = refreshError instanceof Error ? refreshError.message : 'unknown';
+          this.debug?.('Token refresh failed', { error: message });
+        } finally {
+          this.isRefreshing = false;
+        }
+
+        if (refreshed) {
+          return this.executeRequest<T>(url, options, true);
+        }
+      }
+
       const apiError = await createErrorFromResponse(response);
       throw apiError;
     }
@@ -279,6 +326,7 @@ export class HttpClient {
    */
   async request<T>(path: string, options: HttpRequestOptions = {}): Promise<HttpResponse<T>> {
     const url = this.buildUrl(path, options.params, options.skipApiPrefix);
+    const method = options.method ?? 'GET';
 
     // Wrap in circuit breaker
     const execute = async (): Promise<HttpResponse<T>> => {
@@ -291,12 +339,51 @@ export class HttpClient {
     }
 
     return withRetry(execute, {
-      config: this.config.retry,
+      config: this.resolveRetryConfig(method, options),
       signal: options.signal,
       onRetry: (attempt, error, delayMs) => {
         this.debug?.(`Retry attempt ${attempt} after ${delayMs}ms`, { error: error.message });
       },
     });
+  }
+
+  /**
+   * Determine whether a request carries an idempotency key (making a
+   * non-idempotent method safe to retry).
+   */
+  private hasIdempotencyKey(options: HttpRequestOptions): boolean {
+    if (!options.headers) {
+      return false;
+    }
+    return Object.keys(options.headers).some((key) => key.toLowerCase() === 'idempotency-key');
+  }
+
+  /**
+   * Resolve the retry configuration for a request.
+   *
+   * Idempotent methods (GET/PUT/DELETE) and any request carrying an
+   * idempotency key retry normally. Non-idempotent methods (POST/PATCH)
+   * without an idempotency key must NOT be retried on ambiguous failures
+   * (network/timeout/5xx) — doing so risks duplicate jobs, double claims,
+   * etc. They are still retried on 429, which is rejected before the
+   * server processes the request and is therefore side-effect-free.
+   */
+  private resolveRetryConfig(method: HttpMethod, options: HttpRequestOptions): RetryConfig {
+    const base = this.config.retry;
+
+    // Respect an explicit user-provided retry predicate.
+    if (base.retryOn) {
+      return base;
+    }
+
+    if (IDEMPOTENT_METHODS.has(method) || this.hasIdempotencyKey(options)) {
+      return base;
+    }
+
+    return {
+      ...base,
+      retryOn: (error) => error instanceof RateLimitError,
+    };
   }
 
   /**

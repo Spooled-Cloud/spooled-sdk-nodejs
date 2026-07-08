@@ -16,7 +16,11 @@ import type {
 } from '../types/auth.js';
 
 export class AuthResource {
-  constructor(private readonly http: HttpClient) {}
+  constructor(
+    private readonly http: HttpClient,
+    /** Optional accessor for the client's current refresh token (used by logout) */
+    private readonly getRefreshToken?: () => string | undefined
+  ) {}
 
   /**
    * Exchange API key for JWT tokens
@@ -33,10 +37,15 @@ export class AuthResource {
   }
 
   /**
-   * Logout and invalidate current token
+   * Logout and revoke the refresh token server-side.
+   *
+   * The backend requires the refresh token in the body to invalidate the
+   * session. When omitted, the client's current refresh token (if any) is
+   * used automatically.
    */
-  async logout(): Promise<void> {
-    await this.http.post<void>('/auth/logout');
+  async logout(refreshToken?: string): Promise<void> {
+    const token = refreshToken ?? this.getRefreshToken?.();
+    await this.http.post<void>('/auth/logout', token ? { refreshToken: token } : undefined);
   }
 
   /**
