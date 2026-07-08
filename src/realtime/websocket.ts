@@ -52,11 +52,17 @@ export class WebSocketRealtimeClient {
       maxReconnectAttempts: 10,
       reconnectDelay: 1000,
       maxReconnectDelay: 30000,
-      debug: () => {},
       ...options,
       // Always resolve to a provider so reconnects can mint a fresh JWT.
       // Falls back to the static token when no provider is supplied.
       tokenProvider: options.tokenProvider ?? (async () => options.token),
+      // Coalesce debug to a no-op AFTER the spread. A caller that omits debug
+      // still passes `debug: undefined` explicitly (e.g. via SpooledRealtime),
+      // and spreading that would overwrite a pre-spread default with undefined,
+      // making connect() call `this.options.debug(...)` on undefined and throw
+      // "this.options.debug is not a function". Guarding here keeps it callable
+      // regardless of what the caller passes.
+      debug: options.debug ?? (() => {}),
     };
   }
 

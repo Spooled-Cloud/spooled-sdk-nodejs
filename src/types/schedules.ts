@@ -41,7 +41,11 @@ export interface CreateScheduleParams {
   timezone?: string;
   /** Target queue name */
   queueName: string;
-  /** Job payload template */
+  /**
+   * Job payload template. Required: the API rejects a create without it
+   * (HTTP 422), so this is typed as non-optional to surface the omission at
+   * compile time rather than as a runtime 422.
+   */
   payloadTemplate: JsonObject;
   /** Job priority (-100 to 100) */
   priority?: number;

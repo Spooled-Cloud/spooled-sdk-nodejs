@@ -8,6 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { WebSocketRealtimeClient, redactToken } from '../../src/realtime/websocket.js';
 import { SseRealtimeClient } from '../../src/realtime/sse.js';
+import { SpooledRealtime } from '../../src/realtime/index.js';
 import type { RealtimeConnectionOptions } from '../../src/realtime/types.js';
 
 const baseOptions: RealtimeConnectionOptions = {
@@ -67,6 +68,85 @@ describe('WebSocketRealtimeClient', () => {
       const url = await (client as any).buildWsUrl();
       expect(url).toContain('token=static_token');
     });
+  });
+});
+
+describe('debug option default (regression)', () => {
+  // Regression for v1.0.29: SpooledRealtime forwards `debug: undefined` for any
+  // client built without a debug logger (the normal case). The WS/SSE
+  // constructors spread `...options` after their no-op default, so that
+  // explicit undefined clobbered the no-op and connect() threw
+  // "this.options.debug is not a function". debug must always be callable.
+  const withoutDebug: RealtimeConnectionOptions = {
+    baseUrl: 'https://api.spooled.cloud',
+    wsUrl: 'wss://api.spooled.cloud',
+    token: 'static_token',
+  };
+
+  it('WebSocket client: debug is a callable no-op when debug is omitted', () => {
+    const client = new WebSocketRealtimeClient(withoutDebug);
+    const debug = (client as any).options.debug;
+    expect(typeof debug).toBe('function');
+    // Calling it must not throw (this is what connect() does internally).
+    expect(() => debug('hello', { meta: true })).not.toThrow();
+  });
+
+  it('WebSocket client: debug is callable even when debug is explicitly undefined', () => {
+    // This mirrors exactly what SpooledRealtime passes down for a default client.
+    const client = new WebSocketRealtimeClient({ ...withoutDebug, debug: undefined });
+    const debug = (client as any).options.debug;
+    expect(typeof debug).toBe('function');
+    expect(() => debug('connecting')).not.toThrow();
+  });
+
+  it('SSE client: debug is a callable no-op when debug is omitted', () => {
+    const client = new SseRealtimeClient(withoutDebug);
+    const debug = (client as any).options.debug;
+    expect(typeof debug).toBe('function');
+    expect(() => debug('hello', { meta: true })).not.toThrow();
+  });
+
+  it('SSE client: debug is callable even when debug is explicitly undefined', () => {
+    const client = new SseRealtimeClient({ ...withoutDebug, debug: undefined });
+    const debug = (client as any).options.debug;
+    expect(typeof debug).toBe('function');
+    expect(() => debug('connecting')).not.toThrow();
+  });
+
+  it('SpooledRealtime wrapper (default WebSocket): underlying debug is callable without a debug option', () => {
+    // Mirrors what SpooledClient.realtime() builds for a client with no debug
+    // logger: baseUrl/wsUrl/token and no debug. The wrapper must not throw and
+    // the underlying transport client's debug must be a callable no-op.
+    const realtime = new SpooledRealtime({
+      baseUrl: 'https://api.spooled.cloud',
+      wsUrl: 'wss://api.spooled.cloud',
+      token: 'static_token',
+    });
+    const debug = (realtime as any).client.options.debug;
+    expect(typeof debug).toBe('function');
+    expect(() => debug('connecting')).not.toThrow();
+  });
+
+  it('SpooledRealtime wrapper (SSE): underlying debug is callable without a debug option', () => {
+    const realtime = new SpooledRealtime({
+      type: 'sse',
+      baseUrl: 'https://api.spooled.cloud',
+      wsUrl: 'wss://api.spooled.cloud',
+      token: 'static_token',
+    });
+    const debug = (realtime as any).client.options.debug;
+    expect(typeof debug).toBe('function');
+    expect(() => debug('connecting')).not.toThrow();
+  });
+
+  it('honors a user-supplied debug logger', () => {
+    const calls: string[] = [];
+    const client = new WebSocketRealtimeClient({
+      ...withoutDebug,
+      debug: (msg: string) => calls.push(msg),
+    });
+    (client as any).options.debug('logged');
+    expect(calls).toEqual(['logged']);
   });
 });
 

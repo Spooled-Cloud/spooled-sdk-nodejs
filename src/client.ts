@@ -215,7 +215,11 @@ export class SpooledClient {
       // rather than reusing the short-lived token captured above.
       tokenProvider: () => this.getJwtToken(),
       ...options,
-      debug: this.config.debug ?? undefined,
+      // Only forward debug when the client actually has a logger, so we never
+      // hand the realtime layer an explicit `debug: undefined`. The WS/SSE
+      // constructors also guard against this, but keeping the undefined out of
+      // the option object makes the intent clear at the call site.
+      ...(this.config.debug ? { debug: this.config.debug } : {}),
     });
   }
 
