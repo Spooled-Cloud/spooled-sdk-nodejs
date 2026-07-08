@@ -34,6 +34,12 @@ export class WebSocketRealtimeClient {
   private state: ConnectionState = 'disconnected';
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Set when the server rejected our token on the upgrade (e.g. HTTP 401/403).
+   * The next (re)connect uses it to force the token provider to mint a fresh
+   * JWT instead of replaying the rejected one (which would loop forever).
+   */
+  private authFailure = false;
   private subscriptions: Map<string, SubscriptionFilter> = new Map();
   private pendingCommands: Map<string, {
     resolve: () => void;
@@ -143,6 +149,14 @@ export class WebSocketRealtimeClient {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         this.ws.onerror = (event: any) => {
           this.options.debug('WebSocket error', event);
+          // The Node `ws` package surfaces a rejected upgrade here as an error
+          // whose message is e.g. "Unexpected server response: 401". Flag it so
+          // the next reconnect forces a fresh token rather than replaying the
+          // rejected one. (Browsers don't expose the status; expiry-based
+          // refresh still covers the common case there.)
+          if (isAuthFailureEvent(event)) {
+            this.authFailure = true;
+          }
         };
       } catch (error) {
         this.setState('disconnected');
@@ -249,8 +263,12 @@ export class WebSocketRealtimeClient {
   private async buildWsUrl(): Promise<string> {
     // wsUrl should already be ws:// or wss://
     const wsBase = this.options.wsUrl;
-    // Mint a fresh JWT on every (re)connect so a stale token never blocks recovery.
-    const token = await this.options.tokenProvider();
+    // Reuse the provider's cached JWT unless the previous attempt was rejected
+    // for auth (401/403 on the upgrade), in which case force a fresh token so a
+    // stale/revoked one can't block recovery. Clear the flag either way.
+    const forceRefresh = this.authFailure;
+    this.authFailure = false;
+    const token = await this.options.tokenProvider(forceRefresh);
     return `${wsBase}/api/v1/ws?token=${encodeURIComponent(token)}`;
   }
 
@@ -411,4 +429,23 @@ export class WebSocketRealtimeClient {
  */
 export function redactToken(url: string): string {
   return url.replace(/([?&](?:token|api_key)=)[^&]*/gi, '$1***');
+}
+
+/**
+ * Detect whether a WebSocket error event represents an auth rejection on the
+ * upgrade (HTTP 401/403). The Node `ws` package reports these as an error whose
+ * message is like "Unexpected server response: 401"; different runtimes may put
+ * the text on `message`, `error.message`, or `reason`.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function isAuthFailureEvent(event: any): boolean {
+  if (!event) {
+    return false;
+  }
+  const status = event.status ?? event.statusCode ?? event.error?.status;
+  if (status === 401 || status === 403) {
+    return true;
+  }
+  const text = String(event.message ?? event.error?.message ?? event.reason ?? '');
+  return /\b(401|403)\b/.test(text);
 }

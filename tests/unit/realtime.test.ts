@@ -6,7 +6,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { WebSocketRealtimeClient, redactToken } from '../../src/realtime/websocket.js';
+import {
+  WebSocketRealtimeClient,
+  redactToken,
+  isAuthFailureEvent,
+} from '../../src/realtime/websocket.js';
 import { SseRealtimeClient } from '../../src/realtime/sse.js';
 import { SpooledRealtime } from '../../src/realtime/index.js';
 import type { RealtimeConnectionOptions } from '../../src/realtime/types.js';
@@ -68,6 +72,65 @@ describe('WebSocketRealtimeClient', () => {
       const url = await (client as any).buildWsUrl();
       expect(url).toContain('token=static_token');
     });
+
+    it('reuses the cached token on a normal (re)connect (forceRefresh=false)', async () => {
+      const forceCalls: (boolean | undefined)[] = [];
+      const client = new WebSocketRealtimeClient({
+        ...baseOptions,
+        tokenProvider: async (forceRefresh) => {
+          forceCalls.push(forceRefresh);
+          return 'tok';
+        },
+      });
+
+      await (client as any).buildWsUrl();
+      await (client as any).buildWsUrl();
+
+      // No auth failure occurred, so the provider is never asked to force-refresh.
+      expect(forceCalls).toEqual([false, false]);
+    });
+
+    it('forces exactly one refresh after an auth failure, then reverts', async () => {
+      const forceCalls: (boolean | undefined)[] = [];
+      const client = new WebSocketRealtimeClient({
+        ...baseOptions,
+        tokenProvider: async (forceRefresh) => {
+          forceCalls.push(forceRefresh);
+          return 'tok';
+        },
+      });
+
+      // Simulate the ws `onerror` path for a rejected upgrade (HTTP 401).
+      (client as any).options.debug('WebSocket error');
+      const errorEvent = { message: 'Unexpected server response: 401' };
+      if (isAuthFailureEvent(errorEvent)) {
+        (client as any).authFailure = true;
+      }
+
+      await (client as any).buildWsUrl();
+      await (client as any).buildWsUrl();
+
+      // First reconnect forces a fresh token; the flag is cleared afterwards.
+      expect(forceCalls).toEqual([true, false]);
+    });
+  });
+});
+
+describe('isAuthFailureEvent', () => {
+  it('detects 401/403 from the error message text', () => {
+    expect(isAuthFailureEvent({ message: 'Unexpected server response: 401' })).toBe(true);
+    expect(isAuthFailureEvent({ error: { message: 'Unexpected server response: 403' } })).toBe(true);
+  });
+
+  it('detects a status/statusCode field', () => {
+    expect(isAuthFailureEvent({ status: 401 })).toBe(true);
+    expect(isAuthFailureEvent({ statusCode: 403 })).toBe(true);
+  });
+
+  it('returns false for non-auth errors and empty events', () => {
+    expect(isAuthFailureEvent(null)).toBe(false);
+    expect(isAuthFailureEvent({ message: 'Unexpected server response: 500' })).toBe(false);
+    expect(isAuthFailureEvent({ message: 'network error' })).toBe(false);
   });
 });
 

@@ -2,10 +2,36 @@
  * Client tests
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { Buffer } from 'node:buffer';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { SpooledClient, createClient } from '../../src/client.js';
+import {
+  SpooledClient,
+  createClient,
+  decodeJwtExp,
+  isJwtNearExpiry,
+} from '../../src/client.js';
+import type { LoginResponse } from '../../src/types/auth.js';
+
+/** Build a syntactically valid JWT whose payload carries the given `exp` (seconds). */
+function makeJwt(expSeconds: number): string {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ exp: expSeconds })).toString('base64url');
+  return `${header}.${payload}.sig`;
+}
+
+/** A login response whose access token expires `secondsFromNow` from now. */
+function loginResponse(secondsFromNow: number, token?: string): LoginResponse {
+  const exp = Math.floor(Date.now() / 1000) + secondsFromNow;
+  return {
+    accessToken: token ?? makeJwt(exp),
+    refreshToken: 'refresh_token',
+    tokenType: 'Bearer',
+    expiresIn: secondsFromNow,
+    refreshExpiresIn: secondsFromNow * 2,
+  };
+}
 
 // MSW server setup
 const server = setupServer();
@@ -168,6 +194,91 @@ describe('SpooledClient', () => {
       const client = new SpooledClient({ apiKey: 'sk_test_123' });
       await expect(client.jobs.get('nonexistent')).rejects.toThrow('Job not found');
     });
+  });
+});
+
+describe('realtime JWT caching (getJwtToken)', () => {
+  // The realtime layer requests a token on every (re)connect. Before caching,
+  // each call re-logged-in via POST /auth/login, so a reconnect storm tripped
+  // the login rate limit (429) and realtime could never recover. The token
+  // provider must reuse a cached JWT until it nears expiry.
+
+  it('logs in only once when called twice within the token lifetime', async () => {
+    const client = new SpooledClient({ apiKey: 'sk_test_123' });
+    // Token valid for an hour — well outside the 60s near-expiry window.
+    const loginSpy = vi.spyOn(client.auth, 'login').mockResolvedValue(loginResponse(3600));
+
+    const first = await (client as any).getJwtToken();
+    const second = await (client as any).getJwtToken();
+
+    expect(loginSpy).toHaveBeenCalledTimes(1);
+    expect(second).toBe(first);
+  });
+
+  it('re-logs-in when the cached token is near expiry', async () => {
+    const client = new SpooledClient({ apiKey: 'sk_test_123' });
+    // 30s of remaining life is inside the 60s skew, so the cached token is
+    // always considered expiring and each call must mint a new one.
+    const loginSpy = vi
+      .spyOn(client.auth, 'login')
+      .mockResolvedValueOnce(loginResponse(30, makeJwt(Math.floor(Date.now() / 1000) + 30)))
+      .mockResolvedValueOnce(loginResponse(3600, 'second.token.value'));
+
+    await (client as any).getJwtToken();
+    const second = await (client as any).getJwtToken();
+
+    expect(loginSpy).toHaveBeenCalledTimes(2);
+    expect(second).toBe('second.token.value');
+  });
+
+  it('re-logs-in when forceRefresh is requested even if the cache is fresh', async () => {
+    const client = new SpooledClient({ apiKey: 'sk_test_123' });
+    const loginSpy = vi
+      .spyOn(client.auth, 'login')
+      .mockResolvedValueOnce(loginResponse(3600))
+      .mockResolvedValueOnce(loginResponse(3600, 'forced.token.value'));
+
+    await (client as any).getJwtToken();
+    const forced = await (client as any).getJwtToken(true);
+
+    expect(loginSpy).toHaveBeenCalledTimes(2);
+    expect(forced).toBe('forced.token.value');
+  });
+
+  it('deduplicates concurrent logins into a single request', async () => {
+    const client = new SpooledClient({ apiKey: 'sk_test_123' });
+    const loginSpy = vi.spyOn(client.auth, 'login').mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve(loginResponse(3600)), 10))
+    );
+
+    const [a, b] = await Promise.all([
+      (client as any).getJwtToken(),
+      (client as any).getJwtToken(),
+    ]);
+
+    expect(loginSpy).toHaveBeenCalledTimes(1);
+    expect(a).toBe(b);
+  });
+});
+
+describe('JWT expiry decoding', () => {
+  it('decodeJwtExp reads the exp claim without verification', () => {
+    const exp = Math.floor(Date.now() / 1000) + 100;
+    expect(decodeJwtExp(makeJwt(exp))).toBe(exp);
+  });
+
+  it('decodeJwtExp returns null for a malformed token', () => {
+    expect(decodeJwtExp('not-a-jwt')).toBeNull();
+    expect(decodeJwtExp('a.b.c')).toBeNull();
+  });
+
+  it('isJwtNearExpiry is false for a token far from expiry', () => {
+    expect(isJwtNearExpiry(makeJwt(Math.floor(Date.now() / 1000) + 3600))).toBe(false);
+  });
+
+  it('isJwtNearExpiry is true within the skew window and for undecodable tokens', () => {
+    expect(isJwtNearExpiry(makeJwt(Math.floor(Date.now() / 1000) + 30))).toBe(true);
+    expect(isJwtNearExpiry('garbage')).toBe(true);
   });
 });
 

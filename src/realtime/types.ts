@@ -180,13 +180,17 @@ export interface RealtimeConnectionOptions {
   /** JWT token for authentication (used as a fallback when tokenProvider is not supplied) */
   token: string;
   /**
-   * Async provider that mints a fresh JWT for each (re)connect.
+   * Async provider that supplies a valid JWT for each (re)connect.
    *
-   * JWTs are short-lived, so a static token captured once will be stale by
-   * the time a long-running connection needs to reconnect. When provided,
-   * this is invoked before every connect/reconnect to obtain a valid token.
+   * JWTs are short-lived, so a static token captured once will be stale by the
+   * time a long-running connection needs to reconnect. When provided, this is
+   * invoked before every connect/reconnect to obtain a valid token. The
+   * provider is expected to cache and reuse the token itself (re-minting only
+   * near expiry), so calling it on every reconnect does not hammer the login
+   * endpoint. `forceRefresh` asks it to bypass that cache — the transport sets
+   * this after the server rejects a token (e.g. a 401 on the WS upgrade).
    */
-  tokenProvider?: () => Promise<string>;
+  tokenProvider?: (forceRefresh?: boolean) => Promise<string>;
   /** Auto-reconnect on disconnect (default: true) */
   autoReconnect?: boolean;
   /** Maximum reconnect attempts (default: 10) */

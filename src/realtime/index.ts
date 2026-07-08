@@ -43,8 +43,8 @@ interface FullRealtimeOptions extends SpooledRealtimeOptions {
   baseUrl: string;
   wsUrl: string;
   token: string;
-  /** Async provider that mints a fresh JWT for each (re)connect */
-  tokenProvider?: () => Promise<string>;
+  /** Async provider that supplies a valid JWT for each (re)connect */
+  tokenProvider?: (forceRefresh?: boolean) => Promise<string>;
   debug?: (message: string, meta?: unknown) => void;
 }
 

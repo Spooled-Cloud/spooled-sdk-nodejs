@@ -5,6 +5,27 @@ All notable changes to the Spooled Node.js SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.31] - 2026-07-08
+
+### Fixed
+
+- **Realtime no longer re-logs-in on every WebSocket (re)connect.** The token
+  provider handed to `client.realtime()` minted a brand-new JWT via
+  `POST /api/v1/auth/login` on each connect and reconnect. Under a reconnect
+  storm this quickly tripped the login rate limit (HTTP 429), after which
+  realtime could never recover. The client now caches the JWT (at the client
+  level, shared across reconnects) and reuses it until it is within ~60s of its
+  `exp`. It decodes the `exp` claim directly (base64url-decode of the payload,
+  no signature verification) to decide when to refresh, and only re-logs-in when
+  the cached token is absent, near expiry, or explicitly force-refreshed.
+  Concurrent logins (e.g. WebSocket and SSE reconnecting together) are
+  deduplicated into a single request. The happy path is unchanged — just
+  without the redundant logins.
+- **Rejected tokens force a single refresh.** When the server rejects the token
+  on the WebSocket upgrade (HTTP 401/403), the transport now asks the provider
+  to force-refresh on the next reconnect, so a stale or revoked token is
+  replaced instead of being replayed into a reconnect loop.
+
 ## [1.0.30] - 2026-07-08
 
 ### Fixed
