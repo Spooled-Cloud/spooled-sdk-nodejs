@@ -157,7 +157,7 @@ Run jobs on a cron schedule:
 ```typescript
 const schedule = await client.schedules.create({
   name: 'Daily Report',
-  cronExpression: '0 0 9 * * *',    // 6-field cron
+  cronExpression: '0 9 * * *',      // 9 AM daily; 5-field (min hour dom mon dow) or 6-field (leading seconds) both work
   timezone: 'America/New_York',
   queueName: 'reports',
   payloadTemplate: { type: 'daily' },
@@ -320,21 +320,24 @@ All operations automatically enforce tier-based limits:
 - ✅ Queue creation
 - ✅ Webhook creation
 
-When limits are exceeded, you'll receive a `403 Forbidden` response with details:
+When a plan quota or limit is exceeded, you'll receive an `HTTP 429` response with
+`code: "QUOTA_EXCEEDED"` and a body describing the `resource`, `current`, `limit`, and `plan`:
 
 ```typescript
-import { AuthorizationError } from '@spooled/sdk';
+import { RateLimitError } from '@spooled/sdk';
 
 try {
   await client.jobs.create({ /* ... */ });
 } catch (error) {
-  if (error instanceof AuthorizationError) {
-    // Plan limit reached (HTTP 403); the message describes the limit
+  if (error instanceof RateLimitError && error.code === 'QUOTA_EXCEEDED') {
+    // Plan quota reached (HTTP 429); details carry resource/current/limit/plan
     console.log(`Plan limit: ${error.message}`);
     console.log('Details:', error.details);
   }
 }
 ```
+
+(Per-second rate limiting also returns `429`, as a `RateLimitError` with the default `RATE_LIMIT_EXCEEDED` code.)
 
 ## Error Handling
 
@@ -355,8 +358,9 @@ try {
   if (error instanceof NotFoundError) {
     console.log('Job not found');
   } else if (error instanceof AuthorizationError) {
-    console.log(`Forbidden (e.g. plan limit): ${error.message}`);
+    console.log(`Forbidden: ${error.message}`);
   } else if (error instanceof RateLimitError) {
+    // 429: either a plan quota (code "QUOTA_EXCEEDED") or per-second rate limiting
     console.log(`Retry after ${error.getRetryAfter()} seconds`);
   } else if (isSpooledError(error)) {
     console.log(`API error: ${error.code} - ${error.message}`);
