@@ -91,6 +91,28 @@ export interface JobStatusChangedEvent extends RealtimeEventBase {
   };
 }
 
+/** Queue stats update event (backend `QueueStats`) */
+export interface QueueStatsEvent extends RealtimeEventBase {
+  type: 'queue.stats';
+  data: {
+    queueName: string;
+    pending: number;
+    processing: number;
+    completed: number;
+    failed: number;
+  };
+}
+
+/** Worker heartbeat event (backend `WorkerHeartbeat`) */
+export interface WorkerHeartbeatEvent extends RealtimeEventBase {
+  type: 'worker.heartbeat';
+  data: {
+    workerId: string;
+    status: string;
+    currentJobId?: string;
+  };
+}
+
 /** Queue paused event */
 export interface QueuePausedEvent extends RealtimeEventBase {
   type: 'queue.paused';
@@ -152,10 +174,12 @@ export type RealtimeEvent =
   | JobFailedEvent
   | JobProgressEvent
   | JobStatusChangedEvent
+  | QueueStatsEvent
   | QueuePausedEvent
   | QueueResumedEvent
   | WorkerRegisteredEvent
   | WorkerDeregisteredEvent
+  | WorkerHeartbeatEvent
   | ScheduleTriggeredEvent
   | HeartbeatEvent;
 
@@ -203,17 +227,19 @@ export interface RealtimeConnectionOptions {
   debug?: (message: string, meta?: unknown) => void;
 }
 
-/** WebSocket command to server */
+/**
+ * WebSocket command sent to the server.
+ *
+ * Matches the backend `ClientCommand` enum, which is
+ * `#[serde(tag = "cmd")]` with default (PascalCase) variant names and
+ * snake_case fields. The server does not reply with any acknowledgement, so
+ * commands are fire-and-forget.
+ */
 export interface WebSocketCommand {
-  type: 'subscribe' | 'unsubscribe';
-  filter: SubscriptionFilter;
-  requestId?: string;
-}
-
-/** WebSocket command response */
-export interface WebSocketCommandResponse {
-  type: 'subscribed' | 'unsubscribed' | 'error';
-  requestId?: string;
-  filter?: SubscriptionFilter;
-  error?: string;
+  /** Command tag — the backend serde variant name. */
+  cmd: 'Subscribe' | 'Unsubscribe' | 'Ping';
+  /** Queue name filter (backend `queue`). Omitted when not filtering. */
+  queue?: string;
+  /** Job ID filter (backend `job_id`). Omitted when not filtering. */
+  job_id?: string;
 }

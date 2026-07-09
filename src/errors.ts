@@ -330,30 +330,57 @@ export function parseRateLimitHeaders(headers: Headers): RateLimitInfo {
   return info;
 }
 
+/** Cap a raw (non-JSON) error body so a stray HTML page can't become a huge message. */
+const MAX_RAW_ERROR_BODY_CHARS = 500;
+
 /**
- * Parse an error response body
+ * Parse an error response body.
+ *
+ * Reads the body once as text, then:
+ * - if it parses as a JSON object, extracts `{code, message}` (falling back to
+ *   the `error` field when `message` is absent);
+ * - otherwise (plain-text/HTML body, or malformed JSON) preserves the raw body
+ *   text as the message so a server's human-readable error — e.g. a proxy's
+ *   `502 Bad Gateway` page — is not silently discarded.
  */
 async function parseErrorBody(response: Response): Promise<ApiErrorBody | null> {
   const contentType = response.headers.get('Content-Type') || '';
-  if (!contentType.includes('application/json')) {
+
+  let raw: string;
+  try {
+    raw = await response.text();
+  } catch {
     return null;
   }
 
-  try {
-    const body = await response.json() as Record<string, unknown>;
-    if (typeof body === 'object' && body !== null) {
-      // Error bodies come in two shapes: {code, message} or {error, code, details}.
-      // Fall back to `error` when `message` is absent so the server's
-      // human-readable message is not lost.
-      const message = ((body.message as string) ?? (body.error as string)) || response.statusText;
-      return {
-        code: (body.code as string) || 'UNKNOWN_ERROR',
-        message,
-        details: body.details as Record<string, unknown> | undefined,
-      };
+  if (contentType.includes('application/json')) {
+    try {
+      const body = JSON.parse(raw) as Record<string, unknown>;
+      if (typeof body === 'object' && body !== null) {
+        // Error bodies come in two shapes: {code, message} or {error, code, details}.
+        // Fall back to `error` when `message` is absent so the server's
+        // human-readable message is not lost.
+        const message = ((body.message as string) ?? (body.error as string)) || response.statusText;
+        return {
+          code: (body.code as string) || 'UNKNOWN_ERROR',
+          message,
+          details: body.details as Record<string, unknown> | undefined,
+        };
+      }
+    } catch {
+      // Content-Type claimed JSON but the body did not parse — fall through and
+      // preserve the raw text below instead of throwing it away.
     }
-  } catch {
-    // JSON parsing failed
+  }
+
+  // Non-JSON body (or unparseable JSON): keep the raw text as the message.
+  const trimmed = raw.trim();
+  if (trimmed) {
+    const message =
+      trimmed.length > MAX_RAW_ERROR_BODY_CHARS
+        ? `${trimmed.slice(0, MAX_RAW_ERROR_BODY_CHARS)}…`
+        : trimmed;
+    return { code: 'UNKNOWN_ERROR', message };
   }
 
   return null;

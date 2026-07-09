@@ -5,6 +5,36 @@ All notable changes to the Spooled Node.js SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.33] - 2026-07-09
+
+### Fixed
+
+- **Realtime typed event handlers now fire.** The backend sends events tagged
+  with the PascalCase enum variant name (`JobCompleted`, `JobStatusChange`,
+  `QueueStats`, `WorkerHeartbeat`, ...), but the SDK dispatched by its dotted
+  public names (`job.completed`, `job.status_changed`, ...), so
+  `realtime.on('job.completed', cb)` never fired — only the untyped
+  `onEvent()`/catch-all worked. Inbound events are now translated from the
+  backend variant name to the SDK's dotted name before dispatch (covering every
+  variant of the backend `RealtimeEvent` enum), for both the WebSocket and SSE
+  clients. Payload fields are still camelCased on the envelope while
+  `result`/`payload` blobs are preserved verbatim.
+- **`realtime.subscribe()` / `unsubscribe()` no longer hang for ~10s.** They sent
+  `{type, filter, requestId}` and then blocked waiting for a
+  `{type:'subscribed', requestId}` acknowledgement that the server never sends,
+  timing out after 10 seconds. They now send the backend command shape
+  (`{cmd, queue, job_id}`) and resolve as soon as the command is written to the
+  socket. Subscriptions are still tracked locally and replayed on reconnect.
+- **Non-JSON error responses keep their body text.** When an error response body
+  is not valid JSON (a plain-text or HTML page, or a malformed body served with
+  `Content-Type: application/json`), the raw body text is now used as the error
+  message instead of being discarded in favour of the bare status text.
+
+### Changed
+
+- **`SDK_VERSION` / User-Agent synced to the release version.** They were stuck
+  at `1.0.31`; both now report `1.0.33`.
+
 ## [1.0.32] - 2026-07-09
 
 ### Fixed

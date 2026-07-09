@@ -309,8 +309,36 @@ describe('Errors', () => {
       expect(error).toBeInstanceOf(ServerError);
     });
 
-    it('should handle non-JSON response', async () => {
+    it('should preserve the raw text of a non-JSON response body', async () => {
       const response = new Response('Plain text error', {
+        status: 500,
+        statusText: 'Internal Server Error',
+      });
+
+      const error = await createErrorFromResponse(response);
+      expect(error).toBeInstanceOf(ServerError);
+      // The server's human-readable body is kept rather than discarded in
+      // favour of the generic statusText.
+      expect(error.message).toBe('Plain text error');
+    });
+
+    it('should preserve the raw body when Content-Type claims JSON but the body is not valid JSON', async () => {
+      // A proxy (e.g. Cloudflare/Envoy) often returns a plain-text or HTML 502
+      // page while still advertising application/json. The raw text must not be
+      // thrown away in favour of the bare statusText.
+      const response = new Response('upstream connect error or disconnect/reset before headers', {
+        status: 502,
+        statusText: 'Bad Gateway',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const error = await createErrorFromResponse(response);
+      expect(error).toBeInstanceOf(ServerError);
+      expect(error.message).toBe('upstream connect error or disconnect/reset before headers');
+    });
+
+    it('should fall back to statusText when the body is empty', async () => {
+      const response = new Response('', {
         status: 500,
         statusText: 'Internal Server Error',
       });

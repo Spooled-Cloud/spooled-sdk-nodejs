@@ -50,6 +50,81 @@ describe('WebSocketRealtimeClient', () => {
       // User blob preserved byte-for-byte.
       expect(received.result).toEqual({ some_key: 'value' });
     });
+
+    it('maps the backend PascalCase event type to the dotted handler name', () => {
+      // The real backend serializes `RealtimeEvent` with the PascalCase variant
+      // name as `type` and nests fields under `data`. Before the fix this never
+      // reached a `on('job.completed')` handler because dispatch keyed on the
+      // raw `JobCompleted` name.
+      const client = new WebSocketRealtimeClient(baseOptions);
+      let received: any;
+      let genericType: string | undefined;
+      client.on('job.completed', (data) => {
+        received = data;
+      });
+      client.onEvent((event) => {
+        genericType = event.type;
+      });
+
+      (client as any).handleMessage(
+        JSON.stringify({
+          type: 'JobCompleted',
+          data: {
+            job_id: 'job_1',
+            queue_name: 'emails',
+            duration_ms: 42,
+            timestamp: '2024-01-01T00:00:00Z',
+            result: { some_key: 'value' },
+          },
+        })
+      );
+
+      expect(received).toBeDefined();
+      expect(received.jobId).toBe('job_1');
+      expect(received.queueName).toBe('emails');
+      expect(received.durationMs).toBe(42);
+      expect(received.result).toEqual({ some_key: 'value' });
+      // The catch-all sees the normalized dotted name too.
+      expect(genericType).toBe('job.completed');
+    });
+  });
+
+  describe('subscribe/unsubscribe (no ack)', () => {
+    it('resolves promptly without waiting for a server ack and sends the backend command shape', async () => {
+      const sent: string[] = [];
+      const client = new WebSocketRealtimeClient(baseOptions);
+      // Simulate an open connection with a socket that records outbound frames.
+      (client as any).state = 'connected';
+      (client as any).ws = { send: (payload: string) => sent.push(payload) };
+
+      // The server sends no subscribe ack; if the client waited for one this
+      // would hang until the 500ms guard rejects and fails the test.
+      await expect(
+        Promise.race([
+          client.subscribe({ queueName: 'emails' }),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('subscribe hung waiting for an ack')), 500)
+          ),
+        ])
+      ).resolves.toBeUndefined();
+
+      expect(sent).toHaveLength(1);
+      expect(JSON.parse(sent[0])).toEqual({ cmd: 'Subscribe', queue: 'emails' });
+    });
+
+    it('sends an Unsubscribe command with queue and job_id', async () => {
+      const sent: string[] = [];
+      const client = new WebSocketRealtimeClient(baseOptions);
+      (client as any).state = 'connected';
+      (client as any).ws = { send: (payload: string) => sent.push(payload) };
+
+      await client.subscribe({ queueName: 'emails', jobId: 'job_9' });
+      await client.unsubscribe({ queueName: 'emails', jobId: 'job_9' });
+
+      expect(sent).toHaveLength(2);
+      expect(JSON.parse(sent[0])).toEqual({ cmd: 'Subscribe', queue: 'emails', job_id: 'job_9' });
+      expect(JSON.parse(sent[1])).toEqual({ cmd: 'Unsubscribe', queue: 'emails', job_id: 'job_9' });
+    });
   });
 
   describe('token provider', () => {

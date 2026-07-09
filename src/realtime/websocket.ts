@@ -11,9 +11,9 @@ import type {
   SubscriptionFilter,
   ConnectionState,
   WebSocketCommand,
-  WebSocketCommandResponse,
 } from './types.js';
 import { convertResponse } from '../utils/casing.js';
+import { mapEventType } from './event-map.js';
 
 /** Event handler type - simplified for internal use */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,11 +41,6 @@ export class WebSocketRealtimeClient {
    */
   private authFailure = false;
   private subscriptions: Map<string, SubscriptionFilter> = new Map();
-  private pendingCommands: Map<string, {
-    resolve: () => void;
-    reject: (error: Error) => void;
-    timeout: ReturnType<typeof setTimeout>;
-  }> = new Map();
 
   // Event handlers
   private eventHandlers: Map<RealtimeEventType, Set<EventHandler>> = new Map();
@@ -182,11 +177,14 @@ export class WebSocketRealtimeClient {
 
     this.setState('disconnected');
     this.subscriptions.clear();
-    this.clearPendingCommands();
   }
 
   /**
-   * Subscribe to events matching a filter
+   * Subscribe to events matching a filter.
+   *
+   * The server applies filtering itself and sends no acknowledgement, so this
+   * resolves as soon as the command has been written to the socket. The filter
+   * is tracked locally so it is replayed automatically on reconnect.
    */
   async subscribe(filter: SubscriptionFilter): Promise<void> {
     const filterId = this.filterToId(filter);
@@ -198,12 +196,14 @@ export class WebSocketRealtimeClient {
     this.subscriptions.set(filterId, filter);
 
     if (this.state === 'connected') {
-      await this.sendCommand({ type: 'subscribe', filter });
+      this.sendCommand('Subscribe', filter);
     }
   }
 
   /**
-   * Unsubscribe from events matching a filter
+   * Unsubscribe from events matching a filter.
+   *
+   * Fire-and-forget, like {@link subscribe} — the server sends no ack.
    */
   async unsubscribe(filter: SubscriptionFilter): Promise<void> {
     const filterId = this.filterToId(filter);
@@ -215,7 +215,7 @@ export class WebSocketRealtimeClient {
     this.subscriptions.delete(filterId);
 
     if (this.state === 'connected') {
-      await this.sendCommand({ type: 'unsubscribe', filter });
+      this.sendCommand('Unsubscribe', filter);
     }
   }
 
@@ -284,20 +284,21 @@ export class WebSocketRealtimeClient {
       // Backend emits snake_case; convert to camelCase to match the typed
       // event shapes (jobId, queueName, durationMs, ...). User blobs like
       // `result`/`payload` are preserved via SKIP_CONVERSION_KEYS.
-      const message = convertResponse(JSON.parse(data));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const message = convertResponse(JSON.parse(data)) as any;
 
-      // Check if this is a command response
-      if (message.type === 'subscribed' || message.type === 'unsubscribed' || message.type === 'error') {
-        this.handleCommandResponse(message as WebSocketCommandResponse);
-        return;
-      }
-
-      // Handle as event
+      // The backend tags events with the PascalCase enum variant name
+      // (`JobCompleted`, `QueueStats`, ...); the SDK's public API dispatches by
+      // dotted name (`job.completed`, `queue.stats`). Translate before dispatch
+      // so `on('job.completed', ...)` fires. Unknown/pre-dotted names pass
+      // through unchanged.
+      const eventType = mapEventType(String(message.type));
+      message.type = eventType;
       const event = message as RealtimeEvent;
-      this.options.debug(`Received event: ${event.type}`, event);
+      this.options.debug(`Received event: ${eventType}`, event);
 
       // Emit to specific handlers
-      const handlers = this.eventHandlers.get(event.type);
+      const handlers = this.eventHandlers.get(eventType as RealtimeEventType);
       if (handlers) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const eventData = (event as any).data;
@@ -323,29 +324,8 @@ export class WebSocketRealtimeClient {
     }
   }
 
-  private handleCommandResponse(response: WebSocketCommandResponse): void {
-    if (!response.requestId) {
-      return;
-    }
-
-    const pending = this.pendingCommands.get(response.requestId);
-    if (!pending) {
-      return;
-    }
-
-    clearTimeout(pending.timeout);
-    this.pendingCommands.delete(response.requestId);
-
-    if (response.type === 'error') {
-      pending.reject(new Error(response.error || 'Unknown error'));
-    } else {
-      pending.resolve();
-    }
-  }
-
   private handleDisconnect(): void {
     this.ws = null;
-    this.clearPendingCommands();
 
     if (this.options.autoReconnect && this.reconnectAttempts < this.options.maxReconnectAttempts) {
       this.scheduleReconnect();
@@ -378,49 +358,39 @@ export class WebSocketRealtimeClient {
     }, delay);
   }
 
-  private async resubscribeAll(): Promise<void> {
+  private resubscribeAll(): void {
     for (const filter of this.subscriptions.values()) {
       try {
-        await this.sendCommand({ type: 'subscribe', filter });
+        this.sendCommand('Subscribe', filter);
       } catch (error) {
         this.options.debug('Failed to resubscribe', { filter, error });
       }
     }
   }
 
-  private async sendCommand(command: Omit<WebSocketCommand, 'requestId'>): Promise<void> {
+  /**
+   * Send a subscribe/unsubscribe command to the server.
+   *
+   * The backend `ClientCommand` shape is `{ cmd, queue, job_id }` and it sends
+   * no acknowledgement, so this is fire-and-forget — it writes to the socket
+   * and returns. The `SubscriptionFilter`'s `workerId`/`scheduleId` have no
+   * server-side equivalent and are ignored.
+   */
+  private sendCommand(cmd: 'Subscribe' | 'Unsubscribe', filter: SubscriptionFilter): void {
     if (!this.ws || this.state !== 'connected') {
       throw new Error('WebSocket not connected');
     }
 
-    const requestId = this.generateRequestId();
-    const fullCommand: WebSocketCommand = { ...command, requestId };
-
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.pendingCommands.delete(requestId);
-        reject(new Error('Command timeout'));
-      }, 10000);
-
-      this.pendingCommands.set(requestId, { resolve, reject, timeout });
-      this.ws.send(JSON.stringify(fullCommand));
-    });
-  }
-
-  private clearPendingCommands(): void {
-    for (const pending of this.pendingCommands.values()) {
-      clearTimeout(pending.timeout);
-      pending.reject(new Error('Connection closed'));
-    }
-    this.pendingCommands.clear();
+    const command: WebSocketCommand = {
+      cmd,
+      queue: filter.queueName,
+      job_id: filter.jobId,
+    };
+    this.ws.send(JSON.stringify(command));
   }
 
   private filterToId(filter: SubscriptionFilter): string {
     return JSON.stringify(filter);
-  }
-
-  private generateRequestId(): string {
-    return `req_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
   }
 }
 

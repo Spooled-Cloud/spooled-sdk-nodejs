@@ -12,6 +12,7 @@ import type {
   ConnectionState,
 } from './types.js';
 import { convertResponse } from '../utils/casing.js';
+import { mapEventType } from './event-map.js';
 
 /** Event handler type - simplified for internal use */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -258,11 +259,18 @@ export class SseRealtimeClient {
       // Backend emits snake_case; convert to camelCase to match the typed
       // event shapes. User blobs (`result`/`payload`) are preserved via
       // SKIP_CONVERSION_KEYS.
-      const event = convertResponse(JSON.parse(data)) as RealtimeEvent;
-      this.options.debug(`Received SSE event: ${event.type}`, event);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const parsed = convertResponse(JSON.parse(data)) as any;
+      // Translate the backend's PascalCase variant name (`JobCompleted`) to the
+      // SDK's dotted event name (`job.completed`) before dispatch, matching the
+      // WebSocket client. Unknown/pre-dotted names pass through unchanged.
+      const eventType = mapEventType(String(parsed.type));
+      parsed.type = eventType;
+      const event = parsed as RealtimeEvent;
+      this.options.debug(`Received SSE event: ${eventType}`, event);
 
       // Emit to specific handlers
-      const handlers = this.eventHandlers.get(event.type);
+      const handlers = this.eventHandlers.get(eventType as RealtimeEventType);
       if (handlers) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const eventData = (event as any).data;
