@@ -25,7 +25,7 @@ jobs:
 
       - name: Upgrade npm for Trusted Publishing support
         # Trusted Publishing requires npm >= 11.5.1
-        run: npm install -g npm@latest
+        run: npm install -g npm@11  # npm@11 supports Trusted Publishing (>=11.5.1) and runs on Node 20; npm@latest (12+) requires Node 22+
 
       - name: Install dependencies
         run: npm ci
