@@ -118,4 +118,47 @@ describe('Config', () => {
       expect(() => validateConfig(config)).toThrow('retry.maxDelay must be >= retry.baseDelay');
     });
   });
+
+  // Regression: reading a key from a .env line leaves a '\n' behind, and
+  // undici's fetch rejects `Authorization: Bearer <key>\n` with an opaque
+  // `TypeError: HeaderValue`. Trimming at resolveConfig time keeps the fix
+  // aligned with the Go / PHP / Python SDKs.
+  describe('credential trimming', () => {
+    it('trims trailing newline from apiKey', () => {
+      const config = resolveConfig({ apiKey: 'sp_test_abc\n' });
+      expect(config.apiKey).toBe('sp_test_abc');
+    });
+
+    it('trims surrounding whitespace from every credential', () => {
+      const config = resolveConfig({
+        apiKey: '  sp_test_key  ',
+        accessToken: '\tjwt.header.body\n',
+        refreshToken: '\r\nrefresh\r\n',
+        adminKey: ' sk_admin_secret ',
+      });
+
+      expect(config.apiKey).toBe('sp_test_key');
+      expect(config.accessToken).toBe('jwt.header.body');
+      expect(config.refreshToken).toBe('refresh');
+      expect(config.adminKey).toBe('sk_admin_secret');
+    });
+
+    it('treats whitespace-only credentials as unset', () => {
+      const config = resolveConfig({
+        apiKey: '   \n',
+        accessToken: '\t',
+      });
+
+      expect(config.apiKey).toBeUndefined();
+      expect(config.accessToken).toBeUndefined();
+    });
+
+    it('yields an Authorization header with no CR/LF', () => {
+      const config = resolveConfig({ apiKey: 'sp_test_abcdefghijklmnopqrstuvwxyz\n' });
+      const header = `Bearer ${config.apiKey ?? ''}`;
+      expect(header).not.toContain('\n');
+      expect(header).not.toContain('\r');
+      expect(header).toBe('Bearer sp_test_abcdefghijklmnopqrstuvwxyz');
+    });
+  });
 });

@@ -125,6 +125,19 @@ export const API_VERSION = 'v1';
 export const API_BASE_PATH = `/api/${API_VERSION}`;
 
 /**
+ * Trim surrounding whitespace from a credential string and treat an
+ * all-whitespace input as unset. Mirrors the trim policy in the Go, PHP,
+ * and Python SDKs so behavior is consistent across languages.
+ */
+function normalizeCredential(value: string | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
+}
+
+/**
  * Resolve configuration by merging user options with defaults
  */
 export function resolveConfig(options: SpooledClientConfig): ResolvedConfig {
@@ -169,11 +182,16 @@ export function resolveConfig(options: SpooledClientConfig): ResolvedConfig {
   const derivedWsUrl = baseUrl.replace(/^http/, 'ws');
   const wsUrl = options.wsUrl ?? derivedWsUrl;
 
+  // Trim whitespace (including a stray trailing '\n') from every credential.
+  // Node's `undici` fetch rejects `Authorization: Bearer <key>\n` with an
+  // opaque `TypeError: HeaderValue` and users routinely paste keys from
+  // `.env` files that include a newline; normalizing here keeps behavior
+  // consistent with the Go, PHP, and Python SDKs.
   return {
-    apiKey: options.apiKey,
-    accessToken: options.accessToken,
-    refreshToken: options.refreshToken,
-    adminKey: options.adminKey,
+    apiKey: normalizeCredential(options.apiKey),
+    accessToken: normalizeCredential(options.accessToken),
+    refreshToken: normalizeCredential(options.refreshToken),
+    adminKey: normalizeCredential(options.adminKey),
     baseUrl,
     wsUrl,
     grpcAddress: options.grpcAddress ?? DEFAULT_CONFIG.grpcAddress,
