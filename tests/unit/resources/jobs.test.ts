@@ -298,6 +298,7 @@ describe('JobsResource', () => {
                 retry_count: 0,
                 max_retries: 3,
                 timeout_seconds: 300,
+                lease_id: 'lease_abc',
               },
             ],
           });
@@ -313,6 +314,7 @@ describe('JobsResource', () => {
 
       expect(result.jobs).toHaveLength(1);
       expect(result.jobs[0].id).toBe('job_123');
+      expect(result.jobs[0].leaseId).toBe('lease_abc');
     });
   });
 
@@ -332,6 +334,26 @@ describe('JobsResource', () => {
 
       expect(result.success).toBe(true);
     });
+
+    it('should send lease_id when provided', async () => {
+      let receivedBody: any;
+      server.use(
+        http.post('https://api.spooled.cloud/api/v1/jobs/job_123/complete', async ({ request }) => {
+          receivedBody = await request.json();
+          return HttpResponse.json({ success: true });
+        })
+      );
+
+      const client = createClient();
+      await client.jobs.complete('job_123', {
+        workerId: 'worker_123',
+        result: { output: 'done' },
+        leaseId: 'lease_abc',
+      });
+
+      expect(receivedBody.worker_id).toBe('worker_123');
+      expect(receivedBody.lease_id).toBe('lease_abc');
+    });
   });
 
   describe('fail', () => {
@@ -350,6 +372,26 @@ describe('JobsResource', () => {
 
       expect(result.success).toBe(true);
     });
+
+    it('should send lease_id when provided', async () => {
+      let receivedBody: any;
+      server.use(
+        http.post('https://api.spooled.cloud/api/v1/jobs/job_123/fail', async ({ request }) => {
+          receivedBody = await request.json();
+          return HttpResponse.json({ success: true });
+        })
+      );
+
+      const client = createClient();
+      await client.jobs.fail('job_123', {
+        workerId: 'worker_123',
+        error: 'Something went wrong',
+        leaseId: 'lease_abc',
+      });
+
+      expect(receivedBody.error).toBe('Something went wrong');
+      expect(receivedBody.lease_id).toBe('lease_abc');
+    });
   });
 
   describe('heartbeat', () => {
@@ -367,6 +409,26 @@ describe('JobsResource', () => {
       });
 
       expect(result.success).toBe(true);
+    });
+
+    it('should send lease_id when provided', async () => {
+      let receivedBody: any;
+      server.use(
+        http.post('https://api.spooled.cloud/api/v1/jobs/job_123/heartbeat', async ({ request }) => {
+          receivedBody = await request.json();
+          return HttpResponse.json({ success: true });
+        })
+      );
+
+      const client = createClient();
+      await client.jobs.heartbeat('job_123', {
+        workerId: 'worker_123',
+        leaseDurationSecs: 30,
+        leaseId: 'lease_abc',
+      });
+
+      expect(receivedBody.lease_duration_secs).toBe(30);
+      expect(receivedBody.lease_id).toBe('lease_abc');
     });
   });
 

@@ -75,7 +75,7 @@ export class SpooledWorker {
       ...DEFAULT_OPTIONS,
       hostname: osHostname(),
       workerType: 'nodejs',
-      version: '1.0.26',
+      version: '1.0.34',
       metadata: {},
       ...options,
     } as Required<SpooledWorkerOptions>;
@@ -397,6 +397,7 @@ export class SpooledWorker {
       await this.client.jobs.complete(job.id, {
         workerId: this.workerId,
         result,
+        ...(job.leaseId !== undefined && { leaseId: job.leaseId }),
       });
 
       this.emit('job:completed', {
@@ -418,6 +419,7 @@ export class SpooledWorker {
       await this.client.jobs.fail(job.id, {
         workerId: this.workerId,
         error: errorMessage,
+        ...(job.leaseId !== undefined && { leaseId: job.leaseId }),
       });
 
       this.emit('job:failed', {
@@ -442,10 +444,13 @@ export class SpooledWorker {
   private async sendJobHeartbeat(jobId: string): Promise<void> {
     if (!this.workerId) return;
 
+    const leaseId = this.activeJobs.get(jobId)?.job.leaseId;
+
     try {
       await this.client.jobs.heartbeat(jobId, {
         workerId: this.workerId,
         leaseDurationSecs: this.options.leaseDuration,
+        ...(leaseId !== undefined && { leaseId }),
       });
     } catch (error) {
       this.debug(`Job heartbeat failed for ${jobId}`, error);

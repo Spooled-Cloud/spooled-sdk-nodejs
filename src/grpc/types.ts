@@ -94,6 +94,12 @@ export interface GrpcJob {
   leaseExpiresAt?: GrpcTimestamp | string | null;
   assignedWorkerId?: string | null;
   idempotencyKey?: string | null;
+  /**
+   * Lease fencing token (proto `lease_id`). Returned on dequeue; echo it back
+   * in Complete/Fail/RenewLease so the operation applies only to the lease
+   * this worker actually holds (empty = legacy worker_id fence).
+   */
+  leaseId?: string;
 }
 
 // ============================================================================
@@ -138,6 +144,8 @@ export interface GrpcCompleteRequest {
   workerId: string;
   /** Result as object (will be converted to google.protobuf.Struct) */
   result?: Record<string, unknown>;
+  /** Lease fencing token from the dequeued job (proto `lease_id`) */
+  leaseId?: string;
 }
 
 /** Complete response */
@@ -151,6 +159,8 @@ export interface GrpcFailRequest {
   workerId: string;
   error: string;
   retry?: boolean;
+  /** Lease fencing token from the dequeued job (proto `lease_id`) */
+  leaseId?: string;
 }
 
 /** Fail response */
@@ -165,6 +175,8 @@ export interface GrpcRenewLeaseRequest {
   jobId: string;
   workerId: string;
   extensionSecs: number;
+  /** Lease fencing token from the dequeued job (proto `lease_id`) */
+  leaseId?: string;
 }
 
 /** Renew lease response */

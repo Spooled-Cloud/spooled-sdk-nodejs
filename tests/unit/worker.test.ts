@@ -6,9 +6,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { SpooledWorker } from '../../src/worker/worker.js';
 
 /** Build a minimal fake SpooledClient for the worker to drive. */
-function makeFakeClient() {
+function makeFakeClient(jobOverrides: Record<string, unknown> = {}) {
   const heartbeat = vi.fn().mockResolvedValue({ success: true });
   const fail = vi.fn().mockResolvedValue({ success: true });
+  const complete = vi.fn().mockResolvedValue({ success: true });
   const claim = vi
     .fn()
     .mockResolvedValueOnce({
@@ -19,6 +20,7 @@ function makeFakeClient() {
           payload: {},
           retryCount: 0,
           maxRetries: 3,
+          ...jobOverrides,
         },
       ],
     })
@@ -33,13 +35,13 @@ function makeFakeClient() {
     },
     jobs: {
       claim,
-      complete: vi.fn().mockResolvedValue({ success: true }),
+      complete,
       fail,
       heartbeat,
     },
   } as any;
 
-  return { client, heartbeat, fail, claim };
+  return { client, heartbeat, fail, complete, claim };
 }
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -79,5 +81,84 @@ describe('SpooledWorker shutdown', () => {
     const callsAfterStop = heartbeat.mock.calls.length;
     await wait(40);
     expect(heartbeat.mock.calls.length).toBe(callsAfterStop);
+  });
+});
+
+describe('SpooledWorker lease fencing', () => {
+  it('echoes the claimed leaseId on heartbeat and complete', async () => {
+    const { client, heartbeat, complete } = makeFakeClient({ leaseId: 'lease_1' });
+
+    const worker = new SpooledWorker(client, {
+      queueName: 'q',
+      concurrency: 1,
+      pollInterval: 5,
+      leaseDuration: 5,
+      // 5s * 0.002 * 1000 = 10ms heartbeat interval
+      heartbeatFraction: 0.002,
+    });
+
+    // Handler that runs long enough for a few heartbeats to fire.
+    worker.process(async () => {
+      await wait(40);
+      return { ok: true };
+    });
+
+    await worker.start();
+    await wait(100);
+    await worker.stop();
+
+    expect(heartbeat).toHaveBeenCalledWith(
+      'job_1',
+      expect.objectContaining({ workerId: 'w1', leaseId: 'lease_1' })
+    );
+    expect(complete).toHaveBeenCalledWith(
+      'job_1',
+      expect.objectContaining({ workerId: 'w1', leaseId: 'lease_1' })
+    );
+  });
+
+  it('echoes the claimed leaseId on fail', async () => {
+    const { client, fail } = makeFakeClient({ leaseId: 'lease_1' });
+
+    const worker = new SpooledWorker(client, {
+      queueName: 'q',
+      concurrency: 1,
+      pollInterval: 5,
+      leaseDuration: 5,
+    });
+
+    worker.process(() => {
+      throw new Error('boom');
+    });
+
+    await worker.start();
+    await wait(40);
+    await worker.stop();
+
+    expect(fail).toHaveBeenCalledWith(
+      'job_1',
+      expect.objectContaining({ workerId: 'w1', error: 'boom', leaseId: 'lease_1' })
+    );
+  });
+
+  it('omits leaseId when the claim did not include one', async () => {
+    const { client, complete } = makeFakeClient();
+
+    const worker = new SpooledWorker(client, {
+      queueName: 'q',
+      concurrency: 1,
+      pollInterval: 5,
+      leaseDuration: 5,
+    });
+
+    worker.process(async () => ({ ok: true }));
+
+    await worker.start();
+    await wait(40);
+    await worker.stop();
+
+    expect(complete).toHaveBeenCalledTimes(1);
+    const params = complete.mock.calls[0][1];
+    expect('leaseId' in params).toBe(false);
   });
 });

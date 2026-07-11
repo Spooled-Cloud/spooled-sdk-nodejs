@@ -123,6 +123,13 @@ export interface ClaimedJob {
   maxRetries: number;
   timeoutSeconds: number;
   leaseExpiresAt?: string;
+  /**
+   * Lease fencing token for this claim. Echo it back on
+   * complete/fail/heartbeat so the operation applies only to the lease this
+   * worker actually holds (backend rejects stale leases with 409
+   * LEASE_EXPIRED). Omitted = legacy behavior.
+   */
+  leaseId?: string;
 }
 
 /** Parameters for claiming jobs */
@@ -148,6 +155,8 @@ export interface CompleteJobParams {
   workerId: string;
   /** Optional result payload */
   result?: JsonObject;
+  /** Lease fencing token from the claimed job (rejects stale leases when set) */
+  leaseId?: string;
 }
 
 /** Parameters for failing a job */
@@ -156,6 +165,8 @@ export interface FailJobParams {
   workerId: string;
   /** Error message (1-2048 chars) */
   error: string;
+  /** Lease fencing token from the claimed job (rejects stale leases when set) */
+  leaseId?: string;
 }
 
 /** Parameters for job heartbeat */
@@ -164,6 +175,8 @@ export interface HeartbeatJobParams {
   workerId: string;
   /** Lease duration in seconds (5-3600) */
   leaseDurationSecs: number;
+  /** Lease fencing token from the claimed job (rejects stale leases when set) */
+  leaseId?: string;
 }
 
 /** Response for priority boost */

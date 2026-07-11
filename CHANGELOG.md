@@ -5,6 +5,23 @@ All notable changes to the Spooled Node.js SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.34] - 2026-07-11
+
+### Added
+
+- **Lease fencing (`lease_id`).** `claim()` now surfaces the backend's lease
+  fencing token as `ClaimedJob.leaseId`, and the worker runtime echoes it back
+  on complete/fail/heartbeat (`CompleteJobParams`/`FailJobParams`/
+  `HeartbeatJobParams` accept an optional `leaseId`). When sent, the backend
+  (v0.1.94+) applies the operation only if the token matches the job's current
+  lease and rejects stale leases with 409 `LEASE_EXPIRED`, so a worker whose
+  lease expired and was reclaimed can no longer clobber another worker's run
+  (audit F9). Omitting the token preserves legacy behavior.
+- **gRPC proto updated with `lease_id` fields** on `Job`, `CompleteRequest`,
+  `FailRequest`, and `RenewLeaseRequest`; the TypeScript mirror types
+  (`GrpcJob`, `GrpcCompleteRequest`, `GrpcFailRequest`,
+  `GrpcRenewLeaseRequest`) expose it as `leaseId`.
+
 ## [1.0.33] - 2026-07-09
 
 ### Fixed
