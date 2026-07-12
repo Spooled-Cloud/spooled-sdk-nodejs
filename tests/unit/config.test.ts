@@ -3,9 +3,14 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { resolveConfig, validateConfig, DEFAULT_CONFIG } from '../../src/config.js';
+import { resolveConfig, validateConfig, DEFAULT_CONFIG, SDK_VERSION } from '../../src/config.js';
 
 describe('Config', () => {
+  it('keeps runtime metadata synchronized with the package version', () => {
+    expect(SDK_VERSION).toBe('1.0.35');
+    expect(DEFAULT_CONFIG.userAgent).toBe(`@spooled/sdk-nodejs/${SDK_VERSION}`);
+  });
+
   describe('resolveConfig', () => {
     it('should merge defaults with provided options', () => {
       const config = resolveConfig({

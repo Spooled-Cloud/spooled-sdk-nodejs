@@ -5,6 +5,26 @@ All notable changes to the Spooled Node.js SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.35] - 2026-07-12
+
+### Fixed
+
+- **Worker execution identity is now lease-exact.** Overlapping executions of the
+  same job are tracked by job ID plus immutable lease ID, so an older handler or
+  heartbeat timer cannot borrow, cancel, delete, or settle a replacement lease.
+  Cleanup removes only its captured execution and clears its own interval.
+- **Lease nullability matches REST responses.** `Job.leaseId` and
+  `ClaimedJob.leaseId` now accept `null`; the worker omits null lease IDs when
+  calling complete, fail, or heartbeat to preserve legacy behavior.
+- **Release/runtime metadata is synchronized.** Package, lockfile, SDK
+  User-Agent, and default worker registration now consistently report `1.0.35`.
+
+### Tests
+
+- Added deterministic same-job/two-lease out-of-order worker coverage, exact
+  REST request body assertions, and protobuf wire assertions for lease IDs and
+  their preserved field numbers.
+
 ## [1.0.34] - 2026-07-11
 
 ### Added

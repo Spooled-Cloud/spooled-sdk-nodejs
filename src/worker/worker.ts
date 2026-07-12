@@ -5,6 +5,7 @@
  */
 
 import type { SpooledClient } from '../client.js';
+import { SDK_VERSION } from '../config.js';
 import type { JsonObject } from '../types/common.js';
 import type { ClaimedJob } from '../types/jobs.js';
 import type {
@@ -61,7 +62,7 @@ export class SpooledWorker {
   private state: WorkerState = 'idle';
   private workerId: string | null = null;
   private handler: JobHandler | null = null;
-  private activeJobs: Map<string, ActiveJob> = new Map();
+  private activeJobs: Map<symbol, ActiveJob> = new Map();
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private workerHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private shutdownPromise: Promise<void> | null = null;
@@ -75,7 +76,7 @@ export class SpooledWorker {
       ...DEFAULT_OPTIONS,
       hostname: osHostname(),
       workerType: 'nodejs',
-      version: '1.0.34',
+      version: SDK_VERSION,
       metadata: {},
       ...options,
     } as Required<SpooledWorkerOptions>;
@@ -216,14 +217,13 @@ export class SpooledWorker {
 
       // Force-fail any remaining jobs. Snapshot the entries first because
       // cleanupJob() mutates the activeJobs map as we go.
-      const remaining = Array.from(this.activeJobs.entries());
-      for (const [jobId, active] of remaining) {
-        this.debug(`Force-failing job ${jobId} due to shutdown timeout`);
+      const remaining = Array.from(this.activeJobs.values());
+      for (const active of remaining) {
+        this.debug(`Force-failing job ${active.job.id} due to shutdown timeout`);
         await this.failJob(active.job, 'Worker shutdown timeout');
-        // Clear the per-job heartbeat interval and drop the job from the map.
-        // The handler's finally (which normally does this) may never run if
-        // user code ignores the abort signal, so the timer would leak forever.
-        this.cleanupJob(jobId);
+        // The handler's finally may never run if user code ignores the abort
+        // signal, so explicitly clear this exact execution's timer.
+        this.cleanupJob(active);
       }
     }
 
@@ -326,17 +326,18 @@ export class SpooledWorker {
 
     const abortController = new AbortController();
     const activeJob: ActiveJob = {
+      executionId: Symbol(job.id),
       job,
       startedAt: new Date(),
       abortController,
     };
 
-    this.activeJobs.set(job.id, activeJob);
+    this.activeJobs.set(activeJob.executionId, activeJob);
 
-    // Start per-job heartbeat
+    // Capture the immutable execution so a replacement lease cannot be borrowed.
     const heartbeatInterval = this.options.leaseDuration * this.options.heartbeatFraction * 1000;
     activeJob.heartbeatTimer = setInterval(() => {
-      this.sendJobHeartbeat(job.id);
+      this.sendJobHeartbeat(activeJob);
     }, heartbeatInterval);
 
     // Execute handler
@@ -386,7 +387,7 @@ export class SpooledWorker {
       const errorMessage = error instanceof Error ? error.message : String(error);
       await this.failJob(job, errorMessage);
     } finally {
-      this.cleanupJob(job.id);
+      this.cleanupJob(activeJob);
     }
   }
 
@@ -397,7 +398,7 @@ export class SpooledWorker {
       await this.client.jobs.complete(job.id, {
         workerId: this.workerId,
         result,
-        ...(job.leaseId !== undefined && { leaseId: job.leaseId }),
+        ...(job.leaseId != null && { leaseId: job.leaseId }),
       });
 
       this.emit('job:completed', {
@@ -419,7 +420,7 @@ export class SpooledWorker {
       await this.client.jobs.fail(job.id, {
         workerId: this.workerId,
         error: errorMessage,
-        ...(job.leaseId !== undefined && { leaseId: job.leaseId }),
+        ...(job.leaseId != null && { leaseId: job.leaseId }),
       });
 
       this.emit('job:failed', {
@@ -433,27 +434,30 @@ export class SpooledWorker {
     }
   }
 
-  private cleanupJob(jobId: string): void {
-    const activeJob = this.activeJobs.get(jobId);
-    if (activeJob?.heartbeatTimer) {
+  private cleanupJob(activeJob: ActiveJob): void {
+    if (activeJob.heartbeatTimer) {
       clearInterval(activeJob.heartbeatTimer);
+      activeJob.heartbeatTimer = undefined;
     }
-    this.activeJobs.delete(jobId);
+
+    if (this.activeJobs.get(activeJob.executionId) === activeJob) {
+      this.activeJobs.delete(activeJob.executionId);
+    }
   }
 
-  private async sendJobHeartbeat(jobId: string): Promise<void> {
+  private async sendJobHeartbeat(activeJob: ActiveJob): Promise<void> {
     if (!this.workerId) return;
 
-    const leaseId = this.activeJobs.get(jobId)?.job.leaseId;
+    const { job } = activeJob;
 
     try {
-      await this.client.jobs.heartbeat(jobId, {
+      await this.client.jobs.heartbeat(job.id, {
         workerId: this.workerId,
         leaseDurationSecs: this.options.leaseDuration,
-        ...(leaseId !== undefined && { leaseId }),
+        ...(job.leaseId != null && { leaseId: job.leaseId }),
       });
     } catch (error) {
-      this.debug(`Job heartbeat failed for ${jobId}`, error);
+      this.debug(`Job heartbeat failed for ${job.id}`, error);
     }
   }
 

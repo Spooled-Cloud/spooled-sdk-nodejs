@@ -28,7 +28,7 @@ export interface Job {
   parentJobId?: string;
   completionWebhook?: string;
   assignedWorkerId?: string;
-  leaseId?: string;
+  leaseId?: string | null;
   leaseExpiresAt?: string;
   idempotencyKey?: string;
   updatedAt: string;
@@ -129,7 +129,7 @@ export interface ClaimedJob {
    * worker actually holds (backend rejects stale leases with 409
    * LEASE_EXPIRED). Omitted = legacy behavior.
    */
-  leaseId?: string;
+  leaseId?: string | null;
 }
 
 /** Parameters for claiming jobs */

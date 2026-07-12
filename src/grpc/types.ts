@@ -99,7 +99,7 @@ export interface GrpcJob {
    * in Complete/Fail/RenewLease so the operation applies only to the lease
    * this worker actually holds (empty = legacy worker_id fence).
    */
-  leaseId?: string;
+  leaseId?: string | null;
 }
 
 // ============================================================================

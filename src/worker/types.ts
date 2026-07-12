@@ -91,6 +91,7 @@ export interface WorkerEventData {
 
 /** Active job tracking */
 export interface ActiveJob {
+  readonly executionId: symbol;
   job: ClaimedJob;
   startedAt: Date;
   heartbeatTimer?: ReturnType<typeof setInterval>;

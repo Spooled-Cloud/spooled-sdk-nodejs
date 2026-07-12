@@ -316,6 +316,31 @@ describe('JobsResource', () => {
       expect(result.jobs[0].id).toBe('job_123');
       expect(result.jobs[0].leaseId).toBe('lease_abc');
     });
+
+    it('preserves a nullable lease_id from the REST response', async () => {
+      server.use(
+        http.post('https://api.spooled.cloud/api/v1/jobs/claim', () =>
+          HttpResponse.json({
+            jobs: [{
+              id: 'job_legacy',
+              queue_name: 'my-queue',
+              payload: {},
+              retry_count: 0,
+              max_retries: 3,
+              timeout_seconds: 300,
+              lease_id: null,
+            }],
+          })
+        )
+      );
+
+      const result = await createClient().jobs.claim({
+        queueName: 'my-queue',
+        workerId: 'worker_123',
+      });
+
+      expect(result.jobs[0].leaseId).toBeNull();
+    });
   });
 
   describe('complete', () => {
@@ -351,8 +376,11 @@ describe('JobsResource', () => {
         leaseId: 'lease_abc',
       });
 
-      expect(receivedBody.worker_id).toBe('worker_123');
-      expect(receivedBody.lease_id).toBe('lease_abc');
+      expect(receivedBody).toEqual({
+        worker_id: 'worker_123',
+        result: { output: 'done' },
+        lease_id: 'lease_abc',
+      });
     });
   });
 
@@ -389,8 +417,11 @@ describe('JobsResource', () => {
         leaseId: 'lease_abc',
       });
 
-      expect(receivedBody.error).toBe('Something went wrong');
-      expect(receivedBody.lease_id).toBe('lease_abc');
+      expect(receivedBody).toEqual({
+        worker_id: 'worker_123',
+        error: 'Something went wrong',
+        lease_id: 'lease_abc',
+      });
     });
   });
 
@@ -427,8 +458,11 @@ describe('JobsResource', () => {
         leaseId: 'lease_abc',
       });
 
-      expect(receivedBody.lease_duration_secs).toBe(30);
-      expect(receivedBody.lease_id).toBe('lease_abc');
+      expect(receivedBody).toEqual({
+        worker_id: 'worker_123',
+        lease_duration_secs: 30,
+        lease_id: 'lease_abc',
+      });
     });
   });
 
