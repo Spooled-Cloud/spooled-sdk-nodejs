@@ -9,7 +9,7 @@ These tests run against a real Spooled Cloud backend.
 
 ```bash
 export SPOOLED_API_URL=http://localhost:3000
-export SPOOLED_API_KEY=sk_test_your_api_key
+export SPOOLED_API_KEY=sp_test_your_api_key
 ```
 
 ## Running Tests
@@ -22,4 +22,4 @@ npm run test:integration
 
 - Tests will create and clean up their own data
 - Ensure the test API key has sufficient permissions
-- Do not run against production environments
+- The integration suite is intended for local or isolated test environments; use `npm run verify:production` for the production-safe verification flow

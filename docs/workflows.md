@@ -25,7 +25,7 @@ Workflows allow you to orchestrate multiple jobs with dependencies. Jobs only ex
 ```typescript
 import { SpooledClient } from '@spooled/sdk';
 
-const client = new SpooledClient({ apiKey: 'sk_live_...' });
+const client = new SpooledClient({ apiKey: 'sp_live_...' });
 
 const workflow = await client.workflows.create({
   name: 'ETL Pipeline',

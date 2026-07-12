@@ -95,14 +95,17 @@ const result = await client.jobs.claim({
   limit: 10,
   leaseDurationSecs: 300,
 });
-// { jobs: [...], claimedCount: 5 }
+// Each claimed job may include leaseId, the fencing token for this execution.
 ```
+
+Echo `leaseId` from the claimed job on complete, fail, and heartbeat. The backend rejects a stale token with HTTP 409 and code `LEASE_EXPIRED`; omitting it retains legacy worker-ID-only fencing.
 
 ### Complete Job
 
 ```typescript
 await client.jobs.complete('job_id', {
   workerId: 'worker-1',
+  leaseId: claimedJob.leaseId ?? undefined,
   result: { success: true },
 });
 ```
@@ -112,6 +115,7 @@ await client.jobs.complete('job_id', {
 ```typescript
 await client.jobs.fail('job_id', {
   workerId: 'worker-1',
+  leaseId: claimedJob.leaseId ?? undefined,
   error: 'Something went wrong',
 });
 ```
@@ -121,6 +125,7 @@ await client.jobs.fail('job_id', {
 ```typescript
 await client.jobs.heartbeat('job_id', {
   workerId: 'worker-1',
+  leaseId: claimedJob.leaseId ?? undefined,
   leaseDurationSecs: 300,
 });
 ```
@@ -516,7 +521,7 @@ const portal = await client.billing.createPortal({
 
 ```typescript
 const { accessToken, refreshToken } = await client.auth.login({
-  apiKey: 'sk_live_...'
+  apiKey: 'sp_live_...'
 });
 
 // Use JWT for subsequent requests

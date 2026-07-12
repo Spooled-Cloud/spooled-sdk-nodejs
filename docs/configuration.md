@@ -9,7 +9,7 @@ import { SpooledClient } from '@spooled/sdk';
 
 const client = new SpooledClient({
   // === Authentication (required - one of these) ===
-  apiKey: 'sk_live_...',           // API key (starts with sk_live_ or sk_test_)
+  apiKey: 'sp_live_...',           // API key (sp_live_/sp_test_; legacy sk_ prefixes are also accepted)
   accessToken: 'jwt_token',         // Or JWT access token
   refreshToken: 'refresh_token',    // Optional: for auto token renewal
   adminKey: 'admin_...',            // Optional: for admin endpoints
@@ -60,7 +60,7 @@ The SDK reads these environment variables (useful for testing/development):
 
 ```bash
 # Required
-SPOOLED_API_KEY=sk_live_your_api_key
+SPOOLED_API_KEY=sp_live_your_api_key
 
 # Optional
 SPOOLED_API_URL=https://api.spooled.cloud
@@ -88,7 +88,7 @@ If you're running your own Spooled instance, configure the SDK to point to your 
 
 ```typescript
 const client = new SpooledClient({
-  apiKey: 'sk_live_your_key',
+  apiKey: 'sp_live_your_key',
   
   // Point to your self-hosted instance
   baseUrl: 'https://spooled.your-company.com',
@@ -118,7 +118,7 @@ For local development, you might use:
 
 ```typescript
 const client = new SpooledClient({
-  apiKey: 'sk_test_local_dev_key',
+  apiKey: 'sp_test_local_dev_key',
   baseUrl: 'http://localhost:8080',
   grpcAddress: 'localhost:50051',
   debug: true,
@@ -162,7 +162,7 @@ Non-retryable errors:
 
 ```typescript
 const client = new SpooledClient({
-  apiKey: 'sk_live_...',
+  apiKey: 'sp_live_...',
   retry: {
     maxRetries: 5,
     retryOn: (error, attempt) => {
@@ -195,7 +195,7 @@ CLOSED → (failures >= threshold) → OPEN → (timeout expires) → HALF_OPEN
 
 ```typescript
 const client = new SpooledClient({
-  apiKey: 'sk_live_...',
+  apiKey: 'sp_live_...',
   circuitBreaker: {
     enabled: true,
     failureThreshold: 5,    // Open after 5 consecutive failures
@@ -225,7 +225,7 @@ Enable debug mode to see all API requests and responses:
 
 ```typescript
 const client = new SpooledClient({
-  apiKey: 'sk_live_...',
+  apiKey: 'sp_live_...',
   debug: true,
 });
 ```
@@ -234,7 +234,7 @@ Or provide a custom logger:
 
 ```typescript
 const client = new SpooledClient({
-  apiKey: 'sk_live_...',
+  apiKey: 'sp_live_...',
   debug: (message, meta) => {
     console.log(`[Spooled] ${message}`, meta);
   },
@@ -262,7 +262,7 @@ const mockFetch = async (url: string, options: RequestInit) => {
 };
 
 const client = new SpooledClient({
-  apiKey: 'sk_live_...',
+  apiKey: 'sp_live_...',
   fetch: mockFetch,
 });
 ```
@@ -274,19 +274,19 @@ You can create multiple clients for different environments or API keys:
 ```typescript
 // Spooled Cloud (production)
 const cloudClient = new SpooledClient({
-  apiKey: 'sk_live_production_key',
+  apiKey: 'sp_live_production_key',
 });
 
 // Self-hosted instance
 const selfHostedClient = new SpooledClient({
-  apiKey: 'sk_live_self_hosted_key',
+  apiKey: 'sp_live_self_hosted_key',
   baseUrl: 'https://spooled.your-company.com',
   grpcAddress: 'grpc.your-company.com:443',
 });
 
 // Local development
 const localClient = new SpooledClient({
-  apiKey: 'sk_test_dev_key',
+  apiKey: 'sp_test_dev_key',
   baseUrl: 'http://localhost:8080',
   grpcAddress: 'localhost:50051',
   debug: true,
@@ -294,7 +294,7 @@ const localClient = new SpooledClient({
 
 // Admin client
 const adminClient = new SpooledClient({
-  apiKey: 'sk_live_...',
+  apiKey: 'sp_live_...',
   adminKey: 'admin_super_secret',
 });
 ```
@@ -312,7 +312,7 @@ import type {
 } from '@spooled/sdk';
 
 const config: SpooledClientConfig = {
-  apiKey: 'sk_live_...',
+  apiKey: 'sp_live_...',
   timeout: 60000,
 };
 ```

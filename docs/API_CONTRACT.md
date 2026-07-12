@@ -15,7 +15,7 @@ For self-hosted deployments, configure the SDK with your custom endpoints:
 
 ```typescript
 const client = new SpooledClient({
-  apiKey: 'sk_live_...',
+  apiKey: 'sp_live_...',
   baseUrl: 'https://your-server.com',        // REST API
   wsUrl: 'wss://your-server.com',            // WebSocket (optional, derived from baseUrl)
   grpcAddress: 'grpc.your-server.com:443',   // gRPC
@@ -26,7 +26,7 @@ const client = new SpooledClient({
 
 All protected endpoints require `Authorization: Bearer <token>` header.
 Token can be either:
-- **API Key**: `sk_live_...` or `sk_test_...`
+- **API Key**: `sp_live_...` or `sp_test_...` (legacy `sk_live_...` / `sk_test_...` prefixes are also accepted)
 - **JWT Access Token**: obtained via `POST /api/v1/auth/login`
 
 WebSocket endpoint requires JWT token in query string: `/api/v1/ws?token=<jwt>`.
@@ -192,7 +192,7 @@ interface Job {
   parent_job_id?: string;
   completion_webhook?: string;
   assigned_worker_id?: string;
-  lease_id?: string;
+  lease_id?: string | null;
   lease_expires_at?: string;
   idempotency_key?: string;
   updated_at: string;
@@ -251,6 +251,7 @@ interface ClaimedJob {
   max_retries: number;
   timeout_seconds: number;
   lease_expires_at?: string;
+  lease_id?: string | null; // fencing token for this claim
 }
 ```
 
@@ -260,6 +261,7 @@ interface ClaimedJob {
 ```typescript
 {
   worker_id: string;
+  lease_id?: string; // echo the claim token; stale token => 409 LEASE_EXPIRED
   result?: object;
 }
 ```
@@ -272,6 +274,7 @@ interface ClaimedJob {
 ```typescript
 {
   worker_id: string;
+  lease_id?: string; // echo the claim token; stale token => 409 LEASE_EXPIRED
   error: string; // 1-2048 chars
 }
 ```
@@ -284,6 +287,7 @@ interface ClaimedJob {
 ```typescript
 {
   worker_id: string;
+  lease_id?: string; // echo the claim token; stale token => 409 LEASE_EXPIRED
   lease_duration_secs: number; // 5-3600
 }
 ```
@@ -1046,7 +1050,7 @@ All admin endpoints require `X-Admin-Key` header authentication.
 
 | Server enum variant | SDK event name |
 |---------------------|----------------|
-| JobStatusChange | `job.status` |
+| JobStatusChange | `job.status_changed` |
 | JobCreated | `job.created` |
 | JobCompleted | `job.completed` |
 | JobFailed | `job.failed` |

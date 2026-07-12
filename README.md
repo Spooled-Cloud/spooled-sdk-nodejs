@@ -321,7 +321,10 @@ All operations automatically enforce tier-based limits:
 - ✅ Webhook creation
 
 When a plan quota or limit is exceeded, you'll receive an `HTTP 429` response with
-`code: "QUOTA_EXCEEDED"` and a body describing the `resource`, `current`, `limit`, and `plan`:
+`code: "QUOTA_EXCEEDED"`. The SDK reliably preserves the HTTP status, error code, message,
+request ID, and rate-limit headers. `error.details` is populated only when the server nests
+metadata under a JSON `details` field; quota fields sent at the top level of the server payload
+(such as `resource`, `current`, `limit`, and `plan`) are not currently exposed by the SDK.
 
 ```typescript
 import { RateLimitError } from '@spooled/sdk';
@@ -330,9 +333,10 @@ try {
   await client.jobs.create({ /* ... */ });
 } catch (error) {
   if (error instanceof RateLimitError && error.code === 'QUOTA_EXCEEDED') {
-    // Plan quota reached (HTTP 429); details carry resource/current/limit/plan
     console.log(`Plan limit: ${error.message}`);
-    console.log('Details:', error.details);
+    console.log(`Request ID: ${error.requestId ?? 'not provided'}`);
+    // Present only if this server response included a nested `details` object.
+    if (error.details) console.log('Details:', error.details);
   }
 }
 ```
@@ -406,12 +410,13 @@ const { jobs } = await grpcClient.queue.dequeue({
   leaseDurationSecs: 300
 });
 
-// Process and complete
+// Process and complete. Echo leaseId when present so current servers can fence stale executions; legacy servers may omit it and then use worker-ID-only fencing.
 for (const job of jobs) {
   await processJob(job);
   await grpcClient.queue.complete({
     jobId: job.id,
     workerId,
+    leaseId: job.leaseId ?? undefined,
     result: { success: true }
   });
 }
@@ -440,6 +445,22 @@ import type {
   Worker, WorkerStatus,
 } from '@spooled/sdk';
 ```
+
+## Development and releases
+
+Before opening a pull request or tagging a release, run the same checks used by the package and publish workflow:
+
+```bash
+npm ci
+npm run lint
+npm run typecheck
+npm run build
+npm test
+```
+
+Production-safe API verification is separate and credentialed: `npm run verify:production`. Integration tests use `npm run test:integration` against a local or isolated test backend.
+
+Maintainers release by updating `package.json`, `package-lock.json`, `SDK_VERSION`/User-Agent metadata, and `CHANGELOG.md`, then pushing a matching `vX.Y.Z` tag. The publish workflow rejects a tag that differs from `package.json`, reruns lint, typecheck, build, and tests, then publishes to npm through Trusted Publishing (OIDC) with provenance.
 
 ## License
 

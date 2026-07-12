@@ -26,7 +26,7 @@ pnpm add @spooled/sdk
 import { SpooledClient } from '@spooled/sdk';
 
 const client = new SpooledClient({
-  apiKey: 'sk_live_your_api_key',
+  apiKey: 'sp_live_your_api_key',
 });
 ```
 
@@ -85,7 +85,7 @@ The SDK includes a built-in worker runtime for processing jobs:
 ```typescript
 import { SpooledClient, SpooledWorker } from '@spooled/sdk';
 
-const client = new SpooledClient({ apiKey: 'sk_live_...' });
+const client = new SpooledClient({ apiKey: 'sp_live_...' });
 
 const worker = new SpooledWorker(client, {
   queueName: 'my-first-queue',
@@ -191,16 +191,21 @@ console.log(result.created); // false if job already exists
 All operations automatically enforce tier-based limits:
 
 ```typescript
+import { RateLimitError } from '@spooled/sdk';
+
 try {
   await client.jobs.create({ /* ... */ });
 } catch (error) {
-  if (error.statusCode === 403 && error.code === 'limit_exceeded') {
-    console.log(`Limit: ${error.message}`);
-    console.log(`Current: ${error.current}/${error.limit}`);
-    console.log(`Upgrade to: ${error.upgradeTo}`);
+  if (error instanceof RateLimitError && error.code === 'QUOTA_EXCEEDED') {
+    console.log(`Plan quota exceeded: ${error.message}`);
+    console.log(`Request ID: ${error.requestId ?? 'not provided'}`);
+    // Only server metadata nested under `details` is preserved here.
+    if (error.details) console.log('Details:', error.details);
   }
 }
 ```
+
+The SDK reliably preserves the HTTP status, code, message, request ID, and rate-limit headers. `error.details` is available only when the server nests metadata under `details`; top-level quota payload fields such as `resource`, `current`, `limit`, and `plan` are not currently exposed by the SDK.
 
 | Tier | Active Jobs | Daily Jobs | Queues | Workers |
 |------|-------------|------------|--------|---------|

@@ -7,7 +7,7 @@ This guide covers the `SpooledWorker` runtime for processing jobs from queues.
 ```typescript
 import { SpooledClient, SpooledWorker } from '@spooled/sdk';
 
-const client = new SpooledClient({ apiKey: 'sk_live_...' });
+const client = new SpooledClient({ apiKey: 'sp_live_...' });
 
 const worker = new SpooledWorker(client, {
   queueName: 'emails',
@@ -47,13 +47,15 @@ const worker = new SpooledWorker(client, {
   // Identification
   hostname: 'worker-01',     // Worker hostname (default: os.hostname())
   workerType: 'nodejs',      // Worker type identifier
-  version: '1.0.0',          // Application version
+  version: 'my-worker/2.3.0', // Optional application version (defaults to SDK 1.0.35)
   metadata: {                // Custom metadata
     env: 'production',
     region: 'us-east-1',
   },
 });
 ```
+
+The runtime captures each claimed execution's immutable `leaseId` and echoes it on heartbeat, completion, and failure. If the same job is reclaimed, an older handler cannot settle or clean up the replacement lease.
 
 ## Job Context
 

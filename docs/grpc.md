@@ -107,7 +107,7 @@ function createMetadata(apiKey: string): grpc.Metadata {
   return metadata;
 }
 
-const metadata = createMetadata('sk_live_your_api_key');
+const metadata = createMetadata('sp_live_your_api_key');
 ```
 
 ## Enqueue Jobs
@@ -196,8 +196,8 @@ stream.on('data', (job) => {
   const payload = JSON.parse(job.payload);
 
   processJob(job.id, payload)
-    .then(() => completeJob(job.id))
-    .catch((error) => failJob(job.id, error.message));
+    .then((result) => completeJob(job.id, 'worker-1', job.leaseId, result))
+    .catch((error) => failJob(job.id, 'worker-1', job.leaseId, error.message));
 });
 
 stream.on('error', (error) => {
@@ -229,6 +229,8 @@ call.on('data', (response) => {
       call.write({
         complete: {
           jobId: response.job.id,
+          workerId: 'worker-1',
+          ...(response.job.leaseId != null && { leaseId: response.job.leaseId }),
           result: JSON.stringify(result),
         },
       });
@@ -237,6 +239,8 @@ call.on('data', (response) => {
       call.write({
         fail: {
           jobId: response.job.id,
+          workerId: 'worker-1',
+          ...(response.job.leaseId != null && { leaseId: response.job.leaseId }),
           error: error.message,
         },
       });
@@ -280,11 +284,13 @@ call.on('end', () => {
 ## Complete and Fail Jobs
 
 ```typescript
-function completeJob(jobId: string, result?: any): Promise<void> {
+function completeJob(jobId: string, workerId: string, leaseId: string | null | undefined, result?: any): Promise<void> {
   return new Promise((resolve, reject) => {
     queueClient.Complete(
       {
         jobId,
+        workerId,
+        ...(leaseId != null && { leaseId }),
         result: result ? JSON.stringify(result) : undefined,
       },
       metadata,
@@ -296,11 +302,13 @@ function completeJob(jobId: string, result?: any): Promise<void> {
   });
 }
 
-function failJob(jobId: string, errorMessage: string): Promise<void> {
+function failJob(jobId: string, workerId: string, leaseId: string | null | undefined, errorMessage: string): Promise<void> {
   return new Promise((resolve, reject) => {
     queueClient.Fail(
       {
         jobId,
+        workerId,
+        ...(leaseId != null && { leaseId }),
         error: errorMessage,
       },
       metadata,
@@ -315,15 +323,17 @@ function failJob(jobId: string, errorMessage: string): Promise<void> {
 
 ## Renew Lease
 
-Keep jobs alive during long processing:
+Keep jobs alive during long processing. Preserve the dequeued job's `leaseId` and send it with every renew/complete/fail operation; a stale token is rejected with gRPC `FAILED_PRECONDITION`.
 
 ```typescript
-function renewLease(jobId: string, durationSecs: number): Promise<void> {
+function renewLease(jobId: string, workerId: string, leaseId: string | null | undefined, durationSecs: number): Promise<void> {
   return new Promise((resolve, reject) => {
     queueClient.RenewLease(
       {
         jobId,
-        leaseDurationSecs: durationSecs,
+        workerId,
+        ...(leaseId != null && { leaseId }),
+        extensionSecs: durationSecs,
       },
       metadata,
       (error, response) => {
@@ -337,12 +347,12 @@ function renewLease(jobId: string, durationSecs: number): Promise<void> {
 // Usage: Renew lease every 30 seconds during processing
 async function processWithLeaseRenewal(job: any) {
   const renewalInterval = setInterval(() => {
-    renewLease(job.id, 60).catch(console.error);
+    renewLease(job.id, workerId, job.leaseId, 60).catch(console.error);
   }, 30000);
 
   try {
     await longRunningProcess(job);
-    await completeJob(job.id);
+    await completeJob(job.id, workerId, job.leaseId);
   } finally {
     clearInterval(renewalInterval);
   }
