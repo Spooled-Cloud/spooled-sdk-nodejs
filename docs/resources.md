@@ -392,7 +392,8 @@ const registration = await client.workers.register({
   hostname: 'worker-01',
   workerType: 'nodejs',
   maxConcurrency: 10,
-  metadata: { version: '1.0.0' },
+  version: 'my-worker/1.0.0',
+  metadata: { environment: 'production' },
 });
 // { id, leaseDurationSecs, heartbeatIntervalSecs }
 ```

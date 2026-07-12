@@ -25,23 +25,51 @@ jobs:
 
       - name: Upgrade npm for Trusted Publishing support
         # Trusted Publishing requires npm >= 11.5.1
-        run: npm install -g npm@11  # npm@11 supports Trusted Publishing (>=11.5.1) and runs on Node 20; npm@latest (12+) requires Node 22+
+        run: npm install -g npm@11 # npm@11 supports Trusted Publishing (>=11.5.1) and runs on Node 20; npm@latest (12+) requires Node 22+
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Ensure tag matches package version
+      - name: Verify release identity
         run: |
           node - <<'NODE'
-          // Avoid YAML quoting edge-cases by using a heredoc.
+          const fs = require('node:fs');
           const pkg = require('./package.json');
+          const lock = require('./package-lock.json');
           const tag = process.env.GITHUB_REF_NAME;
-          const expected = 'v' + pkg.version;
-          if (tag !== expected) {
-            console.error('Tag (' + tag + ') does not match package.json version (' + pkg.version + '). Expected ' + expected + '.');
+          const expectedTag = 'v' + pkg.version;
+          const config = fs.readFileSync('src/config.ts', 'utf8');
+          const worker = fs.readFileSync('src/worker/worker.ts', 'utf8');
+          const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
+          const runtimeVersion = config.match(/export const SDK_VERSION = '([^']+)'/)?.[1];
+          const userAgentVersion = config.match(/userAgent: '@spooled\/sdk-nodejs\/([^']+)'/)?.[1];
+          const versions = {
+            tag: tag?.replace(/^v/, ''),
+            packageJson: pkg.version,
+            packageLock: lock.version,
+            packageLockRoot: lock.packages?.['']?.version,
+            runtimeVersion,
+            userAgentVersion,
+          };
+
+          if (!/^v\d+\.\d+\.\d+$/.test(tag ?? '')) {
+            console.error('Release tag must be strict vX.Y.Z, got ' + tag);
             process.exit(1);
           }
-          console.log('OK: ' + tag + ' matches package.json version ' + pkg.version);
+          if (tag !== expectedTag || new Set(Object.values(versions)).size !== 1) {
+            console.error('Release version mismatch:', versions);
+            process.exit(1);
+          }
+          if (!worker.includes('version: SDK_VERSION')) {
+            console.error('SpooledWorker no longer derives its default version from SDK_VERSION.');
+            process.exit(1);
+          }
+          const escaped = pkg.version.replace(/\./g, '\\.');
+          if (!new RegExp('^## \\[' + escaped + '\\] - \\d{4}-\\d{2}-\\d{2}$', 'm').test(changelog)) {
+            console.error('CHANGELOG.md has no dated section for ' + pkg.version);
+            process.exit(1);
+          }
+          console.log('Release identity verified:', versions);
           NODE
 
       - name: Lint

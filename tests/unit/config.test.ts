@@ -2,12 +2,14 @@
  * Config tests
  */
 
+import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import { resolveConfig, validateConfig, DEFAULT_CONFIG, SDK_VERSION } from '../../src/config.js';
 
 describe('Config', () => {
   it('keeps runtime metadata synchronized with the package version', () => {
-    expect(SDK_VERSION).toBe('1.0.35');
+    const packageVersion = JSON.parse(readFileSync('package.json', 'utf8')).version;
+    expect(SDK_VERSION).toBe(packageVersion);
     expect(DEFAULT_CONFIG.userAgent).toBe(`@spooled/sdk-nodejs/${SDK_VERSION}`);
   });
 

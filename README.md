@@ -460,7 +460,31 @@ npm test
 
 Production-safe API verification is separate and credentialed: `npm run verify:production`. Integration tests use `npm run test:integration` against a local or isolated test backend.
 
-Maintainers release by updating `package.json`, `package-lock.json`, `SDK_VERSION`/User-Agent metadata, and `CHANGELOG.md`, then pushing a matching `vX.Y.Z` tag. The publish workflow rejects a tag that differs from `package.json`, reruns lint, typecheck, build, and tests, then publishes to npm through Trusted Publishing (OIDC) with provenance.
+Maintainers release by pushing a matching `vX.Y.Z` tag. The tag workflow verifies all same-artifact version surfaces before publishing through npm Trusted Publishing (OIDC) with provenance.
+
+### Maintainer release checklist (advisory)
+
+This checklist records evidence and does not block ordinary commits, experiments, or compatibility research. A mismatch among values that identify the same npm artifact is a release error and cannot be waived for publication. Publishing the SDK is not a service deployment; consumers report new metadata only after upgrading and restarting or redeploying their applications.
+
+Before pushing `vX.Y.Z`:
+
+- [ ] Set `package.json.version` to `X.Y.Z`.
+- [ ] Regenerate `package-lock.json`; verify both top-level `version` and `packages[""].version` are `X.Y.Z`.
+- [ ] Set `SDK_VERSION` and the default User-Agent in `src/config.ts` to `X.Y.Z`.
+- [ ] Confirm `SpooledWorker` derives its default registration version from `SDK_VERSION`.
+- [ ] Add `## [X.Y.Z] - YYYY-MM-DD` to `CHANGELOG.md` and review version-bearing worker documentation.
+- [ ] Run `npm ci`, lint, typecheck, build, tests, and `npm pack --dry-run`.
+- [ ] Review the packed file list and compiled output; confirm the package contains no local logs, caches, credentials, or unintended generated files.
+- [ ] Record any cross-repository compatibility difference separately; backend, SDK, and application versions are not required to match numerically.
+
+Publish and verify:
+
+- [ ] Create one immutable `vX.Y.Z` tag on the reviewed commit and never move or recreate a pushed tag. Fix forward with a new patch version after external visibility.
+- [ ] Record the tag commit and publish workflow URL.
+- [ ] Verify `npm view @spooled/sdk@X.Y.Z version gitHead dist.integrity dist.attestations --json` against the tag and commit.
+- [ ] Confirm `latest` points to `X.Y.Z` when intended and inspect the published tarball's `SDK_VERSION`, User-Agent, and worker registration default.
+- [ ] Confirm npm provenance names this repository, `.github/workflows/publish.yml`, `refs/tags/vX.Y.Z`, and the release commit.
+- [ ] Record registry publication separately from consumer rollout, backend deployment, or documentation deployment.
 
 ## License
 
