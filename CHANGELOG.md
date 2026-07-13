@@ -5,6 +5,16 @@ All notable changes to the Spooled Node.js SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.36] - 2026-07-13
+
+### Fixed
+
+- Preserve Node 18 install compatibility by using an EventSource release that supports the declared engine range.
+- Reject failed WebSocket upgrades instead of leaving `connect()` pending forever.
+- Continue reconnect attempts after token-provider failures instead of stopping after one failed attempt.
+- Prevent custom retry predicates from replaying unsafe write requests unless the request is idempotent.
+- Convert plain JavaScript payload and result objects to and from `google.protobuf.Struct` for gRPC calls.
+
 ## [1.0.35] - 2026-07-12
 
 ### Fixed
