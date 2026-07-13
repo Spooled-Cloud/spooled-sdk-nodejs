@@ -135,8 +135,9 @@ export class WebSocketRealtimeClient {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         this.ws.onclose = (event: any) => {
           this.options.debug(`WebSocket closed: ${event.code} ${event.reason}`);
+          const wasConnecting = this.state === 'connecting';
           this.handleDisconnect();
-          if (this.state === 'connecting') {
+          if (wasConnecting) {
             reject(new Error(`WebSocket connection failed: ${event.reason || 'Unknown error'}`));
           }
         };
@@ -353,7 +354,11 @@ export class WebSocketRealtimeClient {
         await this.connect();
       } catch (error) {
         this.options.debug('Reconnect failed', error);
-        // handleDisconnect will schedule another attempt if needed
+        if (this.options.autoReconnect && this.reconnectAttempts < this.options.maxReconnectAttempts) {
+          this.scheduleReconnect();
+        } else {
+          this.setState('disconnected');
+        }
       }
     }, delay);
   }

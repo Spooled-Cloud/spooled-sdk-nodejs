@@ -107,7 +107,7 @@ export class SseRealtimeClient {
     // Mint a fresh token on every (re)connect so a stale token never blocks recovery.
     let token: string;
     try {
-      token = await this.options.tokenProvider();
+      token = await this.options.tokenProvider(this.reconnectAttempts > 0);
     } catch (error) {
       this.setState('disconnected');
       throw new Error(`Failed to acquire realtime token: ${error}`);
@@ -328,6 +328,11 @@ export class SseRealtimeClient {
         await this.connect(this.filter || undefined);
       } catch (error) {
         this.options.debug('SSE reconnect failed', error);
+        if (this.options.autoReconnect && this.reconnectAttempts < this.options.maxReconnectAttempts) {
+          this.scheduleReconnect();
+        } else {
+          this.setState('disconnected');
+        }
       }
     }, delay);
   }

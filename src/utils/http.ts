@@ -371,18 +371,18 @@ export class HttpClient {
   private resolveRetryConfig(method: HttpMethod, options: HttpRequestOptions): RetryConfig {
     const base = this.config.retry;
 
-    // Respect an explicit user-provided retry predicate.
-    if (base.retryOn) {
-      return base;
-    }
-
     if (IDEMPOTENT_METHODS.has(method) || this.hasIdempotencyKey(options)) {
       return base;
     }
 
     return {
       ...base,
-      retryOn: (error) => error instanceof RateLimitError,
+      retryOn: (error, attempt) => {
+        if (error instanceof RateLimitError) {
+          return base.retryOn ? base.retryOn(error, attempt) : true;
+        }
+        return false;
+      },
     };
   }
 
