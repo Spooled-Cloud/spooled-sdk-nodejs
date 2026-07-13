@@ -45,6 +45,96 @@ import type {
 // Type definitions for dynamic gRPC clients
 type UnaryCallback<T> = (error: grpc.ServiceError | null, response: T) => void;
 
+type ProtobufValue =
+  | { nullValue: 0 }
+  | { numberValue: number }
+  | { stringValue: string }
+  | { boolValue: boolean }
+  | { structValue: ProtobufStruct }
+  | { listValue: { values: ProtobufValue[] } };
+
+interface ProtobufStruct {
+  fields: Record<string, ProtobufValue>;
+}
+
+function encodeStruct(value: Record<string, unknown> | null | undefined): ProtobufStruct | undefined {
+  if (value == null) {
+    return undefined;
+  }
+  return {
+    fields: Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, encodeValue(entry)])
+    ),
+  };
+}
+
+function encodeValue(value: unknown): ProtobufValue {
+  if (value == null) {
+    return { nullValue: 0 };
+  }
+  if (Array.isArray(value)) {
+    return { listValue: { values: value.map(encodeValue) } };
+  }
+  switch (typeof value) {
+    case 'number':
+      return { numberValue: value };
+    case 'string':
+      return { stringValue: value };
+    case 'boolean':
+      return { boolValue: value };
+    case 'object':
+      return { structValue: encodeStruct(value as Record<string, unknown>)! };
+    default:
+      return { stringValue: String(value) };
+  }
+}
+
+function decodeStruct(value: unknown): Record<string, unknown> | null | undefined {
+  if (!value || typeof value !== 'object' || !('fields' in value)) {
+    return value as Record<string, unknown> | null | undefined;
+  }
+  const fields = (value as ProtobufStruct).fields ?? {};
+  return Object.fromEntries(Object.entries(fields).map(([key, entry]) => [key, decodeValue(entry)]));
+}
+
+function decodeValue(value: ProtobufValue): unknown {
+  if ('nullValue' in value) {
+    return null;
+  }
+  if ('numberValue' in value) {
+    return value.numberValue;
+  }
+  if ('stringValue' in value) {
+    return value.stringValue;
+  }
+  if ('boolValue' in value) {
+    return value.boolValue;
+  }
+  if ('structValue' in value) {
+    return decodeStruct(value.structValue);
+  }
+  if ('listValue' in value) {
+    return (value.listValue.values ?? []).map(decodeValue);
+  }
+  return undefined;
+}
+
+function encodeEnqueueRequest(params: GrpcEnqueueRequest): GrpcEnqueueRequest {
+  return { ...params, payload: encodeStruct(params.payload) as unknown as Record<string, unknown> };
+}
+
+function encodeCompleteRequest(params: GrpcCompleteRequest): GrpcCompleteRequest {
+  return { ...params, result: encodeStruct(params.result) as unknown as Record<string, unknown> };
+}
+
+function decodeJob(job: GrpcJob): GrpcJob {
+  return {
+    ...job,
+    payload: decodeStruct(job.payload),
+    result: decodeStruct(job.result),
+  };
+}
+
 interface QueueServiceClient extends grpc.Client {
   Enqueue(request: GrpcEnqueueRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcEnqueueResponse>): void;
   Dequeue(request: GrpcDequeueRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcDequeueResponse>): void;
@@ -108,21 +198,22 @@ export class GrpcQueueOperations {
    * Enqueue a new job
    */
   async enqueue(params: GrpcEnqueueRequest): Promise<GrpcEnqueueResponse> {
-    return promisify(this.client, this.client.Enqueue, params, this.metadata);
+    return promisify(this.client, this.client.Enqueue, encodeEnqueueRequest(params), this.metadata);
   }
 
   /**
    * Dequeue a job (for workers)
    */
   async dequeue(params: GrpcDequeueRequest): Promise<GrpcDequeueResponse> {
-    return promisify(this.client, this.client.Dequeue, params, this.metadata);
+    const response = await promisify(this.client, this.client.Dequeue, params, this.metadata);
+    return { ...response, jobs: response.jobs.map(decodeJob) };
   }
 
   /**
    * Complete a job successfully
    */
   async complete(params: GrpcCompleteRequest): Promise<GrpcCompleteResponse> {
-    return promisify(this.client, this.client.Complete, params, this.metadata);
+    return promisify(this.client, this.client.Complete, encodeCompleteRequest(params), this.metadata);
   }
 
   /**
@@ -143,7 +234,8 @@ export class GrpcQueueOperations {
    * Get a job by ID
    */
   async getJob(jobId: string): Promise<GrpcGetJobResponse> {
-    return promisify(this.client, this.client.GetJob, { jobId }, this.metadata);
+    const response = await promisify(this.client, this.client.GetJob, { jobId }, this.metadata);
+    return { ...response, job: response.job ? decodeJob(response.job) : response.job };
   }
 
   /**
