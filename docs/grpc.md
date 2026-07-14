@@ -630,7 +630,7 @@ Cloudflare Tunnel **requires HTTPS** for HTTP/2 connections (which gRPC uses). Y
    );
    ```
 
-The backend includes self-signed certificates in `./certs/` (10-year validity) that work with Cloudflare Tunnel's "No TLS Verify" option.
+Production Compose generates a private self-signed origin certificate into a Docker volume (`grpc_tls`) and renews it automatically. Historical `./certs/` PEMs in Git/images must not be reused. Cloudflare Tunnel "No TLS Verify" remains appropriate for that private origin cert.
 
 ### Disabling gRPC TLS
 
