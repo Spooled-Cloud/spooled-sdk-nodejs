@@ -120,7 +120,31 @@ function decodeValue(value: ProtobufValue): unknown {
 }
 
 function encodeEnqueueRequest(params: GrpcEnqueueRequest): GrpcEnqueueRequest {
-  return { ...params, payload: encodeStruct(params.payload) as unknown as Record<string, unknown> };
+  // Omit unset numeric fields so proto-loader `defaults: true` does not force
+  // wire zeros for maxRetries/timeoutSeconds (server treats 0 as its default).
+  const encoded: Record<string, unknown> = {
+    queueName: params.queueName,
+    payload: encodeStruct(params.payload),
+  };
+  if (params.priority !== undefined) {
+    encoded.priority = params.priority;
+  }
+  if (params.maxRetries !== undefined) {
+    encoded.maxRetries = params.maxRetries;
+  }
+  if (params.timeoutSeconds !== undefined) {
+    encoded.timeoutSeconds = params.timeoutSeconds;
+  }
+  if (params.idempotencyKey !== undefined && params.idempotencyKey !== '') {
+    encoded.idempotencyKey = params.idempotencyKey;
+  }
+  if (params.scheduledAt !== undefined) {
+    encoded.scheduledAt = params.scheduledAt;
+  }
+  if (params.tags !== undefined) {
+    encoded.tags = params.tags;
+  }
+  return encoded as unknown as GrpcEnqueueRequest;
 }
 
 function encodeCompleteRequest(params: GrpcCompleteRequest): GrpcCompleteRequest {

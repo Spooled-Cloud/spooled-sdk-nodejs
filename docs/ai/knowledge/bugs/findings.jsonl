@@ -1,3 +1,3 @@
-{"id":"NS-01","sev":"P2","summary":"proto-loader defaults true may zero ints","path":"src/grpc/loader.ts","status":"open"}
-{"id":"NS-02","sev":"P3","summary":"worker progress no-op","path":"src/worker/worker.ts","status":"open"}
-{"id":"NS-03","sev":"P3","summary":"UA name vs package name mismatch","path":"src/config.ts","status":"open","note":"intentional naming"}
+{"id": "NS-01", "sev": "P2", "summary": "proto-loader defaults true may zero ints", "path": "src/grpc/loader.ts", "status": "fixed"}
+{"id": "NS-02", "sev": "P3", "summary": "worker progress no-op", "path": "src/worker/worker.ts", "status": "open"}
+{"id": "NS-03", "sev": "P3", "summary": "UA name vs package name mismatch", "path": "src/config.ts", "status": "open", "note": "intentional naming"}
