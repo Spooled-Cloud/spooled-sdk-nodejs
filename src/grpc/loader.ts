@@ -8,6 +8,7 @@
 
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
+import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import type { ServiceClientConstructor } from '@grpc/grpc-js';
@@ -33,19 +34,44 @@ export interface SpooledProtoDefinition {
 let cachedDefinition: SpooledProtoDefinition | null = null;
 
 /**
- * Get the path to the proto file.
- * Supports both ESM and CJS environments.
+ * Resolve the directory that contains this module (ESM or CJS).
  */
-function getProtoPath(): string {
-  // In ESM, use import.meta.url
+function getModuleDir(): string {
   if (typeof import.meta?.url !== 'undefined') {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = dirname(__filename);
-    return join(__dirname, '../../proto/spooled.proto');
+    return dirname(fileURLToPath(import.meta.url));
+  }
+  return __dirname;
+}
+
+/**
+ * Get the path to the proto file.
+ *
+ * tsup bundles `src/grpc/loader.ts` into `dist/index.js`, so a single
+ * `../../proto` relative path (correct from `src/grpc/`) resolves one level
+ * above the package root from `dist/` and breaks gRPC client construction.
+ * Try both layouts (plus package-root fallbacks) and pick the first hit.
+ */
+export function getProtoPath(): string {
+  const moduleDir = getModuleDir();
+  const candidates = [
+    // Bundled ESM/CJS: dist/index.js → ../proto/spooled.proto
+    join(moduleDir, '../proto/spooled.proto'),
+    // Source / unbundled: src/grpc/loader.ts → ../../proto/spooled.proto
+    join(moduleDir, '../../proto/spooled.proto'),
+    // Extra safety if moduleDir is package root
+    join(moduleDir, 'proto/spooled.proto'),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
   }
 
-  // Fallback for CJS (when bundled)
-  return join(__dirname, '../../proto/spooled.proto');
+  throw new Error(
+    `Spooled gRPC proto not found. Tried: ${candidates.join(', ')}. ` +
+      `Ensure the package's proto/spooled.proto is installed next to dist/.`
+  );
 }
 
 /**

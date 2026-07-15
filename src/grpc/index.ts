@@ -22,6 +22,7 @@ export {
 
 // Proto loader (for advanced users)
 export {
+  getProtoPath,
   loadProtoDefinition,
   loadProtoDefinitionAsync,
   clearProtoCache,
