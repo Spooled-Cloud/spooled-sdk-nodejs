@@ -5,6 +5,13 @@ All notable changes to the Spooled Node.js SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Release workflow diagnostics no longer print user or project `.npmrc` contents.
+- Worker docs now reflect the current SDK version default.
+
 ## [1.0.39] - 2026-07-15
 
 ### Fixed
@@ -150,7 +157,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   also no longer forwards an explicit `debug: undefined`.
 - **Auto-reconnect now actually defaults on** (same clobber-by-`undefined` class
   as the `debug` bug). `autoReconnect`, `maxReconnectAttempts`, `reconnectDelay`,
-  and `maxReconnectDelay` were defaulted *before* the `...options` spread, so the
+  and `maxReconnectDelay` were defaulted _before_ the `...options` spread, so the
   `undefined` values `SpooledRealtime` forwards overwrote them — `autoReconnect`
   resolved to `undefined` (falsy), silently disabling reconnect despite the
   documented default of `true`. These defaults are now applied after the spread.

@@ -84,16 +84,11 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Debug npm config
+      - name: Print safe npm diagnostics
         run: |
           echo "Node version: $(node --version)"
           echo "npm version: $(npm --version)"
           echo "Registry: $(npm config get registry)"
-          echo "--- .npmrc contents ---"
-          cat ~/.npmrc 2>/dev/null || echo "(no ~/.npmrc)"
-          cat .npmrc 2>/dev/null || echo "(no .npmrc in project)"
-          echo "--- End .npmrc ---"
-          echo "NODE_AUTH_TOKEN is set: $([[ -n \"$NODE_AUTH_TOKEN\" ]] && echo 'yes' || echo 'no')"
 
       - name: Publish (Trusted Publishing via OIDC)
         # Uses npm Trusted Publishing (OIDC) - requires npm >= 11.5.1

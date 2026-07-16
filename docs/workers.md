@@ -5,12 +5,12 @@ This guide covers the `SpooledWorker` runtime for processing jobs from queues.
 ## Basic Worker
 
 ```typescript
-import { SpooledClient, SpooledWorker } from '@spooled/sdk';
+import { SpooledClient, SpooledWorker } from "@spooled/sdk";
 
-const client = new SpooledClient({ apiKey: 'sp_live_...' });
+const client = new SpooledClient({ apiKey: "sp_live_..." });
 
 const worker = new SpooledWorker(client, {
-  queueName: 'emails',
+  queueName: "emails",
   concurrency: 10,
 });
 
@@ -28,29 +28,30 @@ await worker.start();
 ```typescript
 const worker = new SpooledWorker(client, {
   // Required
-  queueName: 'my-queue',
+  queueName: "my-queue",
 
   // Concurrency
-  concurrency: 10,           // Max parallel jobs (default: 5)
+  concurrency: 10, // Max parallel jobs (default: 5)
 
   // Polling
-  pollInterval: 1000,        // Poll every N ms (default: 1000)
+  pollInterval: 1000, // Poll every N ms (default: 1000)
 
   // Lease Management
-  leaseDuration: 30,         // Lease duration in seconds (default: 30)
-  heartbeatFraction: 0.5,    // Heartbeat at 50% of lease (default: 0.5)
+  leaseDuration: 30, // Lease duration in seconds (default: 30)
+  heartbeatFraction: 0.5, // Heartbeat at 50% of lease (default: 0.5)
 
   // Lifecycle
-  autoStart: false,          // Auto-start on construction (default: false)
-  shutdownTimeout: 30000,    // Max wait for graceful shutdown (default: 30000)
+  autoStart: false, // Auto-start on construction (default: false)
+  shutdownTimeout: 30000, // Max wait for graceful shutdown (default: 30000)
 
   // Identification
-  hostname: 'worker-01',     // Worker hostname (default: os.hostname())
-  workerType: 'nodejs',      // Worker type identifier
-  version: 'my-worker/2.3.0', // Optional application version (defaults to SDK 1.0.37)
-  metadata: {                // Custom metadata
-    env: 'production',
-    region: 'us-east-1',
+  hostname: "worker-01", // Worker hostname (default: os.hostname())
+  workerType: "nodejs", // Worker type identifier
+  version: "my-worker/2.3.0", // Optional application version (defaults to SDK 1.0.39)
+  metadata: {
+    // Custom metadata
+    env: "production",
+    region: "us-east-1",
   },
 });
 ```
@@ -63,16 +64,20 @@ The `process` handler receives a context object:
 
 ```typescript
 interface JobContext {
-  jobId: string;              // Unique job ID
-  queueName: string;          // Queue name
-  payload: any;               // Job payload (your data)
-  retryCount: number;         // Current retry attempt (0-indexed)
-  maxRetries: number;         // Max retries configured
+  jobId: string; // Unique job ID
+  queueName: string; // Queue name
+  payload: any; // Job payload (your data)
+  retryCount: number; // Current retry attempt (0-indexed)
+  maxRetries: number; // Max retries configured
 
-  signal: AbortSignal;        // Abort signal for cancellation
+  signal: AbortSignal; // Abort signal for cancellation
 
   progress: (percent: number, message?: string) => Promise<void>;
-  log: (level: 'debug' | 'info' | 'warn' | 'error', message: string, meta?: any) => void;
+  log: (
+    level: "debug" | "info" | "warn" | "error",
+    message: string,
+    meta?: any,
+  ) => void;
 }
 ```
 
@@ -80,17 +85,17 @@ interface JobContext {
 
 ```typescript
 worker.process(async (ctx) => {
-  ctx.log('info', `Starting job ${ctx.jobId}`);
+  ctx.log("info", `Starting job ${ctx.jobId}`);
 
   // Check retry count
   if (ctx.retryCount > 0) {
-    ctx.log('warn', `Retry attempt ${ctx.retryCount}/${ctx.maxRetries}`);
+    ctx.log("warn", `Retry attempt ${ctx.retryCount}/${ctx.maxRetries}`);
   }
 
   // Process with abort awareness
   for (let i = 0; i < 100; i++) {
     if (ctx.signal.aborted) {
-      throw new Error('Job was cancelled');
+      throw new Error("Job was cancelled");
     }
 
     await doStep(i, ctx.payload);
@@ -107,35 +112,35 @@ Workers emit events throughout their lifecycle:
 
 ```typescript
 // Worker lifecycle
-worker.on('started', ({ workerId, queueName }) => {
+worker.on("started", ({ workerId, queueName }) => {
   console.log(`Worker ${workerId} started on ${queueName}`);
 });
 
-worker.on('stopped', ({ workerId, reason }) => {
+worker.on("stopped", ({ workerId, reason }) => {
   console.log(`Worker stopped: ${reason}`);
 });
 
-worker.on('error', ({ error }) => {
-  console.error('Worker error:', error);
+worker.on("error", ({ error }) => {
+  console.error("Worker error:", error);
 });
 
 // Job lifecycle
-worker.on('job:claimed', ({ jobId, queueName }) => {
+worker.on("job:claimed", ({ jobId, queueName }) => {
   console.log(`Claimed job ${jobId}`);
 });
 
-worker.on('job:started', ({ jobId, queueName }) => {
+worker.on("job:started", ({ jobId, queueName }) => {
   console.log(`Started processing ${jobId}`);
 });
 
-worker.on('job:completed', ({ jobId, queueName, result }) => {
+worker.on("job:completed", ({ jobId, queueName, result }) => {
   console.log(`Completed ${jobId}:`, result);
 });
 
-worker.on('job:failed', ({ jobId, queueName, error, willRetry }) => {
+worker.on("job:failed", ({ jobId, queueName, error, willRetry }) => {
   console.error(`Failed ${jobId}: ${error}`);
   if (willRetry) {
-    console.log('Will retry');
+    console.log("Will retry");
   }
 });
 ```
@@ -143,13 +148,13 @@ worker.on('job:failed', ({ jobId, queueName, error, willRetry }) => {
 ### Removing Event Handlers
 
 ```typescript
-const unsubscribe = worker.on('job:completed', handler);
+const unsubscribe = worker.on("job:completed", handler);
 
 // Later...
 unsubscribe();
 
 // Or explicitly
-worker.off('job:completed', handler);
+worker.off("job:completed", handler);
 ```
 
 ## Graceful Shutdown
@@ -158,19 +163,19 @@ Proper shutdown ensures in-progress jobs complete:
 
 ```typescript
 const worker = new SpooledWorker(client, {
-  queueName: 'emails',
+  queueName: "emails",
   shutdownTimeout: 30000, // Wait up to 30 seconds
 });
 
 // Handle shutdown signals
-process.on('SIGTERM', async () => {
-  console.log('Received SIGTERM, shutting down...');
+process.on("SIGTERM", async () => {
+  console.log("Received SIGTERM, shutting down...");
   await worker.stop();
   process.exit(0);
 });
 
-process.on('SIGINT', async () => {
-  console.log('Received SIGINT, shutting down...');
+process.on("SIGINT", async () => {
+  console.log("Received SIGINT, shutting down...");
   await worker.stop();
   process.exit(0);
 });
@@ -195,11 +200,11 @@ Jobs receive an `AbortSignal` for cooperative cancellation:
 worker.process(async (ctx) => {
   // Check at key points
   if (ctx.signal.aborted) {
-    throw new Error('Job aborted');
+    throw new Error("Job aborted");
   }
 
   // Use with fetch
-  const response = await fetch('https://api.example.com', {
+  const response = await fetch("https://api.example.com", {
     signal: ctx.signal,
   });
 
@@ -221,7 +226,7 @@ worker.process(async (ctx) => {
   const childController = new AbortController();
 
   // Propagate parent abort
-  ctx.signal.addEventListener('abort', () => {
+  ctx.signal.addEventListener("abort", () => {
     childController.abort();
   });
 
@@ -260,7 +265,7 @@ class NonRetryableError extends Error {
 
 worker.process(async (ctx) => {
   if (!isValidPayload(ctx.payload)) {
-    throw new NonRetryableError('Invalid payload format');
+    throw new NonRetryableError("Invalid payload format");
   }
   // ...
 });
@@ -271,13 +276,13 @@ worker.process(async (ctx) => {
 Check worker status programmatically:
 
 ```typescript
-console.log('State:', worker.getState());
+console.log("State:", worker.getState());
 // 'idle' | 'starting' | 'running' | 'stopping' | 'stopped' | 'error'
 
-console.log('Worker ID:', worker.getWorkerId());
+console.log("Worker ID:", worker.getWorkerId());
 // null before start, string after
 
-console.log('Active jobs:', worker.getActiveJobCount());
+console.log("Active jobs:", worker.getActiveJobCount());
 // Number of jobs currently being processed
 ```
 
@@ -287,29 +292,23 @@ Run multiple workers for different queues:
 
 ```typescript
 const emailWorker = new SpooledWorker(client, {
-  queueName: 'emails',
+  queueName: "emails",
   concurrency: 10,
 });
 
 const reportWorker = new SpooledWorker(client, {
-  queueName: 'reports',
+  queueName: "reports",
   concurrency: 2, // Reports are CPU-intensive
 });
 
 emailWorker.process(async (ctx) => sendEmail(ctx.payload));
 reportWorker.process(async (ctx) => generateReport(ctx.payload));
 
-await Promise.all([
-  emailWorker.start(),
-  reportWorker.start(),
-]);
+await Promise.all([emailWorker.start(), reportWorker.start()]);
 
 // Graceful shutdown for all
-process.on('SIGTERM', async () => {
-  await Promise.all([
-    emailWorker.stop(),
-    reportWorker.stop(),
-  ]);
+process.on("SIGTERM", async () => {
+  await Promise.all([emailWorker.stop(), reportWorker.stop()]);
 });
 ```
 
@@ -321,7 +320,7 @@ For CPU-intensive tasks, limit concurrency:
 
 ```typescript
 const worker = new SpooledWorker(client, {
-  queueName: 'image-processing',
+  queueName: "image-processing",
   concurrency: 2, // Match CPU cores - 2
 });
 ```
@@ -332,7 +331,7 @@ For I/O-heavy tasks (HTTP, database), increase concurrency:
 
 ```typescript
 const worker = new SpooledWorker(client, {
-  queueName: 'api-calls',
+  queueName: "api-calls",
   concurrency: 50, // Many parallel I/O operations
 });
 ```
@@ -342,13 +341,13 @@ const worker = new SpooledWorker(client, {
 Adjust based on system load:
 
 ```typescript
-import os from 'os';
+import os from "os";
 
 const cpuCount = os.cpus().length;
 const loadAvg = os.loadavg()[0]; // 1-minute load average
 
 const worker = new SpooledWorker(client, {
-  queueName: 'mixed-workload',
+  queueName: "mixed-workload",
   concurrency: Math.max(1, Math.floor(cpuCount - loadAvg)),
 });
 ```
@@ -360,18 +359,18 @@ worker.process(async (ctx) => {
   const startTime = Date.now();
 
   try {
-    ctx.log('info', 'Starting job', { payload: ctx.payload });
+    ctx.log("info", "Starting job", { payload: ctx.payload });
 
     const result = await processJob(ctx.payload);
 
-    ctx.log('info', 'Job completed', {
+    ctx.log("info", "Job completed", {
       duration: Date.now() - startTime,
       result,
     });
 
     return result;
   } catch (error) {
-    ctx.log('error', 'Job failed', {
+    ctx.log("error", "Job failed", {
       duration: Date.now() - startTime,
       error: error.message,
       stack: error.stack,
