@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Release workflow diagnostics no longer print user or project `.npmrc` contents.
 - Worker docs now reflect the current SDK version default.
+- Release identity verification handles both single- and double-quoted TypeScript literals.
+- gRPC unary calls now use the configured client timeout and map `ServiceError` statuses into SDK error classes instead of rejecting raw gRPC errors.
 
 ## [1.0.39] - 2026-07-15
 

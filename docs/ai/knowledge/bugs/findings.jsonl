@@ -3,3 +3,5 @@
 {"id": "NS-03", "sev": "P3", "summary": "UA name vs package name mismatch", "path": "src/config.ts", "status": "open", "note": "intentional naming"}
 {"id": "NS-04", "sev": "P1", "summary": "bundled dist gRPC proto path ../../proto ENOENT above package root", "path": "src/grpc/loader.ts", "status": "fixed", "note": "getProtoPath tries ../proto then ../../proto; released in 1.0.39"}
 {"id": "NS-05", "sev": "P3", "summary": "publish workflow printed npm config files", "path": ".github/workflows/publish.yml", "status": "fixed", "note": "Working tree keeps safe version/registry diagnostics only"}
+{"id":"NS-06","sev":"P1","summary":"release identity regex missed double-quoted TypeScript version literals","path":".github/workflows/publish.yml","status":"fixed","note":"Working tree accepts single- and double-quoted SDK_VERSION/userAgent literals"}
+{"id":"NS-07","sev":"P2","summary":"gRPC unary calls ignored configured timeout and rejected raw ServiceError","path":"src/grpc/client.ts","status":"fixed","note":"Working tree passes unary deadlines and maps grpc-js statuses into SDK error classes"}

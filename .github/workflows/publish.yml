@@ -41,8 +41,8 @@ jobs:
           const config = fs.readFileSync('src/config.ts', 'utf8');
           const worker = fs.readFileSync('src/worker/worker.ts', 'utf8');
           const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
-          const runtimeVersion = config.match(/export const SDK_VERSION = '([^']+)'/)?.[1];
-          const userAgentVersion = config.match(/userAgent: '@spooled\/sdk-nodejs\/([^']+)'/)?.[1];
+          const runtimeVersion = config.match(/export const SDK_VERSION = ["']([^"']+)["']/)?.[1];
+          const userAgentVersion = config.match(/userAgent: ["']@spooled\/sdk-nodejs\/([^"']+)["']/)?.[1];
           const versions = {
             tag: tag?.replace(/^v/, ''),
             packageJson: pkg.version,

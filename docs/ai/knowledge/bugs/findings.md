@@ -7,5 +7,7 @@
 | NS-03 | P3  | UA string `@spooled/sdk-nodejs` ≠ npm name `@spooled/sdk`                                 | intentional; keep sync with version | open                              |
 | NS-04 | P1  | Bundled `dist/` gRPC proto path used `../../proto` → ENOENT (resolved above package root) | `src/grpc/loader.ts` `getProtoPath` | fixed in `1.0.39`                 |
 | NS-05 | P3  | Publish workflow printed npm config files                                                 | `.github/workflows/publish.yml`     | fixed working tree                |
+| NS-06 | P1  | Release identity regex missed double-quoted version literals                              | `.github/workflows/publish.yml`     | fixed working tree                |
+| NS-07 | P2  | gRPC unary calls ignored configured timeout and rejected raw `ServiceError`               | `src/grpc/client.ts`                | fixed working tree                |
 
 See `findings.jsonl`.

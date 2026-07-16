@@ -38,6 +38,15 @@ vi.mock("@grpc/proto-loader", () => ({
 
 // Mock the loaded package definition
 vi.mock("../../src/grpc/loader.js", () => {
+  const unary = (response: unknown) =>
+    vi.fn((...args: unknown[]) => {
+      const callback = args[args.length - 1];
+      if (typeof callback !== "function") {
+        throw new TypeError("mock unary callback missing");
+      }
+      callback(null, response);
+    });
+
   const mockClient = class MockClient {
     constructor() {}
     close() {}
@@ -48,19 +57,13 @@ vi.mock("../../src/grpc/loader.js", () => {
       callback(null);
     }
     // Queue methods
-    Enqueue = vi.fn((_req, _meta, cb) =>
-      cb(null, { jobId: "job_123", created: true }),
-    );
-    Dequeue = vi.fn((_req, _meta, cb) => cb(null, { jobs: [] }));
-    Complete = vi.fn((_req, _meta, cb) => cb(null, { success: true }));
-    Fail = vi.fn((_req, _meta, cb) =>
-      cb(null, { success: true, willRetry: false }),
-    );
-    RenewLease = vi.fn((_req, _meta, cb) => cb(null, { success: true }));
-    GetJob = vi.fn((_req, _meta, cb) => cb(null, { job: null }));
-    GetQueueStats = vi.fn((_req, _meta, cb) =>
-      cb(null, { queueName: "test", pending: 0 }),
-    );
+    Enqueue = unary({ jobId: "job_123", created: true });
+    Dequeue = unary({ jobs: [] });
+    Complete = unary({ success: true });
+    Fail = unary({ success: true, willRetry: false });
+    RenewLease = unary({ success: true });
+    GetJob = unary({ job: null });
+    GetQueueStats = unary({ queueName: "test", pending: 0 });
     StreamJobs = vi.fn(() => ({
       on: vi.fn(),
       cancel: vi.fn(),
@@ -72,11 +75,9 @@ vi.mock("../../src/grpc/loader.js", () => {
       cancel: vi.fn(),
     }));
     // Worker methods
-    Register = vi.fn((_req, _meta, cb) =>
-      cb(null, { workerId: "w_1", leaseDurationSecs: 30 }),
-    );
-    Heartbeat = vi.fn((_req, _meta, cb) => cb(null, { acknowledged: true }));
-    Deregister = vi.fn((_req, _meta, cb) => cb(null, { success: true }));
+    Register = unary({ workerId: "w_1", leaseDurationSecs: 30 });
+    Heartbeat = unary({ acknowledged: true });
+    Deregister = unary({ success: true });
   };
 
   return {

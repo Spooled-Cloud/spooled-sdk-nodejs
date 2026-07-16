@@ -203,6 +203,7 @@ export class SpooledClient {
       this._grpc = new SpooledGrpcClient({
         address: grpcAddress,
         apiKey,
+        timeout: this.config.timeout,
       });
     }
     return this._grpc;

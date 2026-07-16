@@ -41,9 +41,29 @@ import type {
   GrpcProcessResponse,
   GrpcJob,
 } from "./types.js";
+import {
+  AuthenticationError,
+  AuthorizationError,
+  ConflictError,
+  NetworkError,
+  NotFoundError,
+  RateLimitError,
+  ServerError,
+  TimeoutError,
+  ValidationError,
+} from "../errors.js";
 
 // Type definitions for dynamic gRPC clients
 type UnaryCallback<T> = (error: grpc.ServiceError | null, response: T) => void;
+type UnaryMethod<TReq, TRes> = {
+  (request: TReq, metadata: grpc.Metadata, callback: UnaryCallback<TRes>): void;
+  (
+    request: TReq,
+    metadata: grpc.Metadata,
+    options: grpc.CallOptions,
+    callback: UnaryCallback<TRes>,
+  ): void;
+};
 
 type ProtobufValue =
   | { nullValue: 0 }
@@ -171,41 +191,16 @@ function decodeJob(job: GrpcJob): GrpcJob {
 }
 
 interface QueueServiceClient extends grpc.Client {
-  Enqueue(
-    request: GrpcEnqueueRequest,
-    metadata: grpc.Metadata,
-    callback: UnaryCallback<GrpcEnqueueResponse>,
-  ): void;
-  Dequeue(
-    request: GrpcDequeueRequest,
-    metadata: grpc.Metadata,
-    callback: UnaryCallback<GrpcDequeueResponse>,
-  ): void;
-  Complete(
-    request: GrpcCompleteRequest,
-    metadata: grpc.Metadata,
-    callback: UnaryCallback<GrpcCompleteResponse>,
-  ): void;
-  Fail(
-    request: GrpcFailRequest,
-    metadata: grpc.Metadata,
-    callback: UnaryCallback<GrpcFailResponse>,
-  ): void;
-  RenewLease(
-    request: GrpcRenewLeaseRequest,
-    metadata: grpc.Metadata,
-    callback: UnaryCallback<GrpcRenewLeaseResponse>,
-  ): void;
-  GetJob(
-    request: GrpcGetJobRequest,
-    metadata: grpc.Metadata,
-    callback: UnaryCallback<GrpcGetJobResponse>,
-  ): void;
-  GetQueueStats(
-    request: GrpcGetQueueStatsRequest,
-    metadata: grpc.Metadata,
-    callback: UnaryCallback<GrpcGetQueueStatsResponse>,
-  ): void;
+  Enqueue: UnaryMethod<GrpcEnqueueRequest, GrpcEnqueueResponse>;
+  Dequeue: UnaryMethod<GrpcDequeueRequest, GrpcDequeueResponse>;
+  Complete: UnaryMethod<GrpcCompleteRequest, GrpcCompleteResponse>;
+  Fail: UnaryMethod<GrpcFailRequest, GrpcFailResponse>;
+  RenewLease: UnaryMethod<GrpcRenewLeaseRequest, GrpcRenewLeaseResponse>;
+  GetJob: UnaryMethod<GrpcGetJobRequest, GrpcGetJobResponse>;
+  GetQueueStats: UnaryMethod<
+    GrpcGetQueueStatsRequest,
+    GrpcGetQueueStatsResponse
+  >;
   StreamJobs(
     request: GrpcStreamJobsRequest,
     metadata: grpc.Metadata,
@@ -216,21 +211,9 @@ interface QueueServiceClient extends grpc.Client {
 }
 
 interface WorkerServiceClient extends grpc.Client {
-  Register(
-    request: GrpcRegisterWorkerRequest,
-    metadata: grpc.Metadata,
-    callback: UnaryCallback<GrpcRegisterWorkerResponse>,
-  ): void;
-  Heartbeat(
-    request: GrpcHeartbeatRequest,
-    metadata: grpc.Metadata,
-    callback: UnaryCallback<GrpcHeartbeatResponse>,
-  ): void;
-  Deregister(
-    request: GrpcDeregisterRequest,
-    metadata: grpc.Metadata,
-    callback: UnaryCallback<GrpcDeregisterResponse>,
-  ): void;
+  Register: UnaryMethod<GrpcRegisterWorkerRequest, GrpcRegisterWorkerResponse>;
+  Heartbeat: UnaryMethod<GrpcHeartbeatRequest, GrpcHeartbeatResponse>;
+  Deregister: UnaryMethod<GrpcDeregisterRequest, GrpcDeregisterResponse>;
 }
 
 /**
@@ -238,23 +221,67 @@ interface WorkerServiceClient extends grpc.Client {
  */
 function promisify<TReq, TRes>(
   client: grpc.Client,
-  method: (
-    request: TReq,
-    metadata: grpc.Metadata,
-    callback: UnaryCallback<TRes>,
-  ) => void,
+  method: UnaryMethod<TReq, TRes>,
   request: TReq,
   metadata: grpc.Metadata,
+  timeoutMs?: number,
 ): Promise<TRes> {
   return new Promise((resolve, reject) => {
-    method.call(client, request, metadata, (error, response) => {
+    const callback: UnaryCallback<TRes> = (error, response) => {
       if (error) {
-        reject(error);
+        reject(mapGrpcError(error, timeoutMs));
       } else {
         resolve(response);
       }
-    });
+    };
+
+    method.call(
+      client,
+      request,
+      metadata,
+      createUnaryCallOptions(timeoutMs),
+      callback,
+    );
   });
+}
+
+function createUnaryCallOptions(timeoutMs?: number): grpc.CallOptions {
+  if (timeoutMs === undefined) {
+    return {};
+  }
+  return { deadline: new Date(Date.now() + timeoutMs) };
+}
+
+function mapGrpcError(error: grpc.ServiceError, timeoutMs?: number): Error {
+  const message = error.details || error.message || "gRPC request failed";
+
+  switch (error.code) {
+    case grpc.status.DEADLINE_EXCEEDED:
+      return new TimeoutError(message, timeoutMs ?? 0);
+    case grpc.status.UNAUTHENTICATED:
+      return new AuthenticationError(message, "AUTHENTICATION_FAILED");
+    case grpc.status.PERMISSION_DENIED:
+      return new AuthorizationError(message, "ACCESS_DENIED");
+    case grpc.status.NOT_FOUND:
+      return new NotFoundError(message, "NOT_FOUND");
+    case grpc.status.INVALID_ARGUMENT:
+    case grpc.status.OUT_OF_RANGE:
+      return new ValidationError(message, "VALIDATION_ERROR");
+    case grpc.status.ALREADY_EXISTS:
+    case grpc.status.ABORTED:
+    case grpc.status.FAILED_PRECONDITION:
+      return new ConflictError(message, "CONFLICT");
+    case grpc.status.RESOURCE_EXHAUSTED:
+      return new RateLimitError(message, "RATE_LIMIT_EXCEEDED");
+    case grpc.status.UNAVAILABLE:
+    case grpc.status.CANCELLED:
+      return new NetworkError(message, error);
+    default:
+      if (error.code >= grpc.status.INTERNAL) {
+        return new ServerError(message, 500, "GRPC_SERVER_ERROR");
+      }
+      return new ServerError(message, 500, "GRPC_ERROR");
+  }
 }
 
 /**
@@ -278,6 +305,7 @@ export class GrpcQueueOperations {
   constructor(
     private readonly client: QueueServiceClient,
     private readonly metadata: grpc.Metadata,
+    private readonly timeoutMs?: number,
   ) {}
 
   /**
@@ -289,6 +317,7 @@ export class GrpcQueueOperations {
       this.client.Enqueue,
       encodeEnqueueRequest(params),
       this.metadata,
+      this.timeoutMs,
     );
   }
 
@@ -301,6 +330,7 @@ export class GrpcQueueOperations {
       this.client.Dequeue,
       params,
       this.metadata,
+      this.timeoutMs,
     );
     return { ...response, jobs: response.jobs.map(decodeJob) };
   }
@@ -314,6 +344,7 @@ export class GrpcQueueOperations {
       this.client.Complete,
       encodeCompleteRequest(params),
       this.metadata,
+      this.timeoutMs,
     );
   }
 
@@ -321,7 +352,13 @@ export class GrpcQueueOperations {
    * Fail a job
    */
   async fail(params: GrpcFailRequest): Promise<GrpcFailResponse> {
-    return promisify(this.client, this.client.Fail, params, this.metadata);
+    return promisify(
+      this.client,
+      this.client.Fail,
+      params,
+      this.metadata,
+      this.timeoutMs,
+    );
   }
 
   /**
@@ -335,6 +372,7 @@ export class GrpcQueueOperations {
       this.client.RenewLease,
       params,
       this.metadata,
+      this.timeoutMs,
     );
   }
 
@@ -347,6 +385,7 @@ export class GrpcQueueOperations {
       this.client.GetJob,
       { jobId },
       this.metadata,
+      this.timeoutMs,
     );
     return {
       ...response,
@@ -363,6 +402,7 @@ export class GrpcQueueOperations {
       this.client.GetQueueStats,
       { queueName },
       this.metadata,
+      this.timeoutMs,
     );
   }
 
@@ -423,6 +463,7 @@ export class GrpcWorkerOperations {
   constructor(
     private readonly client: WorkerServiceClient,
     private readonly metadata: grpc.Metadata,
+    private readonly timeoutMs?: number,
   ) {}
 
   /**
@@ -431,7 +472,13 @@ export class GrpcWorkerOperations {
   async register(
     params: GrpcRegisterWorkerRequest,
   ): Promise<GrpcRegisterWorkerResponse> {
-    return promisify(this.client, this.client.Register, params, this.metadata);
+    return promisify(
+      this.client,
+      this.client.Register,
+      params,
+      this.metadata,
+      this.timeoutMs,
+    );
   }
 
   /**
@@ -440,7 +487,13 @@ export class GrpcWorkerOperations {
   async heartbeat(
     params: GrpcHeartbeatRequest,
   ): Promise<GrpcHeartbeatResponse> {
-    return promisify(this.client, this.client.Heartbeat, params, this.metadata);
+    return promisify(
+      this.client,
+      this.client.Heartbeat,
+      params,
+      this.metadata,
+      this.timeoutMs,
+    );
   }
 
   /**
@@ -452,6 +505,7 @@ export class GrpcWorkerOperations {
       this.client.Deregister,
       { workerId },
       this.metadata,
+      this.timeoutMs,
     );
   }
 }
@@ -495,7 +549,8 @@ export class SpooledGrpcClient {
   readonly workers: GrpcWorkerOperations;
 
   constructor(options: GrpcClientOptions) {
-    const { address, apiKey, useTls, credentials, channelOptions } = options;
+    const { address, apiKey, useTls, credentials, channelOptions, timeout } =
+      options;
 
     // Create credentials
     const creds =
@@ -525,8 +580,16 @@ export class SpooledGrpcClient {
     ) as unknown as WorkerServiceClient;
 
     // Initialize operation namespaces
-    this.queue = new GrpcQueueOperations(this.queueClient, this.metadata);
-    this.workers = new GrpcWorkerOperations(this.workerClient, this.metadata);
+    this.queue = new GrpcQueueOperations(
+      this.queueClient,
+      this.metadata,
+      timeout,
+    );
+    this.workers = new GrpcWorkerOperations(
+      this.workerClient,
+      this.metadata,
+      timeout,
+    );
   }
 
   /**

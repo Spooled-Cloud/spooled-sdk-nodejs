@@ -313,6 +313,8 @@ export interface GrpcClientOptions {
   credentials?: grpc.ChannelCredentials;
   /** Channel options */
   channelOptions?: grpc.ChannelOptions;
+  /** Deadline for unary gRPC calls in milliseconds. Streams are not bounded unless explicitly configured. */
+  timeout?: number;
 }
 
 // ============================================================================
