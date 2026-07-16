@@ -282,14 +282,16 @@ const workflow = await client.workflows.create({
     { key: "load", queueName: "etl", payload: {}, dependsOn: ["transform"] },
   ],
 });
-// { workflowId, jobMappings: { extract: 'job_1', ... } }
+// { workflowId, jobIds: [{ key: 'extract', jobId: 'job_1' }, ...] }
 ```
 
 ### Get Workflow
 
 ```typescript
 const status = await client.workflows.get("workflow_id");
-// { workflowId, status, jobs: [...] }
+const jobs = await client.workflows.jobs.list("workflow_id");
+// status: { id, name, status, ... }
+// jobs: [{ id, workflowId, key, status, ... }]
 ```
 
 ### Cancel Workflow

@@ -8,7 +8,6 @@
 
 import {
   SpooledClient,
-  SpooledError,
   AuthenticationError,
   NotFoundError,
   ValidationError,

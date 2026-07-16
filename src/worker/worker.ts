@@ -369,9 +369,9 @@ export class SpooledWorker {
       retryCount: job.retryCount,
       maxRetries: job.maxRetries,
       signal,
-      progress: async (_percent: number, _message?: string) => {
-        // Progress tracking could be implemented via heartbeat metadata
-        // For now, this is a no-op
+      progress: async (percent: number, message?: string) => {
+        const boundedPercent = Math.max(0, Math.min(100, percent));
+        this.debug(`[${job.id}] progress ${boundedPercent}%`, message);
       },
       log: (level, message, meta) => {
         this.debug(`[${job.id}] [${level}] ${message}`, meta);

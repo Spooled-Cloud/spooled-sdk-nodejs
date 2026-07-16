@@ -51,8 +51,8 @@ const workflow = await client.workflows.create({
 });
 
 console.log(`Workflow ID: ${workflow.workflowId}`);
-console.log("Jobs:", workflow.jobMappings);
-// { extract: 'job_abc', transform: 'job_def', load: 'job_ghi' }
+console.log("Jobs:", workflow.jobIds);
+// [{ key: 'extract', jobId: 'job_abc' }, ...]
 ```
 
 ## Complex DAG Patterns
@@ -216,12 +216,13 @@ const workflow = await client.workflows.create({
 
 ```typescript
 const status = await client.workflows.get(workflow.workflowId);
+const jobs = await client.workflows.jobs.list(workflow.workflowId);
 
 console.log("Workflow status:", status.status);
 // 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
 console.log("Jobs:");
-for (const job of status.jobs) {
+for (const job of jobs) {
   console.log(`  ${job.key}: ${job.status}`);
 }
 ```
@@ -283,7 +284,8 @@ For more granular control, you can retry individual jobs:
 ```typescript
 // Re-run only a specific failed job and its dependents
 const failedJobKey = "transform";
-const jobId = workflow.jobMappings[failedJobKey];
+const jobId = workflow.jobIds.find((job) => job.key === failedJobKey)?.jobId;
+if (!jobId) throw new Error(`Missing job ID for ${failedJobKey}`);
 
 await client.jobs.retry(jobId);
 // This will re-run 'transform' and once complete, 'load' will start

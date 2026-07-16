@@ -56,7 +56,7 @@ export interface JobContext {
   maxRetries: number;
   /** Abort signal for graceful shutdown */
   signal: AbortSignal;
-  /** Update job progress (0-100) */
+  /** Log local job progress (0-100); backend progress persistence is not yet available. */
   progress: (percent: number, message?: string) => Promise<void>;
   /** Log a message */
   log: (

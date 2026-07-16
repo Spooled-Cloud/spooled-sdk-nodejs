@@ -7,7 +7,12 @@
  * Run with: npx ts-node examples/workflow-dag.ts
  */
 
-import { SpooledClient, SpooledWorker } from "../src/index.js";
+import {
+  SpooledClient,
+  SpooledWorker,
+  type JsonObject,
+  type WorkflowJobDefinition,
+} from "../src/index.js";
 
 // Configuration
 const API_KEY = process.env.SPOOLED_API_KEY || "sk_test_example";
@@ -60,7 +65,7 @@ async function main() {
 
   console.log(`   Workflow ID: ${etlWorkflow.workflowId}`);
   console.log("   Job Mappings:");
-  for (const [key, jobId] of Object.entries(etlWorkflow.jobMappings)) {
+  for (const { key, jobId } of etlWorkflow.jobIds) {
     console.log(`     ${key}: ${jobId}`);
   }
   console.log();
@@ -242,9 +247,10 @@ async function main() {
   console.log("6. Checking Workflow Status...\n");
 
   const status = await client.workflows.get(etlWorkflow.workflowId);
+  const jobs = await client.workflows.jobs.list(etlWorkflow.workflowId);
   console.log(`   ETL Workflow Status: ${status.status}`);
   console.log("   Jobs:");
-  for (const job of status.jobs || []) {
+  for (const job of jobs) {
     console.log(`     - ${job.key}: ${job.status}`);
   }
   console.log();
@@ -256,12 +262,7 @@ async function main() {
  * Helper function to create a dynamic batch processing workflow
  */
 async function createBatchWorkflow(client: SpooledClient, items: string[]) {
-  const jobs: Array<{
-    key: string;
-    queueName: string;
-    payload: Record<string, unknown>;
-    dependsOn?: string[];
-  }> = [];
+  const jobs: WorkflowJobDefinition[] = [];
 
   // Create parallel processing jobs for each item
   for (let i = 0; i < items.length; i++) {
@@ -296,7 +297,7 @@ async function createBatchWorkflow(client: SpooledClient, items: string[]) {
 // ============================================
 // Example Worker for Processing Workflow Jobs
 // ============================================
-async function runWorker() {
+export async function runWorker() {
   const client = new SpooledClient({
     apiKey: API_KEY,
     baseUrl: BASE_URL,
@@ -307,7 +308,7 @@ async function runWorker() {
     concurrency: 5,
   });
 
-  worker.process(async (ctx) => {
+  worker.process(async (ctx): Promise<JsonObject> => {
     const { step } = ctx.payload as { step: string };
 
     console.log(`[Worker] Processing ${step} job: ${ctx.jobId}`);
@@ -316,17 +317,28 @@ async function runWorker() {
       case "extract":
         // Simulate data extraction
         await sleep(1000);
-        return { rowsExtracted: 10000, source: ctx.payload.source };
+        return {
+          rowsExtracted: 10000,
+          source: String(ctx.payload.source ?? ""),
+        };
 
       case "transform":
         // Simulate data transformation
         await sleep(2000);
-        return { rowsTransformed: 9500, operations: ctx.payload.operations };
+        return {
+          rowsTransformed: 9500,
+          operations: Array.isArray(ctx.payload.operations)
+            ? ctx.payload.operations
+            : [],
+        };
 
       case "load":
         // Simulate data loading
         await sleep(1500);
-        return { rowsLoaded: 9500, destination: ctx.payload.destination };
+        return {
+          rowsLoaded: 9500,
+          destination: String(ctx.payload.destination ?? ""),
+        };
 
       default:
         throw new Error(`Unknown step: ${step}`);
