@@ -9,7 +9,10 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PROTO_LOADER_OPTIONS } from "../../src/grpc/loader.js";
 
-type MessageDefinition = MessageTypeDefinition<Record<string, unknown>, Record<string, unknown>>;
+type MessageDefinition = MessageTypeDefinition<
+  Record<string, unknown>,
+  Record<string, unknown>
+>;
 
 const definition = protoLoader.loadSync(
   resolve("proto/spooled.proto"),

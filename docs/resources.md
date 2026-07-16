@@ -8,16 +8,16 @@ This is a complete reference for all SDK resources and their methods.
 
 ```typescript
 const { id, created } = await client.jobs.create({
-  queueName: 'my-queue',           // Required: target queue
-  payload: { data: 'value' },      // Required: job data (any JSON)
+  queueName: "my-queue", // Required: target queue
+  payload: { data: "value" }, // Required: job data (any JSON)
 
   // Optional
-  priority: 5,                      // -100 to 100 (default: 0)
-  maxRetries: 3,                    // Retry attempts (default: 3)
-  timeoutSeconds: 300,              // Job timeout (default: 300)
-  scheduledAt: new Date(),          // Delay execution
-  idempotencyKey: 'unique-key',     // Prevent duplicates
-  tags: { env: 'prod' },            // Metadata tags
+  priority: 5, // -100 to 100 (default: 0)
+  maxRetries: 3, // Retry attempts (default: 3)
+  timeoutSeconds: 300, // Job timeout (default: 300)
+  scheduledAt: new Date(), // Delay execution
+  idempotencyKey: "unique-key", // Prevent duplicates
+  tags: { env: "prod" }, // Metadata tags
 });
 ```
 
@@ -25,37 +25,37 @@ const { id, created } = await client.jobs.create({
 
 ```typescript
 const jobs = await client.jobs.list({
-  queueName: 'my-queue',            // Optional: filter by queue
-  status: 'pending',                // Optional: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
-  tag: 'billing',                   // Optional: filter by a single tag
-  limit: 10,                        // Pagination limit
-  offset: 0,                        // Pagination offset
+  queueName: "my-queue", // Optional: filter by queue
+  status: "pending", // Optional: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+  tag: "billing", // Optional: filter by a single tag
+  limit: 10, // Pagination limit
+  offset: 0, // Pagination offset
 });
 ```
 
 ### Get Job
 
 ```typescript
-const job = await client.jobs.get('job_id');
+const job = await client.jobs.get("job_id");
 // Returns: { id, queueName, status, payload, priority, ... }
 ```
 
 ### Cancel Job
 
 ```typescript
-await client.jobs.cancel('job_id');
+await client.jobs.cancel("job_id");
 ```
 
 ### Retry Job
 
 ```typescript
-const { id } = await client.jobs.retry('job_id');
+const { id } = await client.jobs.retry("job_id");
 ```
 
 ### Boost Priority
 
 ```typescript
-await client.jobs.boostPriority('job_id', 10); // Add 10 to priority
+await client.jobs.boostPriority("job_id", 10); // Add 10 to priority
 ```
 
 ### Get Statistics
@@ -69,7 +69,7 @@ const stats = await client.jobs.getStats();
 
 ```typescript
 const result = await client.jobs.bulkEnqueue({
-  queueName: 'my-queue',
+  queueName: "my-queue",
   jobs: [
     { payload: { n: 1 } },
     { payload: { n: 2 }, priority: 10 },
@@ -82,7 +82,7 @@ const result = await client.jobs.bulkEnqueue({
 ### Batch Status
 
 ```typescript
-const statuses = await client.jobs.batchStatus(['job_1', 'job_2', 'job_3']);
+const statuses = await client.jobs.batchStatus(["job_1", "job_2", "job_3"]);
 // { job_1: 'completed', job_2: 'processing', job_3: 'pending' }
 ```
 
@@ -90,8 +90,8 @@ const statuses = await client.jobs.batchStatus(['job_1', 'job_2', 'job_3']);
 
 ```typescript
 const result = await client.jobs.claim({
-  queueName: 'my-queue',
-  workerId: 'worker-1',
+  queueName: "my-queue",
+  workerId: "worker-1",
   limit: 10,
   leaseDurationSecs: 300,
 });
@@ -103,8 +103,8 @@ Echo `leaseId` from the claimed job on complete, fail, and heartbeat. The backen
 ### Complete Job
 
 ```typescript
-await client.jobs.complete('job_id', {
-  workerId: 'worker-1',
+await client.jobs.complete("job_id", {
+  workerId: "worker-1",
   leaseId: claimedJob.leaseId ?? undefined,
   result: { success: true },
 });
@@ -113,18 +113,18 @@ await client.jobs.complete('job_id', {
 ### Fail Job
 
 ```typescript
-await client.jobs.fail('job_id', {
-  workerId: 'worker-1',
+await client.jobs.fail("job_id", {
+  workerId: "worker-1",
   leaseId: claimedJob.leaseId ?? undefined,
-  error: 'Something went wrong',
+  error: "Something went wrong",
 });
 ```
 
 ### Heartbeat
 
 ```typescript
-await client.jobs.heartbeat('job_id', {
-  workerId: 'worker-1',
+await client.jobs.heartbeat("job_id", {
+  workerId: "worker-1",
   leaseId: claimedJob.leaseId ?? undefined,
   leaseDurationSecs: 300,
 });
@@ -135,23 +135,23 @@ await client.jobs.heartbeat('job_id', {
 ```typescript
 // List DLQ jobs
 const dlqJobs = await client.jobs.dlq.list({
-  queueName: 'my-queue',
+  queueName: "my-queue",
   limit: 50,
 });
 
 // Retry DLQ jobs
 await client.jobs.dlq.retry({
-  jobIds: ['job_1', 'job_2'],
+  jobIds: ["job_1", "job_2"],
 });
 
 // Retry all DLQ jobs for a queue
 await client.jobs.dlq.retry({
-  queueName: 'my-queue',
+  queueName: "my-queue",
 });
 
 // Purge DLQ
 await client.jobs.dlq.purge({
-  queueName: 'my-queue',
+  queueName: "my-queue",
   confirm: true,
 });
 ```
@@ -170,13 +170,13 @@ const queues = await client.queues.list();
 ### Get Queue Config
 
 ```typescript
-const config = await client.queues.get('my-queue');
+const config = await client.queues.get("my-queue");
 ```
 
 ### Update Queue Config
 
 ```typescript
-await client.queues.updateConfig('my-queue', {
+await client.queues.updateConfig("my-queue", {
   maxRetries: 5,
   defaultTimeout: 600,
   rateLimit: 100,
@@ -187,20 +187,20 @@ await client.queues.updateConfig('my-queue', {
 ### Get Queue Stats
 
 ```typescript
-const stats = await client.queues.getStats('my-queue');
+const stats = await client.queues.getStats("my-queue");
 // { pending, processing, completed, failed, ... }
 ```
 
 ### Pause Queue
 
 ```typescript
-await client.queues.pause('my-queue', 'Maintenance window');
+await client.queues.pause("my-queue", "Maintenance window");
 ```
 
 ### Resume Queue
 
 ```typescript
-await client.queues.resume('my-queue');
+await client.queues.resume("my-queue");
 ```
 
 ---
@@ -211,11 +211,11 @@ await client.queues.resume('my-queue');
 
 ```typescript
 const schedule = await client.schedules.create({
-  name: 'Daily Report',
-  cronExpression: '0 0 9 * * *',    // 6-field cron (with seconds)
-  timezone: 'America/New_York',
-  queueName: 'reports',
-  payloadTemplate: { type: 'daily' },
+  name: "Daily Report",
+  cronExpression: "0 0 9 * * *", // 6-field cron (with seconds)
+  timezone: "America/New_York",
+  queueName: "reports",
+  payloadTemplate: { type: "daily" },
   enabled: true,
 });
 ```
@@ -229,14 +229,14 @@ const schedules = await client.schedules.list();
 ### Get Schedule
 
 ```typescript
-const schedule = await client.schedules.get('schedule_id');
+const schedule = await client.schedules.get("schedule_id");
 ```
 
 ### Update Schedule
 
 ```typescript
-await client.schedules.update('schedule_id', {
-  cronExpression: '0 0 8 * * *',
+await client.schedules.update("schedule_id", {
+  cronExpression: "0 0 8 * * *",
   enabled: false,
 });
 ```
@@ -244,26 +244,26 @@ await client.schedules.update('schedule_id', {
 ### Delete Schedule
 
 ```typescript
-await client.schedules.delete('schedule_id');
+await client.schedules.delete("schedule_id");
 ```
 
 ### Pause/Resume
 
 ```typescript
-await client.schedules.pause('schedule_id');
-await client.schedules.resume('schedule_id');
+await client.schedules.pause("schedule_id");
+await client.schedules.resume("schedule_id");
 ```
 
 ### Trigger Manually
 
 ```typescript
-const { jobId } = await client.schedules.trigger('schedule_id');
+const { jobId } = await client.schedules.trigger("schedule_id");
 ```
 
 ### Get History
 
 ```typescript
-const runs = await client.schedules.getHistory('schedule_id', 10);
+const runs = await client.schedules.getHistory("schedule_id", 10);
 // Last 10 executions
 ```
 
@@ -275,11 +275,11 @@ const runs = await client.schedules.getHistory('schedule_id', 10);
 
 ```typescript
 const workflow = await client.workflows.create({
-  name: 'ETL Pipeline',
+  name: "ETL Pipeline",
   jobs: [
-    { key: 'extract', queueName: 'etl', payload: {} },
-    { key: 'transform', queueName: 'etl', payload: {}, dependsOn: ['extract'] },
-    { key: 'load', queueName: 'etl', payload: {}, dependsOn: ['transform'] },
+    { key: "extract", queueName: "etl", payload: {} },
+    { key: "transform", queueName: "etl", payload: {}, dependsOn: ["extract"] },
+    { key: "load", queueName: "etl", payload: {}, dependsOn: ["transform"] },
   ],
 });
 // { workflowId, jobMappings: { extract: 'job_1', ... } }
@@ -288,14 +288,14 @@ const workflow = await client.workflows.create({
 ### Get Workflow
 
 ```typescript
-const status = await client.workflows.get('workflow_id');
+const status = await client.workflows.get("workflow_id");
 // { workflowId, status, jobs: [...] }
 ```
 
 ### Cancel Workflow
 
 ```typescript
-await client.workflows.cancel('workflow_id');
+await client.workflows.cancel("workflow_id");
 ```
 
 ### Retry Failed Workflow
@@ -303,7 +303,7 @@ await client.workflows.cancel('workflow_id');
 Retry all failed jobs in a workflow. Only works on workflows with status `failed`.
 
 ```typescript
-const workflow = await client.workflows.retry('workflow_id');
+const workflow = await client.workflows.retry("workflow_id");
 // Workflow status changes from 'failed' to 'running'
 // Failed jobs are reset to 'pending' and reprocessed
 ```
@@ -311,10 +311,10 @@ const workflow = await client.workflows.retry('workflow_id');
 ### Job Dependencies
 
 ```typescript
-const deps = await client.workflows.jobs.getDependencies('job_id');
+const deps = await client.workflows.jobs.getDependencies("job_id");
 
-await client.workflows.jobs.addDependencies('job_id', {
-  dependsOnJobIds: ['other_job_id'],
+await client.workflows.jobs.addDependencies("job_id", {
+  dependsOnJobIds: ["other_job_id"],
 });
 ```
 
@@ -326,10 +326,10 @@ await client.workflows.jobs.addDependencies('job_id', {
 
 ```typescript
 const webhook = await client.webhooks.create({
-  name: 'Slack Notifications',
-  url: 'https://hooks.slack.com/...',
-  events: ['job.completed', 'job.failed'],
-  secret: 'hmac-secret',
+  name: "Slack Notifications",
+  url: "https://hooks.slack.com/...",
+  events: ["job.completed", "job.failed"],
+  secret: "hmac-secret",
   enabled: true,
 });
 ```
@@ -343,28 +343,30 @@ const webhooks = await client.webhooks.list();
 ### Get/Update/Delete
 
 ```typescript
-const wh = await client.webhooks.get('webhook_id');
-await client.webhooks.update('webhook_id', { enabled: false });
-await client.webhooks.delete('webhook_id');
+const wh = await client.webhooks.get("webhook_id");
+await client.webhooks.update("webhook_id", { enabled: false });
+await client.webhooks.delete("webhook_id");
 ```
 
 ### Test Webhook
 
 ```typescript
-const result = await client.webhooks.test('webhook_id');
+const result = await client.webhooks.test("webhook_id");
 // { success, statusCode, ... }
 ```
 
 ### Get Deliveries
 
 ```typescript
-const deliveries = await client.webhooks.getDeliveries('webhook_id', { limit: 50 });
+const deliveries = await client.webhooks.getDeliveries("webhook_id", {
+  limit: 50,
+});
 ```
 
 ### Retry Delivery
 
 ```typescript
-const result = await client.webhooks.retryDelivery('webhook_id', 'delivery_id');
+const result = await client.webhooks.retryDelivery("webhook_id", "delivery_id");
 // { success, message }
 ```
 
@@ -381,19 +383,19 @@ const workers = await client.workers.list();
 ### Get Worker
 
 ```typescript
-const worker = await client.workers.get('worker_id');
+const worker = await client.workers.get("worker_id");
 ```
 
 ### Register Worker
 
 ```typescript
 const registration = await client.workers.register({
-  queueName: 'my-queue',
-  hostname: 'worker-01',
-  workerType: 'nodejs',
+  queueName: "my-queue",
+  hostname: "worker-01",
+  workerType: "nodejs",
   maxConcurrency: 10,
-  version: 'my-worker/1.0.0',
-  metadata: { environment: 'production' },
+  version: "my-worker/1.0.0",
+  metadata: { environment: "production" },
 });
 // { id, leaseDurationSecs, heartbeatIntervalSecs }
 ```
@@ -401,16 +403,16 @@ const registration = await client.workers.register({
 ### Heartbeat
 
 ```typescript
-await client.workers.heartbeat('worker_id', {
+await client.workers.heartbeat("worker_id", {
   currentJobs: 5,
-  status: 'healthy',
+  status: "healthy",
 });
 ```
 
 ### Deregister
 
 ```typescript
-await client.workers.deregister('worker_id');
+await client.workers.deregister("worker_id");
 ```
 
 ---
@@ -428,8 +430,8 @@ const keys = await client.apiKeys.list();
 
 ```typescript
 const { id, key } = await client.apiKeys.create({
-  name: 'Production API Key',
-  queues: ['queue-1', 'queue-2'],  // Optional: restrict to queues
+  name: "Production API Key",
+  queues: ["queue-1", "queue-2"], // Optional: restrict to queues
   rateLimit: 1000,
 });
 // IMPORTANT: 'key' is only shown once!
@@ -438,8 +440,8 @@ const { id, key } = await client.apiKeys.create({
 ### Update Key
 
 ```typescript
-await client.apiKeys.update('key_id', {
-  name: 'Updated Name',
+await client.apiKeys.update("key_id", {
+  name: "Updated Name",
   rateLimit: 2000,
 });
 ```
@@ -447,7 +449,7 @@ await client.apiKeys.update('key_id', {
 ### Revoke Key
 
 ```typescript
-await client.apiKeys.revoke('key_id');
+await client.apiKeys.revoke("key_id");
 ```
 
 ---
@@ -458,9 +460,9 @@ await client.apiKeys.revoke('key_id');
 
 ```typescript
 const { organization, apiKey } = await client.organizations.create({
-  name: 'My Company',
-  slug: 'my-company',
-  billingEmail: 'billing@company.com',
+  name: "My Company",
+  slug: "my-company",
+  billingEmail: "billing@company.com",
 });
 ```
 
@@ -481,7 +483,8 @@ const orgs = await client.organizations.list();
 ### Check Slug Availability
 
 ```typescript
-const { available, valid, suggestion } = await client.organizations.checkSlug('my-company');
+const { available, valid, suggestion } =
+  await client.organizations.checkSlug("my-company");
 // available: boolean - whether slug is available
 // valid: boolean - whether slug format is valid
 // suggestion: string | null - alternative slug if not available
@@ -490,7 +493,7 @@ const { available, valid, suggestion } = await client.organizations.checkSlug('m
 ### Generate Slug
 
 ```typescript
-const { slug } = await client.organizations.generateSlug('My Company Name');
+const { slug } = await client.organizations.generateSlug("My Company Name");
 // Returns a unique, URL-safe slug generated from the name
 ```
 
@@ -509,7 +512,7 @@ const status = await client.billing.getStatus();
 
 ```typescript
 const portal = await client.billing.createPortal({
-  returnUrl: 'https://yourapp.com/billing',
+  returnUrl: "https://yourapp.com/billing",
 });
 // { url } - Redirect user to this Stripe portal URL
 ```
@@ -522,7 +525,7 @@ const portal = await client.billing.createPortal({
 
 ```typescript
 const { accessToken, refreshToken } = await client.auth.login({
-  apiKey: 'sp_live_...'
+  apiKey: "sp_live_...",
 });
 
 // Use JWT for subsequent requests
@@ -558,11 +561,11 @@ await client.auth.logout();
 
 ```typescript
 // Start email login flow (sends magic link)
-const result = await client.auth.startEmailLogin('user@example.com');
+const result = await client.auth.startEmailLogin("user@example.com");
 // { success, message }
 
 // Check if email exists in system
-const { exists } = await client.auth.checkEmail('user@example.com');
+const { exists } = await client.auth.checkEmail("user@example.com");
 ```
 
 ---
@@ -611,7 +614,7 @@ Requires `adminKey` in client config.
 
 ```typescript
 const orgs = await client.admin.listOrganizations({
-  planTier: 'pro',
+  planTier: "pro",
   limit: 10,
 });
 ```
@@ -619,14 +622,14 @@ const orgs = await client.admin.listOrganizations({
 ### Get Organization
 
 ```typescript
-const org = await client.admin.getOrganization('org_id');
+const org = await client.admin.getOrganization("org_id");
 ```
 
 ### Update Organization
 
 ```typescript
-await client.admin.updateOrganization('org_id', {
-  planTier: 'enterprise',
+await client.admin.updateOrganization("org_id", {
+  planTier: "enterprise",
 });
 ```
 
@@ -641,8 +644,8 @@ const stats = await client.admin.getStats();
 
 ```typescript
 const { id, key } = await client.admin.createApiKey({
-  organizationId: 'org_id',
-  name: 'Admin-created key',
+  organizationId: "org_id",
+  name: "Admin-created key",
 });
 ```
 
@@ -655,10 +658,10 @@ For receiving webhooks from external services. These are signature-based, not AP
 ### Custom Webhook
 
 ```typescript
-await client.ingest.custom('org_id', {
-  queueName: 'custom_events',
-  eventType: 'custom.event',
-  payload: { data: 'value' },
+await client.ingest.custom("org_id", {
+  queueName: "custom_events",
+  eventType: "custom.event",
+  payload: { data: "value" },
 });
 ```
 
@@ -705,5 +708,5 @@ import type {
   // Common
   PaginationParams,
   JsonObject,
-} from '@spooled/sdk';
+} from "@spooled/sdk";
 ```

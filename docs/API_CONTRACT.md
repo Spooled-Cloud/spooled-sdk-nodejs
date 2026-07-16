@@ -5,20 +5,20 @@ Source of truth: `spooled-backend/src/api/mod.rs` (routes) and `spooled-backend/
 
 ## Base URLs
 
-| Service | Spooled Cloud | Self-Hosted Example |
-|---------|---------------|---------------------|
-| REST API | `https://api.spooled.cloud` | `https://your-server.com` |
-| WebSocket | `wss://api.spooled.cloud` | `wss://your-server.com` |
-| gRPC | `grpc.spooled.cloud:443` | `grpc.your-server.com:443` |
+| Service   | Spooled Cloud               | Self-Hosted Example        |
+| --------- | --------------------------- | -------------------------- |
+| REST API  | `https://api.spooled.cloud` | `https://your-server.com`  |
+| WebSocket | `wss://api.spooled.cloud`   | `wss://your-server.com`    |
+| gRPC      | `grpc.spooled.cloud:443`    | `grpc.your-server.com:443` |
 
 For self-hosted deployments, configure the SDK with your custom endpoints:
 
 ```typescript
 const client = new SpooledClient({
-  apiKey: 'sp_live_...',
-  baseUrl: 'https://your-server.com',        // REST API
-  wsUrl: 'wss://your-server.com',            // WebSocket (optional, derived from baseUrl)
-  grpcAddress: 'grpc.your-server.com:443',   // gRPC
+  apiKey: "sp_live_...",
+  baseUrl: "https://your-server.com", // REST API
+  wsUrl: "wss://your-server.com", // WebSocket (optional, derived from baseUrl)
+  grpcAddress: "grpc.your-server.com:443", // gRPC
 });
 ```
 
@@ -26,6 +26,7 @@ const client = new SpooledClient({
 
 All protected endpoints require `Authorization: Bearer <token>` header.
 Token can be either:
+
 - **API Key**: `sp_live_...` or `sp_test_...` (legacy `sk_live_...` / `sk_test_...` prefixes are also accepted)
 - **JWT Access Token**: obtained via `POST /api/v1/auth/login`
 
@@ -35,28 +36,29 @@ WebSocket endpoint requires JWT token in query string: `/api/v1/ws?token=<jwt>`.
 
 ## Health (Public)
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/health` | Health check |
-| GET | `/health/live` | Liveness probe |
-| GET | `/health/ready` | Readiness probe |
-| GET | `/metrics` | Prometheus metrics (optional auth) |
+| Method | Path            | Description                        |
+| ------ | --------------- | ---------------------------------- |
+| GET    | `/health`       | Health check                       |
+| GET    | `/health/live`  | Liveness probe                     |
+| GET    | `/health/ready` | Readiness probe                    |
+| GET    | `/metrics`      | Prometheus metrics (optional auth) |
 
 ---
 
 ## Auth
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/v1/auth/login` | Exchange API key for JWT tokens |
-| POST | `/api/v1/auth/refresh` | Refresh access token |
-| POST | `/api/v1/auth/logout` | Invalidate token (protected) |
-| GET | `/api/v1/auth/me` | Get current user info |
-| POST | `/api/v1/auth/validate` | Validate a token |
+| Method | Path                    | Description                     |
+| ------ | ----------------------- | ------------------------------- |
+| POST   | `/api/v1/auth/login`    | Exchange API key for JWT tokens |
+| POST   | `/api/v1/auth/refresh`  | Refresh access token            |
+| POST   | `/api/v1/auth/logout`   | Invalidate token (protected)    |
+| GET    | `/api/v1/auth/me`       | Get current user info           |
+| POST   | `/api/v1/auth/validate` | Validate a token                |
 
 ### POST /api/v1/auth/login
 
 **Request:**
+
 ```typescript
 {
   api_key: string; // min 10 chars
@@ -64,11 +66,12 @@ WebSocket endpoint requires JWT token in query string: `/api/v1/ws?token=<jwt>`.
 ```
 
 **Response:**
+
 ```typescript
 {
   access_token: string;
   refresh_token: string;
-  token_type: 'Bearer';
+  token_type: "Bearer";
   expires_in: number; // seconds
   refresh_expires_in: number; // seconds
 }
@@ -77,6 +80,7 @@ WebSocket endpoint requires JWT token in query string: `/api/v1/ws?token=<jwt>`.
 ### POST /api/v1/auth/refresh
 
 **Request:**
+
 ```typescript
 {
   refresh_token: string;
@@ -84,10 +88,11 @@ WebSocket endpoint requires JWT token in query string: `/api/v1/ws?token=<jwt>`.
 ```
 
 **Response:**
+
 ```typescript
 {
   access_token: string;
-  token_type: 'Bearer';
+  token_type: "Bearer";
   expires_in: number;
 }
 ```
@@ -95,6 +100,7 @@ WebSocket endpoint requires JWT token in query string: `/api/v1/ws?token=<jwt>`.
 ### GET /api/v1/auth/me
 
 **Response:**
+
 ```typescript
 {
   organization_id: string;
@@ -109,28 +115,29 @@ WebSocket endpoint requires JWT token in query string: `/api/v1/ws?token=<jwt>`.
 
 ## Jobs
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/jobs` | List jobs |
-| POST | `/api/v1/jobs` | Create job |
-| GET | `/api/v1/jobs/{id}` | Get job |
-| DELETE | `/api/v1/jobs/{id}` | Cancel job |
-| POST | `/api/v1/jobs/{id}/retry` | Retry failed job |
-| PUT | `/api/v1/jobs/{id}/priority` | Boost priority |
-| GET | `/api/v1/jobs/stats` | Job statistics |
-| GET | `/api/v1/jobs/status` | Batch status lookup |
-| POST | `/api/v1/jobs/bulk` | Bulk enqueue |
-| POST | `/api/v1/jobs/claim` | Claim jobs for worker |
-| POST | `/api/v1/jobs/{id}/complete` | Complete job |
-| POST | `/api/v1/jobs/{id}/fail` | Fail job |
-| POST | `/api/v1/jobs/{id}/heartbeat` | Extend job lease |
-| GET | `/api/v1/jobs/dlq` | List dead-letter queue |
-| POST | `/api/v1/jobs/dlq/retry` | Retry DLQ jobs |
-| POST | `/api/v1/jobs/dlq/purge` | Purge DLQ |
+| Method | Path                          | Description            |
+| ------ | ----------------------------- | ---------------------- |
+| GET    | `/api/v1/jobs`                | List jobs              |
+| POST   | `/api/v1/jobs`                | Create job             |
+| GET    | `/api/v1/jobs/{id}`           | Get job                |
+| DELETE | `/api/v1/jobs/{id}`           | Cancel job             |
+| POST   | `/api/v1/jobs/{id}/retry`     | Retry failed job       |
+| PUT    | `/api/v1/jobs/{id}/priority`  | Boost priority         |
+| GET    | `/api/v1/jobs/stats`          | Job statistics         |
+| GET    | `/api/v1/jobs/status`         | Batch status lookup    |
+| POST   | `/api/v1/jobs/bulk`           | Bulk enqueue           |
+| POST   | `/api/v1/jobs/claim`          | Claim jobs for worker  |
+| POST   | `/api/v1/jobs/{id}/complete`  | Complete job           |
+| POST   | `/api/v1/jobs/{id}/fail`      | Fail job               |
+| POST   | `/api/v1/jobs/{id}/heartbeat` | Extend job lease       |
+| GET    | `/api/v1/jobs/dlq`            | List dead-letter queue |
+| POST   | `/api/v1/jobs/dlq/retry`      | Retry DLQ jobs         |
+| POST   | `/api/v1/jobs/dlq/purge`      | Purge DLQ              |
 
 ### POST /api/v1/jobs
 
 **Request:**
+
 ```typescript
 {
   queue_name: string; // 1-100 chars, alphanumeric/-/_/.
@@ -148,6 +155,7 @@ WebSocket endpoint requires JWT token in query string: `/api/v1/ws?token=<jwt>`.
 ```
 
 **Response:**
+
 ```typescript
 {
   id: string;
@@ -158,6 +166,7 @@ WebSocket endpoint requires JWT token in query string: `/api/v1/ws?token=<jwt>`.
 ### GET /api/v1/jobs
 
 **Query params:**
+
 - `queue_name?: string`
 - `status?: 'pending' | 'scheduled' | 'processing' | 'completed' | 'failed' | 'deadletter' | 'cancelled'`
 - `tag?: string` — filter by a single tag (matches Postgres `tags ? tag` semantics)
@@ -228,6 +237,7 @@ interface JobStats {
 ### POST /api/v1/jobs/claim
 
 **Request:**
+
 ```typescript
 {
   queue_name: string;
@@ -238,6 +248,7 @@ interface JobStats {
 ```
 
 **Response:**
+
 ```typescript
 {
   jobs: ClaimedJob[];
@@ -258,6 +269,7 @@ interface ClaimedJob {
 ### POST /api/v1/jobs/{id}/complete
 
 **Request:**
+
 ```typescript
 {
   worker_id: string;
@@ -271,6 +283,7 @@ interface ClaimedJob {
 ### POST /api/v1/jobs/{id}/fail
 
 **Request:**
+
 ```typescript
 {
   worker_id: string;
@@ -284,6 +297,7 @@ interface ClaimedJob {
 ### POST /api/v1/jobs/{id}/heartbeat
 
 **Request:**
+
 ```typescript
 {
   worker_id: string;
@@ -297,6 +311,7 @@ interface ClaimedJob {
 ### POST /api/v1/jobs/bulk
 
 **Request:**
+
 ```typescript
 {
   queue_name: string;
@@ -315,10 +330,20 @@ interface BulkJobItem {
 ```
 
 **Response:**
+
 ```typescript
 {
-  succeeded: { index: number; job_id: string; created: boolean }[];
-  failed: { index: number; error: string }[];
+  succeeded: {
+    index: number;
+    job_id: string;
+    created: boolean;
+  }
+  [];
+  failed: {
+    index: number;
+    error: string;
+  }
+  [];
   total: number;
   success_count: number;
   failure_count: number;
@@ -329,15 +354,15 @@ interface BulkJobItem {
 
 ## Queues
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/queues` | List queues |
-| GET | `/api/v1/queues/{name}` | Get queue config |
-| PUT | `/api/v1/queues/{name}/config` | Update queue config |
-| GET | `/api/v1/queues/{name}/stats` | Get queue stats |
-| POST | `/api/v1/queues/{name}/pause` | Pause queue |
-| POST | `/api/v1/queues/{name}/resume` | Resume queue |
-| DELETE | `/api/v1/queues/{name}` | Delete queue |
+| Method | Path                           | Description         |
+| ------ | ------------------------------ | ------------------- |
+| GET    | `/api/v1/queues`               | List queues         |
+| GET    | `/api/v1/queues/{name}`        | Get queue config    |
+| PUT    | `/api/v1/queues/{name}/config` | Update queue config |
+| GET    | `/api/v1/queues/{name}/stats`  | Get queue stats     |
+| POST   | `/api/v1/queues/{name}/pause`  | Pause queue         |
+| POST   | `/api/v1/queues/{name}/resume` | Resume queue        |
+| DELETE | `/api/v1/queues/{name}`        | Delete queue        |
 
 ### Queue Models
 
@@ -392,13 +417,13 @@ interface ResumeQueueResponse {
 
 ## Workers
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/workers` | List workers |
-| POST | `/api/v1/workers/register` | Register worker |
-| GET | `/api/v1/workers/{id}` | Get worker |
-| POST | `/api/v1/workers/{id}/heartbeat` | Worker heartbeat |
-| POST | `/api/v1/workers/{id}/deregister` | Deregister worker |
+| Method | Path                              | Description       |
+| ------ | --------------------------------- | ----------------- |
+| GET    | `/api/v1/workers`                 | List workers      |
+| POST   | `/api/v1/workers/register`        | Register worker   |
+| GET    | `/api/v1/workers/{id}`            | Get worker        |
+| POST   | `/api/v1/workers/{id}/heartbeat`  | Worker heartbeat  |
+| POST   | `/api/v1/workers/{id}/deregister` | Deregister worker |
 
 ### Worker Models
 
@@ -411,7 +436,7 @@ interface Worker {
   worker_type?: string;
   max_concurrency: number;
   current_jobs: number;
-  status: 'healthy' | 'degraded' | 'offline' | 'draining';
+  status: "healthy" | "degraded" | "offline" | "draining";
   last_heartbeat: string;
   metadata: object;
   version?: string;
@@ -455,17 +480,17 @@ interface WorkerHeartbeatRequest {
 
 ## Schedules
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/schedules` | List schedules |
-| POST | `/api/v1/schedules` | Create schedule |
-| GET | `/api/v1/schedules/{id}` | Get schedule |
-| PUT | `/api/v1/schedules/{id}` | Update schedule |
-| DELETE | `/api/v1/schedules/{id}` | Delete schedule |
-| POST | `/api/v1/schedules/{id}/pause` | Pause schedule |
-| POST | `/api/v1/schedules/{id}/resume` | Resume schedule |
-| POST | `/api/v1/schedules/{id}/trigger` | Manual trigger |
-| GET | `/api/v1/schedules/{id}/history` | Execution history |
+| Method | Path                             | Description       |
+| ------ | -------------------------------- | ----------------- |
+| GET    | `/api/v1/schedules`              | List schedules    |
+| POST   | `/api/v1/schedules`              | Create schedule   |
+| GET    | `/api/v1/schedules/{id}`         | Get schedule      |
+| PUT    | `/api/v1/schedules/{id}`         | Update schedule   |
+| DELETE | `/api/v1/schedules/{id}`         | Delete schedule   |
+| POST   | `/api/v1/schedules/{id}/pause`   | Pause schedule    |
+| POST   | `/api/v1/schedules/{id}/resume`  | Resume schedule   |
+| POST   | `/api/v1/schedules/{id}/trigger` | Manual trigger    |
+| GET    | `/api/v1/schedules/{id}/history` | Execution history |
 
 ### Schedule Models
 
@@ -517,7 +542,7 @@ interface ScheduleRun {
   id: string;
   schedule_id: string;
   job_id?: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: "pending" | "running" | "completed" | "failed";
   error_message?: string;
   started_at: string;
   completed_at?: string;
@@ -528,15 +553,15 @@ interface ScheduleRun {
 
 ## Workflows
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/workflows` | List workflows |
-| POST | `/api/v1/workflows` | Create workflow |
-| GET | `/api/v1/workflows/{id}` | Get workflow |
-| POST | `/api/v1/workflows/{id}/cancel` | Cancel workflow |
-| POST | `/api/v1/workflows/{id}/retry` | Retry failed workflow |
-| GET | `/api/v1/jobs/{id}/dependencies` | Get job dependencies |
-| POST | `/api/v1/jobs/{id}/dependencies` | Add job dependencies |
+| Method | Path                             | Description           |
+| ------ | -------------------------------- | --------------------- |
+| GET    | `/api/v1/workflows`              | List workflows        |
+| POST   | `/api/v1/workflows`              | Create workflow       |
+| GET    | `/api/v1/workflows/{id}`         | Get workflow          |
+| POST   | `/api/v1/workflows/{id}/cancel`  | Cancel workflow       |
+| POST   | `/api/v1/workflows/{id}/retry`   | Retry failed workflow |
+| GET    | `/api/v1/jobs/{id}/dependencies` | Get job dependencies  |
+| POST   | `/api/v1/jobs/{id}/dependencies` | Add job dependencies  |
 
 ### Workflow Models
 
@@ -546,7 +571,7 @@ interface Workflow {
   organization_id: string;
   name: string;
   description?: string;
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
   total_jobs: number;
   completed_jobs: number;
   failed_jobs: number;
@@ -580,7 +605,7 @@ interface WorkflowJobDefinition {
   queue_name: string;
   payload: object;
   depends_on?: string[];
-  dependency_mode?: 'all' | 'any';
+  dependency_mode?: "all" | "any";
   priority?: number;
   max_retries?: number;
   timeout_seconds?: number;
@@ -596,19 +621,20 @@ interface CreateWorkflowResponse {
 
 ## Outgoing Webhooks
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/outgoing-webhooks` | List webhooks |
-| POST | `/api/v1/outgoing-webhooks` | Create webhook |
-| GET | `/api/v1/outgoing-webhooks/{id}` | Get webhook |
-| PUT | `/api/v1/outgoing-webhooks/{id}` | Update webhook |
-| DELETE | `/api/v1/outgoing-webhooks/{id}` | Delete webhook |
-| POST | `/api/v1/outgoing-webhooks/{id}/test` | Test webhook |
-| GET | `/api/v1/outgoing-webhooks/{id}/deliveries` | Delivery history |
+| Method | Path                                        | Description      |
+| ------ | ------------------------------------------- | ---------------- |
+| GET    | `/api/v1/outgoing-webhooks`                 | List webhooks    |
+| POST   | `/api/v1/outgoing-webhooks`                 | Create webhook   |
+| GET    | `/api/v1/outgoing-webhooks/{id}`            | Get webhook      |
+| PUT    | `/api/v1/outgoing-webhooks/{id}`            | Update webhook   |
+| DELETE | `/api/v1/outgoing-webhooks/{id}`            | Delete webhook   |
+| POST   | `/api/v1/outgoing-webhooks/{id}/test`       | Test webhook     |
+| GET    | `/api/v1/outgoing-webhooks/{id}/deliveries` | Delivery history |
 
 ### Webhook Events
 
 Valid event types:
+
 - `job.created`
 - `job.started`
 - `job.completed`
@@ -632,7 +658,7 @@ interface OutgoingWebhook {
   enabled: boolean;
   failure_count: number;
   last_triggered_at?: string;
-  last_status?: 'success' | 'failed';
+  last_status?: "success" | "failed";
   created_at: string;
   updated_at: string;
 }
@@ -657,7 +683,7 @@ interface OutgoingWebhookDelivery {
   webhook_id: string;
   event: string;
   payload: object;
-  status: 'pending' | 'success' | 'failed';
+  status: "pending" | "success" | "failed";
   status_code?: number;
   response_body?: string;
   error?: string;
@@ -679,6 +705,7 @@ interface OutgoingWebhookDelivery {
 ### GET /api/v1/billing/status
 
 **Response:**
+
 ```typescript
 {
   plan_tier: string;
@@ -693,6 +720,7 @@ interface OutgoingWebhookDelivery {
 ### POST /api/v1/billing/portal
 
 **Request:**
+
 ```typescript
 {
   return_url: string;
@@ -700,6 +728,7 @@ interface OutgoingWebhookDelivery {
 ```
 
 **Response:**
+
 ```typescript
 {
   url: string;
@@ -710,12 +739,12 @@ interface OutgoingWebhookDelivery {
 
 ## API Keys
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/api-keys` | List API keys |
-| POST | `/api/v1/api-keys` | Create API key |
-| GET | `/api/v1/api-keys/{id}` | Get API key |
-| PUT | `/api/v1/api-keys/{id}` | Update API key |
+| Method | Path                    | Description    |
+| ------ | ----------------------- | -------------- |
+| GET    | `/api/v1/api-keys`      | List API keys  |
+| POST   | `/api/v1/api-keys`      | Create API key |
+| GET    | `/api/v1/api-keys/{id}` | Get API key    |
+| PUT    | `/api/v1/api-keys/{id}` | Update API key |
 | DELETE | `/api/v1/api-keys/{id}` | Revoke API key |
 
 ### API Key Models
@@ -759,15 +788,15 @@ interface UpdateApiKeyRequest {
 
 ## Organizations
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/v1/organizations` | Create organization (public) |
-| GET | `/api/v1/organizations` | List organizations |
-| GET | `/api/v1/organizations/{id}` | Get organization |
-| PUT | `/api/v1/organizations/{id}` | Update organization |
-| DELETE | `/api/v1/organizations/{id}` | Delete organization |
-| GET | `/api/v1/organizations/usage` | Get usage & limits |
-| GET | `/api/v1/organizations/{id}/members` | Get members |
+| Method | Path                                 | Description                  |
+| ------ | ------------------------------------ | ---------------------------- |
+| POST   | `/api/v1/organizations`              | Create organization (public) |
+| GET    | `/api/v1/organizations`              | List organizations           |
+| GET    | `/api/v1/organizations/{id}`         | Get organization             |
+| PUT    | `/api/v1/organizations/{id}`         | Update organization          |
+| DELETE | `/api/v1/organizations/{id}`         | Delete organization          |
+| GET    | `/api/v1/organizations/usage`        | Get usage & limits           |
+| GET    | `/api/v1/organizations/{id}/members` | Get members                  |
 
 ### Organization Models
 
@@ -776,7 +805,7 @@ interface Organization {
   id: string;
   name: string;
   slug: string;
-  plan_tier: 'free' | 'starter' | 'pro' | 'enterprise';
+  plan_tier: "free" | "starter" | "pro" | "enterprise";
   billing_email?: string;
   settings: object;
   custom_limits?: object;
@@ -860,7 +889,7 @@ interface UsageItem {
 interface UsageWarning {
   resource: string;
   message: string;
-  severity: 'warning' | 'critical' | string;
+  severity: "warning" | "critical" | string;
 }
 
 interface OrganizationMember {
@@ -878,9 +907,9 @@ interface OrganizationMember {
 
 ## Dashboard
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/dashboard` | Aggregated dashboard data (protected) |
+| Method | Path                | Description                           |
+| ------ | ------------------- | ------------------------------------- |
+| GET    | `/api/v1/dashboard` | Aggregated dashboard data (protected) |
 
 ### Dashboard Models
 
@@ -939,32 +968,32 @@ interface RecentActivity {
 
 Each organization gets a unique webhook URL for receiving events from external sources.
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/v1/webhooks/{org_id}/custom` | Custom webhook ingestion |
+| Method | Path                               | Description              |
+| ------ | ---------------------------------- | ------------------------ |
+| POST   | `/api/v1/webhooks/{org_id}/custom` | Custom webhook ingestion |
 
 ### Webhook Token Management
 
 A webhook token is automatically generated when your organization is created.
 Use these endpoints to manage it:
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/organizations/webhook-token` | Get current token and URL |
-| POST | `/api/v1/organizations/webhook-token/regenerate` | Generate new token |
-| POST | `/api/v1/organizations/webhook-token/clear` | Remove token (not recommended) |
+| Method | Path                                             | Description                    |
+| ------ | ------------------------------------------------ | ------------------------------ |
+| GET    | `/api/v1/organizations/webhook-token`            | Get current token and URL      |
+| POST   | `/api/v1/organizations/webhook-token/regenerate` | Generate new token             |
+| POST   | `/api/v1/organizations/webhook-token/clear`      | Remove token (not recommended) |
 
 ```typescript
 // Get your webhook token and URL
-const response = await fetch('/api/v1/organizations/webhook-token', {
-  headers: { 'Authorization': `Bearer ${apiKey}` }
+const response = await fetch("/api/v1/organizations/webhook-token", {
+  headers: { Authorization: `Bearer ${apiKey}` },
 });
 const { webhook_token, webhook_url } = await response.json();
 
 // Regenerate the token
-await fetch('/api/v1/organizations/webhook-token/regenerate', {
-  method: 'POST',
-  headers: { 'Authorization': `Bearer ${apiKey}` }
+await fetch("/api/v1/organizations/webhook-token/regenerate", {
+  method: "POST",
+  headers: { Authorization: `Bearer ${apiKey}` },
 });
 ```
 
@@ -1004,32 +1033,33 @@ interface CustomWebhookRequest {
 
 All admin endpoints require `X-Admin-Key` header authentication.
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/admin/organizations` | List organizations |
-| POST | `/api/v1/admin/organizations` | Create organization |
-| GET | `/api/v1/admin/organizations/{id}` | Get organization detail |
-| PATCH | `/api/v1/admin/organizations/{id}` | Update organization |
-| DELETE | `/api/v1/admin/organizations/{id}` | Delete organization (soft/hard) |
-| POST | `/api/v1/admin/organizations/{id}/api-keys` | Create API key |
-| POST | `/api/v1/admin/organizations/{id}/reset-usage` | Reset usage counters |
-| GET | `/api/v1/admin/stats` | Platform-wide stats |
-| GET | `/api/v1/admin/plans` | List plan tiers & limits |
+| Method | Path                                           | Description                     |
+| ------ | ---------------------------------------------- | ------------------------------- |
+| GET    | `/api/v1/admin/organizations`                  | List organizations              |
+| POST   | `/api/v1/admin/organizations`                  | Create organization             |
+| GET    | `/api/v1/admin/organizations/{id}`             | Get organization detail         |
+| PATCH  | `/api/v1/admin/organizations/{id}`             | Update organization             |
+| DELETE | `/api/v1/admin/organizations/{id}`             | Delete organization (soft/hard) |
+| POST   | `/api/v1/admin/organizations/{id}/api-keys`    | Create API key                  |
+| POST   | `/api/v1/admin/organizations/{id}/reset-usage` | Reset usage counters            |
+| GET    | `/api/v1/admin/stats`                          | Platform-wide stats             |
+| GET    | `/api/v1/admin/plans`                          | List plan tiers & limits        |
 
 ## Real-time
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/ws` | WebSocket connection |
-| GET | `/api/v1/events` | SSE stream (all events) |
-| GET | `/api/v1/events/jobs/{id}` | SSE for specific job |
-| GET | `/api/v1/events/queues/{name}` | SSE for specific queue |
+| Method | Path                           | Description             |
+| ------ | ------------------------------ | ----------------------- |
+| GET    | `/api/v1/ws`                   | WebSocket connection    |
+| GET    | `/api/v1/events`               | SSE stream (all events) |
+| GET    | `/api/v1/events/jobs/{id}`     | SSE for specific job    |
+| GET    | `/api/v1/events/queues/{name}` | SSE for specific queue  |
 
 ### WebSocket Protocol
 
 **Connection:** `wss://api.spooled.cloud/api/v1/ws?token=<jwt>`
 
 **Client Commands:**
+
 ```typescript
 { cmd: 'Subscribe', queue?: string, job_id?: string }
 { cmd: 'Unsubscribe', queue?: string, job_id?: string }
@@ -1037,30 +1067,39 @@ All admin endpoints require `X-Admin-Key` header authentication.
 ```
 
 **Server Events:**
+
 ```typescript
 {
-  type: 'JobStatusChange' | 'JobCreated' | 'JobCompleted' | 'JobFailed' |
-        'QueueStats' | 'WorkerHeartbeat' | 'WorkerRegistered' |
-        'WorkerDeregistered' | 'SystemHealth' | 'Ping' | 'Error';
+  type: "JobStatusChange" |
+    "JobCreated" |
+    "JobCompleted" |
+    "JobFailed" |
+    "QueueStats" |
+    "WorkerHeartbeat" |
+    "WorkerRegistered" |
+    "WorkerDeregistered" |
+    "SystemHealth" |
+    "Ping" |
+    "Error";
   data: object;
 }
 ```
 
 ### Event Type Mapping
 
-| Server enum variant | SDK event name |
-|---------------------|----------------|
-| JobStatusChange | `job.status_changed` |
-| JobCreated | `job.created` |
-| JobCompleted | `job.completed` |
-| JobFailed | `job.failed` |
-| QueueStats | `queue.stats` |
-| WorkerHeartbeat | `worker.heartbeat` |
-| WorkerRegistered | `worker.registered` |
-| WorkerDeregistered | `worker.deregistered` |
-| SystemHealth | `system.health` |
-| Ping | `ping` |
-| Error | `error` |
+| Server enum variant | SDK event name        |
+| ------------------- | --------------------- |
+| JobStatusChange     | `job.status_changed`  |
+| JobCreated          | `job.created`         |
+| JobCompleted        | `job.completed`       |
+| JobFailed           | `job.failed`          |
+| QueueStats          | `queue.stats`         |
+| WorkerHeartbeat     | `worker.heartbeat`    |
+| WorkerRegistered    | `worker.registered`   |
+| WorkerDeregistered  | `worker.deregistered` |
+| SystemHealth        | `system.health`       |
+| Ping                | `ping`                |
+| Error               | `error`               |
 
 ---
 
@@ -1078,20 +1117,21 @@ All API errors return JSON:
 
 ### HTTP Status Codes
 
-| Status | Error Class |
-|--------|-------------|
-| 400 | ValidationError |
-| 401 | AuthenticationError |
-| 403 | AuthorizationError |
-| 404 | NotFoundError |
-| 409 | ConflictError |
-| 413 | PayloadTooLargeError |
-| 429 | RateLimitError |
-| 5xx | ServerError |
+| Status | Error Class          |
+| ------ | -------------------- |
+| 400    | ValidationError      |
+| 401    | AuthenticationError  |
+| 403    | AuthorizationError   |
+| 404    | NotFoundError        |
+| 409    | ConflictError        |
+| 413    | PayloadTooLargeError |
+| 429    | RateLimitError       |
+| 5xx    | ServerError          |
 
 ### Rate Limit Headers
 
 When rate limited (429), the response may include:
+
 - `Retry-After: <seconds>`
 - `X-RateLimit-Limit: <number>`
 - `X-RateLimit-Remaining: <number>`

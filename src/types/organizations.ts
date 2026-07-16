@@ -4,7 +4,7 @@
  * Types for organization operations.
  */
 
-import type { PlanTier, JsonObject } from './common.js';
+import type { PlanTier, JsonObject } from "./common.js";
 
 /** Full organization model */
 export interface Organization {
@@ -117,7 +117,7 @@ export interface UsageItem {
 export interface UsageWarning {
   resource: string;
   message: string;
-  severity: 'warning' | 'critical' | string;
+  severity: "warning" | "critical" | string;
 }
 
 /** Organization member */

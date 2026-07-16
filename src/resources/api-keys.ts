@@ -4,13 +4,13 @@
  * Handles API key operations.
  */
 
-import type { HttpClient } from '../utils/http.js';
+import type { HttpClient } from "../utils/http.js";
 import type {
   ApiKeySummary,
   CreateApiKeyParams,
   CreateApiKeyResponse,
   UpdateApiKeyParams,
-} from '../types/api-keys.js';
+} from "../types/api-keys.js";
 
 export class ApiKeysResource {
   constructor(private readonly http: HttpClient) {}
@@ -19,14 +19,14 @@ export class ApiKeysResource {
    * List all API keys (without sensitive data)
    */
   async list(): Promise<ApiKeySummary[]> {
-    return this.http.get<ApiKeySummary[]>('/api-keys');
+    return this.http.get<ApiKeySummary[]>("/api-keys");
   }
 
   /**
    * Create a new API key
    */
   async create(params: CreateApiKeyParams): Promise<CreateApiKeyResponse> {
-    return this.http.post<CreateApiKeyResponse>('/api-keys', params);
+    return this.http.post<CreateApiKeyResponse>("/api-keys", params);
   }
 
   /**

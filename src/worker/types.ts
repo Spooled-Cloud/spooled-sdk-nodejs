@@ -4,8 +4,8 @@
  * Types for the worker runtime.
  */
 
-import type { ClaimedJob } from '../types/jobs.js';
-import type { JsonObject } from '../types/common.js';
+import type { ClaimedJob } from "../types/jobs.js";
+import type { JsonObject } from "../types/common.js";
 
 /** Worker configuration options */
 export interface SpooledWorkerOptions {
@@ -34,7 +34,13 @@ export interface SpooledWorkerOptions {
 }
 
 /** Worker state */
-export type WorkerState = 'idle' | 'starting' | 'running' | 'stopping' | 'stopped' | 'error';
+export type WorkerState =
+  | "idle"
+  | "starting"
+  | "running"
+  | "stopping"
+  | "stopped"
+  | "error";
 
 /** Job context passed to handlers */
 export interface JobContext {
@@ -53,7 +59,11 @@ export interface JobContext {
   /** Update job progress (0-100) */
   progress: (percent: number, message?: string) => Promise<void>;
   /** Log a message */
-  log: (level: 'debug' | 'info' | 'warn' | 'error', message: string, meta?: unknown) => void;
+  log: (
+    level: "debug" | "info" | "warn" | "error",
+    message: string,
+    meta?: unknown,
+  ) => void;
 }
 
 /** Job handler function */
@@ -68,25 +78,30 @@ export interface JobResult {
 
 /** Worker event types */
 export type WorkerEvent =
-  | 'started'
-  | 'stopped'
-  | 'error'
-  | 'job:claimed'
-  | 'job:started'
-  | 'job:completed'
-  | 'job:failed'
-  | 'job:timeout';
+  | "started"
+  | "stopped"
+  | "error"
+  | "job:claimed"
+  | "job:started"
+  | "job:completed"
+  | "job:failed"
+  | "job:timeout";
 
 /** Worker event data types */
 export interface WorkerEventData {
   started: { workerId: string; queueName: string };
   stopped: { workerId: string; reason: string };
   error: { error: Error };
-  'job:claimed': { jobId: string; queueName: string };
-  'job:started': { jobId: string; queueName: string };
-  'job:completed': { jobId: string; queueName: string; result?: JsonObject };
-  'job:failed': { jobId: string; queueName: string; error: string; willRetry: boolean };
-  'job:timeout': { jobId: string; queueName: string };
+  "job:claimed": { jobId: string; queueName: string };
+  "job:started": { jobId: string; queueName: string };
+  "job:completed": { jobId: string; queueName: string; result?: JsonObject };
+  "job:failed": {
+    jobId: string;
+    queueName: string;
+    error: string;
+    willRetry: boolean;
+  };
+  "job:timeout": { jobId: string; queueName: string };
 }
 
 /** Active job tracking */

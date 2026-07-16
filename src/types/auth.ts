@@ -14,7 +14,7 @@ export interface LoginParams {
 export interface LoginResponse {
   accessToken: string;
   refreshToken: string;
-  tokenType: 'Bearer';
+  tokenType: "Bearer";
   expiresIn: number;
   refreshExpiresIn: number;
 }
@@ -27,7 +27,7 @@ export interface RefreshTokenParams {
 /** Token refresh response */
 export interface RefreshTokenResponse {
   accessToken: string;
-  tokenType: 'Bearer';
+  tokenType: "Bearer";
   expiresIn: number;
 }
 

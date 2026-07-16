@@ -7,19 +7,19 @@
  *   SPOOLED_API_KEY - API key for authentication
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { SpooledClient } from '../../src/client.js';
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { SpooledClient } from "../../src/client.js";
 
-describe('Jobs Integration', () => {
+describe("Jobs Integration", () => {
   let client: SpooledClient;
   let createdJobIds: string[] = [];
 
   beforeAll(() => {
     const apiKey = process.env.SPOOLED_API_KEY;
-    const baseUrl = process.env.SPOOLED_API_URL || 'http://localhost:3000';
+    const baseUrl = process.env.SPOOLED_API_URL || "http://localhost:3000";
 
     if (!apiKey) {
-      throw new Error('SPOOLED_API_KEY environment variable is required');
+      throw new Error("SPOOLED_API_KEY environment variable is required");
     }
 
     client = new SpooledClient({ apiKey, baseUrl });
@@ -36,10 +36,10 @@ describe('Jobs Integration', () => {
     }
   });
 
-  it('should create a job', async () => {
+  it("should create a job", async () => {
     const result = await client.jobs.create({
-      queueName: 'test-queue',
-      payload: { message: 'Hello from integration test' },
+      queueName: "test-queue",
+      payload: { message: "Hello from integration test" },
     });
 
     expect(result.id).toBeTruthy();
@@ -47,44 +47,44 @@ describe('Jobs Integration', () => {
     createdJobIds.push(result.id);
   });
 
-  it('should get a job by ID', async () => {
+  it("should get a job by ID", async () => {
     const createResult = await client.jobs.create({
-      queueName: 'test-queue',
-      payload: { key: 'value' },
+      queueName: "test-queue",
+      payload: { key: "value" },
     });
     createdJobIds.push(createResult.id);
 
     const job = await client.jobs.get(createResult.id);
 
     expect(job.id).toBe(createResult.id);
-    expect(job.queueName).toBe('test-queue');
-    expect(job.payload).toEqual({ key: 'value' });
+    expect(job.queueName).toBe("test-queue");
+    expect(job.payload).toEqual({ key: "value" });
   });
 
-  it('should list jobs', async () => {
+  it("should list jobs", async () => {
     const jobs = await client.jobs.list({ limit: 10 });
     expect(Array.isArray(jobs)).toBe(true);
   });
 
-  it('should list jobs filtered by queue', async () => {
+  it("should list jobs filtered by queue", async () => {
     const jobs = await client.jobs.list({
-      queueName: 'test-queue',
+      queueName: "test-queue",
       limit: 10,
     });
 
     for (const job of jobs) {
-      expect(job.queueName).toBe('test-queue');
+      expect(job.queueName).toBe("test-queue");
     }
   });
 
-  it('should create job with options', async () => {
+  it("should create job with options", async () => {
     const result = await client.jobs.create({
-      queueName: 'test-queue',
-      payload: { data: 'test' },
+      queueName: "test-queue",
+      payload: { data: "test" },
       priority: 5,
       maxRetries: 5,
       timeoutSeconds: 120,
-      tags: { env: 'test', type: 'integration' },
+      tags: { env: "test", type: "integration" },
     });
 
     createdJobIds.push(result.id);
@@ -93,34 +93,34 @@ describe('Jobs Integration', () => {
     expect(job.priority).toBe(5);
     expect(job.maxRetries).toBe(5);
     expect(job.timeoutSeconds).toBe(120);
-    expect(job.tags).toEqual({ env: 'test', type: 'integration' });
+    expect(job.tags).toEqual({ env: "test", type: "integration" });
   });
 
-  it('should cancel a job', async () => {
+  it("should cancel a job", async () => {
     const result = await client.jobs.create({
-      queueName: 'test-queue',
+      queueName: "test-queue",
       payload: { toCancel: true },
     });
 
     await client.jobs.cancel(result.id);
 
     const job = await client.jobs.get(result.id);
-    expect(job.status).toBe('cancelled');
+    expect(job.status).toBe("cancelled");
   });
 
-  it('should get job stats', async () => {
+  it("should get job stats", async () => {
     const stats = await client.jobs.getStats();
 
-    expect(stats).toHaveProperty('pending');
-    expect(stats).toHaveProperty('processing');
-    expect(stats).toHaveProperty('completed');
-    expect(stats).toHaveProperty('failed');
-    expect(stats).toHaveProperty('total');
+    expect(stats).toHaveProperty("pending");
+    expect(stats).toHaveProperty("processing");
+    expect(stats).toHaveProperty("completed");
+    expect(stats).toHaveProperty("failed");
+    expect(stats).toHaveProperty("total");
   });
 
-  it('should bulk enqueue jobs', async () => {
+  it("should bulk enqueue jobs", async () => {
     const result = await client.jobs.bulkEnqueue({
-      queueName: 'test-queue',
+      queueName: "test-queue",
       jobs: [
         { payload: { batch: 1 } },
         { payload: { batch: 2 } },
@@ -137,10 +137,10 @@ describe('Jobs Integration', () => {
     }
   });
 
-  it('should get batch status', async () => {
+  it("should get batch status", async () => {
     const createResults = await Promise.all([
-      client.jobs.create({ queueName: 'test-queue', payload: { n: 1 } }),
-      client.jobs.create({ queueName: 'test-queue', payload: { n: 2 } }),
+      client.jobs.create({ queueName: "test-queue", payload: { n: 1 } }),
+      client.jobs.create({ queueName: "test-queue", payload: { n: 2 } }),
     ]);
 
     const ids = createResults.map((r) => r.id);

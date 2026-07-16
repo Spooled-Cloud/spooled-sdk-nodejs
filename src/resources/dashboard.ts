@@ -4,8 +4,8 @@
  * Provides aggregated dashboard data (used by the Spooled dashboard UI).
  */
 
-import type { HttpClient } from '../utils/http.js';
-import type { DashboardData } from '../types/dashboard.js';
+import type { HttpClient } from "../utils/http.js";
+import type { DashboardData } from "../types/dashboard.js";
 
 export class DashboardResource {
   constructor(private readonly http: HttpClient) {}
@@ -16,6 +16,6 @@ export class DashboardResource {
    * GET /api/v1/dashboard
    */
   async get(): Promise<DashboardData> {
-    return this.http.get<DashboardData>('/dashboard');
+    return this.http.get<DashboardData>("/dashboard");
   }
 }

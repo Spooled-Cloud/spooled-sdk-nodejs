@@ -11,6 +11,7 @@ The gRPC API is **~28x faster** than the HTTP API when Redis caching is enabled:
 - **Throughput**: Suitable for 1000+ jobs/second per worker
 
 Performance optimizations:
+
 - ✅ **Redis API key caching** eliminates bcrypt verification on cache hits
 - ✅ **Batch operations** reduce round trips
 - ✅ **Connection pooling** reuses HTTP/2 streams
@@ -28,10 +29,12 @@ When limits are exceeded, you'll receive a `RESOURCE_EXHAUSTED` status:
 
 ```typescript
 try {
-  await grpcClient.queue.enqueue({ /* ... */ });
+  await grpcClient.queue.enqueue({
+    /* ... */
+  });
 } catch (error) {
   if (error.code === grpc.status.RESOURCE_EXHAUSTED) {
-    console.log('Plan limit exceeded:', error.details);
+    console.log("Plan limit exceeded:", error.details);
     // Example: "active jobs limit reached (10/10). Upgrade to starter for higher limits."
   }
 }
@@ -39,14 +42,14 @@ try {
 
 ## When to Use gRPC
 
-| Use Case | Recommended API |
-|----------|-----------------|
-| Web/mobile apps | REST |
-| Dashboard/admin interfaces | REST |
-| High-throughput workers | **gRPC** |
-| Streaming job delivery | **gRPC** |
-| Low-latency operations | **gRPC** |
-| Batch processing | **gRPC** |
+| Use Case                   | Recommended API |
+| -------------------------- | --------------- |
+| Web/mobile apps            | REST            |
+| Dashboard/admin interfaces | REST            |
+| High-throughput workers    | **gRPC**        |
+| Streaming job delivery     | **gRPC**        |
+| Low-latency operations     | **gRPC**        |
+| Batch processing           | **gRPC**        |
 
 ## Prerequisites
 
@@ -59,14 +62,14 @@ The proto file is included in the SDK package at `node_modules/@spooled/sdk/prot
 ## Basic Setup
 
 ```typescript
-import * as grpc from '@grpc/grpc-js';
-import * as protoLoader from '@grpc/proto-loader';
-import { join } from 'path';
+import * as grpc from "@grpc/grpc-js";
+import * as protoLoader from "@grpc/proto-loader";
+import { join } from "path";
 
 // Load the proto file
 const PROTO_PATH = join(
-  require.resolve('@spooled/sdk'),
-  '../../proto/spooled.proto'
+  require.resolve("@spooled/sdk"),
+  "../../proto/spooled.proto",
 );
 
 const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
@@ -81,17 +84,17 @@ const spooled = grpc.loadPackageDefinition(packageDefinition).spooled.v1 as any;
 
 // Create clients
 // For Spooled Cloud:
-const GRPC_ADDRESS = 'grpc.spooled.cloud:443';
+const GRPC_ADDRESS = "grpc.spooled.cloud:443";
 // For self-hosted: 'your-server.com:443' or 'localhost:50051'
 
 const queueClient = new spooled.QueueService(
   GRPC_ADDRESS,
-  grpc.credentials.createSsl()
+  grpc.credentials.createSsl(),
 );
 
 const workerClient = new spooled.WorkerService(
   GRPC_ADDRESS,
-  grpc.credentials.createSsl()
+  grpc.credentials.createSsl(),
 );
 
 // For local development without TLS:
@@ -103,11 +106,11 @@ const workerClient = new spooled.WorkerService(
 // Create metadata with API key
 function createMetadata(apiKey: string): grpc.Metadata {
   const metadata = new grpc.Metadata();
-  metadata.add('x-api-key', apiKey);
+  metadata.add("x-api-key", apiKey);
   return metadata;
 }
 
-const metadata = createMetadata('sp_live_your_api_key');
+const metadata = createMetadata("sp_live_your_api_key");
 ```
 
 ## Enqueue Jobs
@@ -116,20 +119,20 @@ const metadata = createMetadata('sp_live_your_api_key');
 // Single job
 queueClient.Enqueue(
   {
-    queueName: 'emails',
-    payload: JSON.stringify({ to: 'user@example.com', subject: 'Hello' }),
+    queueName: "emails",
+    payload: JSON.stringify({ to: "user@example.com", subject: "Hello" }),
     priority: 5,
     maxRetries: 3,
   },
   metadata,
   (error, response) => {
     if (error) {
-      console.error('Enqueue failed:', error);
+      console.error("Enqueue failed:", error);
       return;
     }
-    console.log('Job ID:', response.jobId);
-    console.log('Created:', response.created);
-  }
+    console.log("Job ID:", response.jobId);
+    console.log("Created:", response.created);
+  },
 );
 ```
 
@@ -147,8 +150,8 @@ function enqueue(request: any): Promise<any> {
 
 // Usage
 const result = await enqueue({
-  queueName: 'emails',
-  payload: JSON.stringify({ to: 'user@example.com' }),
+  queueName: "emails",
+  payload: JSON.stringify({ to: "user@example.com" }),
 });
 ```
 
@@ -157,15 +160,15 @@ const result = await enqueue({
 ```typescript
 queueClient.Dequeue(
   {
-    queueName: 'emails',
-    workerId: 'worker-1',
+    queueName: "emails",
+    workerId: "worker-1",
     limit: 10,
     leaseDurationSecs: 300,
   },
   metadata,
   (error, response) => {
     if (error) {
-      console.error('Dequeue failed:', error);
+      console.error("Dequeue failed:", error);
       return;
     }
 
@@ -173,7 +176,7 @@ queueClient.Dequeue(
       console.log(`Job ${job.id}:`, JSON.parse(job.payload));
       processJob(job);
     }
-  }
+  },
 );
 ```
 
@@ -184,28 +187,28 @@ The most powerful feature: receive jobs as a continuous stream.
 ```typescript
 const stream = queueClient.StreamJobs(
   {
-    queueName: 'emails',
-    workerId: 'worker-1',
+    queueName: "emails",
+    workerId: "worker-1",
     leaseDurationSecs: 300,
   },
-  metadata
+  metadata,
 );
 
-stream.on('data', (job) => {
+stream.on("data", (job) => {
   console.log(`Received job: ${job.id}`);
   const payload = JSON.parse(job.payload);
 
   processJob(job.id, payload)
-    .then((result) => completeJob(job.id, 'worker-1', job.leaseId, result))
-    .catch((error) => failJob(job.id, 'worker-1', job.leaseId, error.message));
+    .then((result) => completeJob(job.id, "worker-1", job.leaseId, result))
+    .catch((error) => failJob(job.id, "worker-1", job.leaseId, error.message));
 });
 
-stream.on('error', (error) => {
-  console.error('Stream error:', error);
+stream.on("error", (error) => {
+  console.error("Stream error:", error);
 });
 
-stream.on('end', () => {
-  console.log('Stream ended');
+stream.on("end", () => {
+  console.log("Stream ended");
 });
 
 // Cancel stream when done
@@ -220,43 +223,49 @@ Full duplex streaming for the highest performance:
 const call = workerClient.ProcessJobs(metadata);
 
 // Handle incoming jobs from server
-call.on('data', (response) => {
+call.on("data", (response) => {
   if (response.job) {
     console.log(`Received job: ${response.job.id}`);
 
-    processJobAsync(response.job).then((result) => {
-      // Send completion back to server
-      call.write({
-        complete: {
-          jobId: response.job.id,
-          workerId: 'worker-1',
-          ...(response.job.leaseId != null && { leaseId: response.job.leaseId }),
-          result: JSON.stringify(result),
-        },
+    processJobAsync(response.job)
+      .then((result) => {
+        // Send completion back to server
+        call.write({
+          complete: {
+            jobId: response.job.id,
+            workerId: "worker-1",
+            ...(response.job.leaseId != null && {
+              leaseId: response.job.leaseId,
+            }),
+            result: JSON.stringify(result),
+          },
+        });
+      })
+      .catch((error) => {
+        // Send failure back to server
+        call.write({
+          fail: {
+            jobId: response.job.id,
+            workerId: "worker-1",
+            ...(response.job.leaseId != null && {
+              leaseId: response.job.leaseId,
+            }),
+            error: error.message,
+          },
+        });
       });
-    }).catch((error) => {
-      // Send failure back to server
-      call.write({
-        fail: {
-          jobId: response.job.id,
-          workerId: 'worker-1',
-          ...(response.job.leaseId != null && { leaseId: response.job.leaseId }),
-          error: error.message,
-        },
-      });
-    });
   }
 
   if (response.heartbeatAck) {
-    console.log('Heartbeat acknowledged');
+    console.log("Heartbeat acknowledged");
   }
 });
 
 // Request jobs
 call.write({
   subscribe: {
-    queueName: 'emails',
-    workerId: 'worker-1',
+    queueName: "emails",
+    workerId: "worker-1",
     leaseDurationSecs: 300,
     maxConcurrent: 10,
   },
@@ -266,25 +275,30 @@ call.write({
 setInterval(() => {
   call.write({
     heartbeat: {
-      workerId: 'worker-1',
+      workerId: "worker-1",
     },
   });
 }, 10000);
 
 // Handle stream events
-call.on('error', (error) => {
-  console.error('Stream error:', error);
+call.on("error", (error) => {
+  console.error("Stream error:", error);
 });
 
-call.on('end', () => {
-  console.log('Stream ended');
+call.on("end", () => {
+  console.log("Stream ended");
 });
 ```
 
 ## Complete and Fail Jobs
 
 ```typescript
-function completeJob(jobId: string, workerId: string, leaseId: string | null | undefined, result?: any): Promise<void> {
+function completeJob(
+  jobId: string,
+  workerId: string,
+  leaseId: string | null | undefined,
+  result?: any,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     queueClient.Complete(
       {
@@ -297,12 +311,17 @@ function completeJob(jobId: string, workerId: string, leaseId: string | null | u
       (error, response) => {
         if (error) reject(error);
         else resolve();
-      }
+      },
     );
   });
 }
 
-function failJob(jobId: string, workerId: string, leaseId: string | null | undefined, errorMessage: string): Promise<void> {
+function failJob(
+  jobId: string,
+  workerId: string,
+  leaseId: string | null | undefined,
+  errorMessage: string,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     queueClient.Fail(
       {
@@ -315,7 +334,7 @@ function failJob(jobId: string, workerId: string, leaseId: string | null | undef
       (error, response) => {
         if (error) reject(error);
         else resolve();
-      }
+      },
     );
   });
 }
@@ -326,7 +345,12 @@ function failJob(jobId: string, workerId: string, leaseId: string | null | undef
 Keep jobs alive during long processing. Preserve the dequeued job's `leaseId` and send it with every renew/complete/fail operation; a stale token is rejected with gRPC `FAILED_PRECONDITION`.
 
 ```typescript
-function renewLease(jobId: string, workerId: string, leaseId: string | null | undefined, durationSecs: number): Promise<void> {
+function renewLease(
+  jobId: string,
+  workerId: string,
+  leaseId: string | null | undefined,
+  durationSecs: number,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     queueClient.RenewLease(
       {
@@ -339,7 +363,7 @@ function renewLease(jobId: string, workerId: string, leaseId: string | null | un
       (error, response) => {
         if (error) reject(error);
         else resolve();
-      }
+      },
     );
   });
 }
@@ -363,20 +387,20 @@ async function processWithLeaseRenewal(job: any) {
 
 ```typescript
 queueClient.GetQueueStats(
-  { queueName: 'emails' },
+  { queueName: "emails" },
   metadata,
   (error, response) => {
     if (error) {
-      console.error('GetQueueStats failed:', error);
+      console.error("GetQueueStats failed:", error);
       return;
     }
 
-    console.log('Queue:', response.queueName);
-    console.log('Pending:', response.pending);
-    console.log('Processing:', response.processing);
-    console.log('Completed:', response.completed);
-    console.log('Failed:', response.failed);
-  }
+    console.log("Queue:", response.queueName);
+    console.log("Pending:", response.pending);
+    console.log("Processing:", response.processing);
+    console.log("Completed:", response.completed);
+    console.log("Failed:", response.failed);
+  },
 );
 ```
 
@@ -385,25 +409,25 @@ queueClient.GetQueueStats(
 gRPC errors have status codes:
 
 ```typescript
-import { status } from '@grpc/grpc-js';
+import { status } from "@grpc/grpc-js";
 
-stream.on('error', (error: any) => {
+stream.on("error", (error: any) => {
   switch (error.code) {
     case status.UNAUTHENTICATED:
-      console.error('Invalid API key');
+      console.error("Invalid API key");
       break;
     case status.PERMISSION_DENIED:
-      console.error('Access denied');
+      console.error("Access denied");
       break;
     case status.UNAVAILABLE:
-      console.error('Service unavailable, retrying...');
+      console.error("Service unavailable, retrying...");
       reconnect();
       break;
     case status.DEADLINE_EXCEEDED:
-      console.error('Request timed out');
+      console.error("Request timed out");
       break;
     default:
-      console.error('gRPC error:', error.message);
+      console.error("gRPC error:", error.message);
   }
 });
 ```
@@ -414,16 +438,16 @@ stream.on('error', (error: any) => {
 
 ```typescript
 const channelOptions = {
-  'grpc.keepalive_time_ms': 30000,           // Send keepalive every 30s
-  'grpc.keepalive_timeout_ms': 10000,        // Wait 10s for keepalive ack
-  'grpc.keepalive_permit_without_calls': 1,  // Allow keepalive without active calls
-  'grpc.http2.min_time_between_pings_ms': 10000,
+  "grpc.keepalive_time_ms": 30000, // Send keepalive every 30s
+  "grpc.keepalive_timeout_ms": 10000, // Wait 10s for keepalive ack
+  "grpc.keepalive_permit_without_calls": 1, // Allow keepalive without active calls
+  "grpc.http2.min_time_between_pings_ms": 10000,
 };
 
 const queueClient = new spooled.QueueService(
-  'grpc.spooled.cloud:443',
+  "grpc.spooled.cloud:443",
   grpc.credentials.createSsl(),
-  channelOptions
+  channelOptions,
 );
 ```
 
@@ -435,8 +459,8 @@ function createClientWithRetry(maxRetries = 5) {
 
   function connect() {
     const client = new spooled.QueueService(
-      'grpc.spooled.cloud:443',
-      grpc.credentials.createSsl()
+      "grpc.spooled.cloud:443",
+      grpc.credentials.createSsl(),
     );
 
     // Check connection health
@@ -447,11 +471,11 @@ function createClientWithRetry(maxRetries = 5) {
           console.log(`Connection failed, retry ${retries}/${maxRetries}`);
           setTimeout(connect, 1000 * retries);
         } else {
-          console.error('Max retries exceeded');
+          console.error("Max retries exceeded");
         }
       } else {
         retries = 0;
-        console.log('Connected to gRPC server');
+        console.log("Connected to gRPC server");
       }
     });
 
@@ -465,12 +489,12 @@ function createClientWithRetry(maxRetries = 5) {
 ## Full Streaming Worker Example
 
 ```typescript
-import * as grpc from '@grpc/grpc-js';
-import * as protoLoader from '@grpc/proto-loader';
+import * as grpc from "@grpc/grpc-js";
+import * as protoLoader from "@grpc/proto-loader";
 
 async function main() {
   // Load proto
-  const packageDefinition = protoLoader.loadSync('spooled.proto', {
+  const packageDefinition = protoLoader.loadSync("spooled.proto", {
     keepCase: false,
     longs: String,
     enums: String,
@@ -478,30 +502,31 @@ async function main() {
     oneofs: true,
   });
 
-  const spooled = grpc.loadPackageDefinition(packageDefinition).spooled.v1 as any;
+  const spooled = grpc.loadPackageDefinition(packageDefinition).spooled
+    .v1 as any;
 
   // Create client
   const client = new spooled.QueueService(
-    'grpc.spooled.cloud:443',
-    grpc.credentials.createSsl()
+    "grpc.spooled.cloud:443",
+    grpc.credentials.createSsl(),
   );
 
   const metadata = new grpc.Metadata();
-  metadata.add('x-api-key', process.env.SPOOLED_API_KEY!);
+  metadata.add("x-api-key", process.env.SPOOLED_API_KEY!);
 
   // Start streaming
   const stream = client.StreamJobs(
     {
-      queueName: 'emails',
+      queueName: "emails",
       workerId: `worker-${process.pid}`,
       leaseDurationSecs: 300,
     },
-    metadata
+    metadata,
   );
 
   const activeJobs = new Map<string, NodeJS.Timeout>();
 
-  stream.on('data', async (job: any) => {
+  stream.on("data", async (job: any) => {
     console.log(`Received job: ${job.id}`);
 
     // Start lease renewal
@@ -509,7 +534,7 @@ async function main() {
       client.RenewLease(
         { jobId: job.id, leaseDurationSecs: 300 },
         metadata,
-        () => {}
+        () => {},
       );
     }, 60000);
     activeJobs.set(job.id, renewalTimer);
@@ -524,31 +549,27 @@ async function main() {
         (err) => {
           if (err) console.error(`Complete failed for ${job.id}:`, err);
           else console.log(`Completed: ${job.id}`);
-        }
+        },
       );
     } catch (error: any) {
-      client.Fail(
-        { jobId: job.id, error: error.message },
-        metadata,
-        (err) => {
-          if (err) console.error(`Fail failed for ${job.id}:`, err);
-          else console.log(`Failed: ${job.id}`);
-        }
-      );
+      client.Fail({ jobId: job.id, error: error.message }, metadata, (err) => {
+        if (err) console.error(`Fail failed for ${job.id}:`, err);
+        else console.log(`Failed: ${job.id}`);
+      });
     } finally {
       clearInterval(activeJobs.get(job.id));
       activeJobs.delete(job.id);
     }
   });
 
-  stream.on('error', (error) => {
-    console.error('Stream error:', error);
+  stream.on("error", (error) => {
+    console.error("Stream error:", error);
     process.exit(1);
   });
 
   // Graceful shutdown
-  process.on('SIGTERM', () => {
-    console.log('Shutting down...');
+  process.on("SIGTERM", () => {
+    console.log("Shutting down...");
     stream.cancel();
     activeJobs.forEach((timer) => clearInterval(timer));
     client.close();
@@ -557,7 +578,7 @@ async function main() {
 
 async function processEmail(payload: any) {
   // Your email sending logic
-  console.log('Sending email to:', payload.to);
+  console.log("Sending email to:", payload.to);
   await new Promise((r) => setTimeout(r, 1000)); // Simulate work
   return { sent: true };
 }
@@ -572,35 +593,36 @@ For self-hosted deployments, configure the gRPC address to point to your server:
 ```typescript
 // Self-hosted with TLS
 const client = new spooled.QueueService(
-  'grpc.your-company.com:443',
-  grpc.credentials.createSsl()
+  "grpc.your-company.com:443",
+  grpc.credentials.createSsl(),
 );
 
 // Self-hosted without TLS (development only)
 const devClient = new spooled.QueueService(
-  'localhost:50051',
-  grpc.credentials.createInsecure()
+  "localhost:50051",
+  grpc.credentials.createInsecure(),
 );
 
 // With custom root certificate
-const fs = require('fs');
-const rootCert = fs.readFileSync('/path/to/ca.pem');
+const fs = require("fs");
+const rootCert = fs.readFileSync("/path/to/ca.pem");
 const credentials = grpc.credentials.createSsl(rootCert);
 const customTlsClient = new spooled.QueueService(
-  'grpc.your-company.com:443',
-  credentials
+  "grpc.your-company.com:443",
+  credentials,
 );
 ```
 
 ### Environment-Based Configuration
 
 ```typescript
-const grpcAddress = process.env.SPOOLED_GRPC_ADDRESS || 'grpc.spooled.cloud:443';
-const useTls = !grpcAddress.startsWith('localhost');
+const grpcAddress =
+  process.env.SPOOLED_GRPC_ADDRESS || "grpc.spooled.cloud:443";
+const useTls = !grpcAddress.startsWith("localhost");
 
 const client = new spooled.QueueService(
   grpcAddress,
-  useTls ? grpc.credentials.createSsl() : grpc.credentials.createInsecure()
+  useTls ? grpc.credentials.createSsl() : grpc.credentials.createInsecure(),
 );
 ```
 
@@ -611,6 +633,7 @@ Cloudflare Tunnel **requires HTTPS** for HTTP/2 connections (which gRPC uses). Y
 #### Required Configuration
 
 1. **Enable TLS on the backend** (default in `docker-compose.prod.yml`):
+
    ```yaml
    environment:
      GRPC_TLS_ENABLED: "true"
@@ -625,8 +648,8 @@ Cloudflare Tunnel **requires HTTPS** for HTTP/2 connections (which gRPC uses). Y
 3. **Connect with TLS from SDK**:
    ```typescript
    const client = new spooled.QueueService(
-     'grpc.your-domain.com:443',
-     grpc.credentials.createSsl()
+     "grpc.your-domain.com:443",
+     grpc.credentials.createSsl(),
    );
    ```
 
@@ -646,19 +669,22 @@ environment:
 ```
 
 Then connect without TLS:
+
 ```typescript
 const client = new spooled.QueueService(
-  'localhost:50051',
-  grpc.credentials.createInsecure()
+  "localhost:50051",
+  grpc.credentials.createInsecure(),
 );
 ```
 
 ## Proto File Reference
 
 The full proto file is available at:
+
 - SDK: `node_modules/@spooled/sdk/proto/spooled.proto`
 - GitHub: [spooled-backend/proto/spooled.proto](https://github.com/Spooled-Cloud/spooled-backend/blob/main/proto/spooled.proto)
 
 Key services:
+
 - `QueueService`: Enqueue, Dequeue, StreamJobs, Complete, Fail, RenewLease
 - `WorkerService`: ProcessJobs (bidirectional streaming)

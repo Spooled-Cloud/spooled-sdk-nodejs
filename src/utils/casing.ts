@@ -10,17 +10,17 @@
  * These typically contain user-defined JSON that shouldn't be modified.
  */
 const SKIP_CONVERSION_KEYS = new Set([
-  'payload',
-  'result',
-  'metadata',
-  'tags',
-  'settings',
-  'details',
-  'extra',
-  'payloadTemplate',
-  'payload_template',
-  'customLimits',
-  'custom_limits',
+  "payload",
+  "result",
+  "metadata",
+  "tags",
+  "settings",
+  "details",
+  "extra",
+  "payloadTemplate",
+  "payload_template",
+  "customLimits",
+  "custom_limits",
 ]);
 
 /**
@@ -28,12 +28,12 @@ const SKIP_CONVERSION_KEYS = new Set([
  */
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return (
-    typeof value === 'object' &&
+    typeof value === "object" &&
     value !== null &&
     !Array.isArray(value) &&
     !(value instanceof Date) &&
     !(value instanceof RegExp) &&
-    Object.prototype.toString.call(value) === '[object Object]'
+    Object.prototype.toString.call(value) === "[object Object]"
   );
 }
 
@@ -63,7 +63,10 @@ export function snakeToCamel(str: string): string {
  * @param skipDeepConversion - Whether current context should skip deep conversion of values
  * @returns Object with snake_case keys
  */
-export function toSnakeCase<T = unknown>(obj: T, skipDeepConversion = false): T {
+export function toSnakeCase<T = unknown>(
+  obj: T,
+  skipDeepConversion = false,
+): T {
   if (obj === null || obj === undefined) {
     return obj;
   }
@@ -86,7 +89,10 @@ export function toSnakeCase<T = unknown>(obj: T, skipDeepConversion = false): T 
     const snakeKey = camelToSnake(key);
 
     // Check if this key's value should skip deep conversion
-    const shouldSkip = skipDeepConversion || SKIP_CONVERSION_KEYS.has(key) || SKIP_CONVERSION_KEYS.has(snakeKey);
+    const shouldSkip =
+      skipDeepConversion ||
+      SKIP_CONVERSION_KEYS.has(key) ||
+      SKIP_CONVERSION_KEYS.has(snakeKey);
 
     if (shouldSkip) {
       // Don't convert the value, just preserve it as-is
@@ -108,7 +114,10 @@ export function toSnakeCase<T = unknown>(obj: T, skipDeepConversion = false): T 
  * @param skipDeepConversion - Whether current context should skip deep conversion of values
  * @returns Object with camelCase keys
  */
-export function toCamelCase<T = unknown>(obj: T, skipDeepConversion = false): T {
+export function toCamelCase<T = unknown>(
+  obj: T,
+  skipDeepConversion = false,
+): T {
   if (obj === null || obj === undefined) {
     return obj;
   }
@@ -131,7 +140,10 @@ export function toCamelCase<T = unknown>(obj: T, skipDeepConversion = false): T 
     const camelKey = snakeToCamel(key);
 
     // Check if this key's value should skip deep conversion
-    const shouldSkip = skipDeepConversion || SKIP_CONVERSION_KEYS.has(key) || SKIP_CONVERSION_KEYS.has(camelKey);
+    const shouldSkip =
+      skipDeepConversion ||
+      SKIP_CONVERSION_KEYS.has(key) ||
+      SKIP_CONVERSION_KEYS.has(camelKey);
 
     if (shouldSkip) {
       // Don't convert the value, just preserve it as-is
@@ -164,7 +176,7 @@ export function convertResponse<T>(body: T): T {
  * Only converts top-level keys, not nested objects.
  */
 export function convertQueryParams(
-  params: Record<string, string | number | boolean | undefined>
+  params: Record<string, string | number | boolean | undefined>,
 ): Record<string, string> {
   const result: Record<string, string> = {};
 

@@ -4,7 +4,7 @@
  * Handles organization operations including webhook token management.
  */
 
-import type { HttpClient } from '../utils/http.js';
+import type { HttpClient } from "../utils/http.js";
 import type {
   Organization,
   OrganizationSummary,
@@ -15,7 +15,7 @@ import type {
   OrganizationMember,
   CheckSlugResponse,
   WebhookTokenResponse,
-} from '../types/organizations.js';
+} from "../types/organizations.js";
 
 export class OrganizationsResource {
   constructor(private readonly http: HttpClient) {}
@@ -23,15 +23,17 @@ export class OrganizationsResource {
   /**
    * Create a new organization (public endpoint, no auth required)
    */
-  async create(params: CreateOrganizationParams): Promise<CreateOrganizationResponse> {
-    return this.http.post<CreateOrganizationResponse>('/organizations', params);
+  async create(
+    params: CreateOrganizationParams,
+  ): Promise<CreateOrganizationResponse> {
+    return this.http.post<CreateOrganizationResponse>("/organizations", params);
   }
 
   /**
    * List organizations
    */
   async list(): Promise<OrganizationSummary[]> {
-    return this.http.get<OrganizationSummary[]>('/organizations');
+    return this.http.get<OrganizationSummary[]>("/organizations");
   }
 
   /**
@@ -44,7 +46,10 @@ export class OrganizationsResource {
   /**
    * Update an organization
    */
-  async update(id: string, params: UpdateOrganizationParams): Promise<Organization> {
+  async update(
+    id: string,
+    params: UpdateOrganizationParams,
+  ): Promise<Organization> {
     return this.http.put<Organization>(`/organizations/${id}`, params);
   }
 
@@ -59,7 +64,7 @@ export class OrganizationsResource {
    * Get organization usage and limits
    */
   async getUsage(): Promise<OrganizationUsage> {
-    return this.http.get<OrganizationUsage>('/organizations/usage');
+    return this.http.get<OrganizationUsage>("/organizations/usage");
   }
 
   /**
@@ -73,7 +78,7 @@ export class OrganizationsResource {
    * Check slug availability
    */
   async checkSlug(slug: string): Promise<CheckSlugResponse> {
-    return this.http.get<CheckSlugResponse>('/organizations/check-slug', {
+    return this.http.get<CheckSlugResponse>("/organizations/check-slug", {
       params: { slug },
     });
   }
@@ -82,7 +87,9 @@ export class OrganizationsResource {
    * Generate a unique slug from an organization name
    */
   async generateSlug(name: string): Promise<{ slug: string }> {
-    return this.http.post<{ slug: string }>('/organizations/generate-slug', { name });
+    return this.http.post<{ slug: string }>("/organizations/generate-slug", {
+      name,
+    });
   }
 
   /**
@@ -98,7 +105,7 @@ export class OrganizationsResource {
    * ```
    */
   async getWebhookToken(): Promise<WebhookTokenResponse> {
-    return this.http.get<WebhookTokenResponse>('/organizations/webhook-token');
+    return this.http.get<WebhookTokenResponse>("/organizations/webhook-token");
   }
 
   /**
@@ -114,7 +121,9 @@ export class OrganizationsResource {
    * ```
    */
   async regenerateWebhookToken(): Promise<WebhookTokenResponse> {
-    return this.http.post<WebhookTokenResponse>('/organizations/webhook-token/regenerate');
+    return this.http.post<WebhookTokenResponse>(
+      "/organizations/webhook-token/regenerate",
+    );
   }
 
   /**
@@ -129,6 +138,6 @@ export class OrganizationsResource {
    * ```
    */
   async clearWebhookToken(): Promise<void> {
-    await this.http.post('/organizations/webhook-token/clear');
+    await this.http.post("/organizations/webhook-token/clear");
   }
 }

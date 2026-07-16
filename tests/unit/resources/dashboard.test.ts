@@ -2,15 +2,15 @@
  * Dashboard Resource tests
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { http, HttpResponse } from 'msw';
-import { setupServer } from 'msw/node';
-import { SpooledClient } from '../../../src/client.js';
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { http, HttpResponse } from "msw";
+import { setupServer } from "msw/node";
+import { SpooledClient } from "../../../src/client.js";
 
 const server = setupServer();
 
 beforeEach(() => {
-  server.listen({ onUnhandledRequest: 'error' });
+  server.listen({ onUnhandledRequest: "error" });
 });
 
 afterEach(() => {
@@ -18,20 +18,20 @@ afterEach(() => {
   server.close();
 });
 
-describe('DashboardResource', () => {
-  const createClient = () => new SpooledClient({ apiKey: 'sk_test_123' });
+describe("DashboardResource", () => {
+  const createClient = () => new SpooledClient({ apiKey: "sk_test_123" });
 
-  it('should fetch dashboard data', async () => {
+  it("should fetch dashboard data", async () => {
     server.use(
-      http.get('https://api.spooled.cloud/api/v1/dashboard', () => {
+      http.get("https://api.spooled.cloud/api/v1/dashboard", () => {
         return HttpResponse.json({
           system: {
-            version: '1.0.26',
+            version: "1.0.26",
             uptime_seconds: 123,
-            started_at: '2025-01-01T00:00:00Z',
-            database_status: 'healthy',
-            cache_status: 'healthy',
-            environment: 'production',
+            started_at: "2025-01-01T00:00:00Z",
+            database_status: "healthy",
+            cache_status: "healthy",
+            environment: "production",
           },
           jobs: {
             total: 1000,
@@ -43,11 +43,17 @@ describe('DashboardResource', () => {
             avg_wait_time_ms: 12.5,
             avg_processing_time_ms: 150.0,
           },
-          queues: [{ name: 'emails', pending: 10, processing: 2, paused: false }],
+          queues: [
+            { name: "emails", pending: 10, processing: 2, paused: false },
+          ],
           workers: { total: 3, healthy: 2, unhealthy: 1 },
-          recent_activity: { jobs_created_1h: 50, jobs_completed_1h: 40, jobs_failed_1h: 2 },
+          recent_activity: {
+            jobs_created_1h: 50,
+            jobs_completed_1h: 40,
+            jobs_failed_1h: 2,
+          },
         });
-      })
+      }),
     );
 
     const client = createClient();
@@ -55,7 +61,7 @@ describe('DashboardResource', () => {
 
     expect(data.system.uptimeSeconds).toBe(123);
     expect(data.jobs.completed24h).toBe(900);
-    expect(data.queues[0].name).toBe('emails');
+    expect(data.queues[0].name).toBe("emails");
     expect(data.recentActivity.jobsCreated1h).toBe(50);
   });
 });

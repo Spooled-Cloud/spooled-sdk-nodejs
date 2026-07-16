@@ -4,7 +4,7 @@
  * Handles queue configuration and control operations.
  */
 
-import type { HttpClient } from '../utils/http.js';
+import type { HttpClient } from "../utils/http.js";
 import type {
   QueueConfig,
   QueueConfigSummary,
@@ -12,7 +12,7 @@ import type {
   UpdateQueueConfigParams,
   PauseQueueResponse,
   ResumeQueueResponse,
-} from '../types/queues.js';
+} from "../types/queues.js";
 
 export class QueuesResource {
   constructor(private readonly http: HttpClient) {}
@@ -21,7 +21,7 @@ export class QueuesResource {
    * List all queues
    */
   async list(): Promise<QueueConfigSummary[]> {
-    return this.http.get<QueueConfigSummary[]>('/queues');
+    return this.http.get<QueueConfigSummary[]>("/queues");
   }
 
   /**
@@ -34,15 +34,23 @@ export class QueuesResource {
   /**
    * Update queue configuration
    */
-  async updateConfig(name: string, params: UpdateQueueConfigParams): Promise<QueueConfig> {
-    return this.http.put<QueueConfig>(`/queues/${encodeURIComponent(name)}/config`, params);
+  async updateConfig(
+    name: string,
+    params: UpdateQueueConfigParams,
+  ): Promise<QueueConfig> {
+    return this.http.put<QueueConfig>(
+      `/queues/${encodeURIComponent(name)}/config`,
+      params,
+    );
   }
 
   /**
    * Get queue statistics
    */
   async getStats(name: string): Promise<QueueStats> {
-    return this.http.get<QueueStats>(`/queues/${encodeURIComponent(name)}/stats`);
+    return this.http.get<QueueStats>(
+      `/queues/${encodeURIComponent(name)}/stats`,
+    );
   }
 
   /**
@@ -51,7 +59,7 @@ export class QueuesResource {
   async pause(name: string, reason?: string): Promise<PauseQueueResponse> {
     return this.http.post<PauseQueueResponse>(
       `/queues/${encodeURIComponent(name)}/pause`,
-      reason ? { reason } : undefined
+      reason ? { reason } : undefined,
     );
   }
 
@@ -59,7 +67,9 @@ export class QueuesResource {
    * Resume a paused queue
    */
   async resume(name: string): Promise<ResumeQueueResponse> {
-    return this.http.post<ResumeQueueResponse>(`/queues/${encodeURIComponent(name)}/resume`);
+    return this.http.post<ResumeQueueResponse>(
+      `/queues/${encodeURIComponent(name)}/resume`,
+    );
   }
 
   /**

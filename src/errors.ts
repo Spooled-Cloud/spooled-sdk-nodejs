@@ -41,13 +41,13 @@ export class SpooledError extends Error {
   constructor(
     message: string,
     statusCode: number = 0,
-    code: string = 'UNKNOWN_ERROR',
+    code: string = "UNKNOWN_ERROR",
     details?: Record<string, unknown>,
     requestId?: string,
-    cause?: Error
+    cause?: Error,
   ) {
     super(message);
-    this.name = 'SpooledError';
+    this.name = "SpooledError";
     this.statusCode = statusCode;
     this.code = code;
     this.details = details;
@@ -84,13 +84,13 @@ export class SpooledError extends Error {
  */
 export class AuthenticationError extends SpooledError {
   constructor(
-    message: string = 'Authentication failed',
-    code: string = 'AUTHENTICATION_FAILED',
+    message: string = "Authentication failed",
+    code: string = "AUTHENTICATION_FAILED",
     details?: Record<string, unknown>,
-    requestId?: string
+    requestId?: string,
   ) {
     super(message, 401, code, details, requestId);
-    this.name = 'AuthenticationError';
+    this.name = "AuthenticationError";
   }
 }
 
@@ -100,13 +100,13 @@ export class AuthenticationError extends SpooledError {
  */
 export class AuthorizationError extends SpooledError {
   constructor(
-    message: string = 'Access denied',
-    code: string = 'ACCESS_DENIED',
+    message: string = "Access denied",
+    code: string = "ACCESS_DENIED",
     details?: Record<string, unknown>,
-    requestId?: string
+    requestId?: string,
   ) {
     super(message, 403, code, details, requestId);
-    this.name = 'AuthorizationError';
+    this.name = "AuthorizationError";
   }
 }
 
@@ -116,13 +116,13 @@ export class AuthorizationError extends SpooledError {
  */
 export class NotFoundError extends SpooledError {
   constructor(
-    message: string = 'Resource not found',
-    code: string = 'NOT_FOUND',
+    message: string = "Resource not found",
+    code: string = "NOT_FOUND",
     details?: Record<string, unknown>,
-    requestId?: string
+    requestId?: string,
   ) {
     super(message, 404, code, details, requestId);
-    this.name = 'NotFoundError';
+    this.name = "NotFoundError";
   }
 }
 
@@ -132,13 +132,13 @@ export class NotFoundError extends SpooledError {
  */
 export class ConflictError extends SpooledError {
   constructor(
-    message: string = 'Conflict',
-    code: string = 'CONFLICT',
+    message: string = "Conflict",
+    code: string = "CONFLICT",
     details?: Record<string, unknown>,
-    requestId?: string
+    requestId?: string,
   ) {
     super(message, 409, code, details, requestId);
-    this.name = 'ConflictError';
+    this.name = "ConflictError";
   }
 }
 
@@ -148,13 +148,13 @@ export class ConflictError extends SpooledError {
  */
 export class ValidationError extends SpooledError {
   constructor(
-    message: string = 'Validation failed',
-    code: string = 'VALIDATION_ERROR',
+    message: string = "Validation failed",
+    code: string = "VALIDATION_ERROR",
     details?: Record<string, unknown>,
-    requestId?: string
+    requestId?: string,
   ) {
     super(message, 400, code, details, requestId);
-    this.name = 'ValidationError';
+    this.name = "ValidationError";
   }
 }
 
@@ -164,13 +164,13 @@ export class ValidationError extends SpooledError {
  */
 export class PayloadTooLargeError extends SpooledError {
   constructor(
-    message: string = 'Request payload too large',
-    code: string = 'PAYLOAD_TOO_LARGE',
+    message: string = "Request payload too large",
+    code: string = "PAYLOAD_TOO_LARGE",
     details?: Record<string, unknown>,
-    requestId?: string
+    requestId?: string,
   ) {
     super(message, 413, code, details, requestId);
-    this.name = 'PayloadTooLargeError';
+    this.name = "PayloadTooLargeError";
   }
 }
 
@@ -183,14 +183,14 @@ export class RateLimitError extends SpooledError {
   readonly rateLimitInfo: RateLimitInfo;
 
   constructor(
-    message: string = 'Rate limit exceeded',
-    code: string = 'RATE_LIMIT_EXCEEDED',
+    message: string = "Rate limit exceeded",
+    code: string = "RATE_LIMIT_EXCEEDED",
     rateLimitInfo: RateLimitInfo = {},
     details?: Record<string, unknown>,
-    requestId?: string
+    requestId?: string,
   ) {
     super(message, 429, code, details, requestId);
-    this.name = 'RateLimitError';
+    this.name = "RateLimitError";
     this.rateLimitInfo = rateLimitInfo;
   }
 
@@ -225,14 +225,14 @@ export class RateLimitError extends SpooledError {
  */
 export class ServerError extends SpooledError {
   constructor(
-    message: string = 'Server error',
+    message: string = "Server error",
     statusCode: number = 500,
-    code: string = 'SERVER_ERROR',
+    code: string = "SERVER_ERROR",
     details?: Record<string, unknown>,
-    requestId?: string
+    requestId?: string,
   ) {
     super(message, statusCode, code, details, requestId);
-    this.name = 'ServerError';
+    this.name = "ServerError";
   }
 
   override isRetryable(): boolean {
@@ -245,9 +245,9 @@ export class ServerError extends SpooledError {
  * Thrown when a network request fails (no response received)
  */
 export class NetworkError extends SpooledError {
-  constructor(message: string = 'Network request failed', cause?: Error) {
-    super(message, 0, 'NETWORK_ERROR', undefined, undefined, cause);
-    this.name = 'NetworkError';
+  constructor(message: string = "Network request failed", cause?: Error) {
+    super(message, 0, "NETWORK_ERROR", undefined, undefined, cause);
+    this.name = "NetworkError";
   }
 
   override isRetryable(): boolean {
@@ -263,9 +263,9 @@ export class TimeoutError extends SpooledError {
   /** Timeout duration in milliseconds */
   readonly timeoutMs: number;
 
-  constructor(message: string = 'Request timed out', timeoutMs: number = 0) {
-    super(message, 0, 'TIMEOUT', { timeoutMs });
-    this.name = 'TimeoutError';
+  constructor(message: string = "Request timed out", timeoutMs: number = 0) {
+    super(message, 0, "TIMEOUT", { timeoutMs });
+    this.name = "TimeoutError";
     this.timeoutMs = timeoutMs;
   }
 
@@ -279,9 +279,9 @@ export class TimeoutError extends SpooledError {
  * Thrown when the circuit breaker is open and rejecting requests
  */
 export class CircuitBreakerOpenError extends SpooledError {
-  constructor(message: string = 'Circuit breaker is open') {
-    super(message, 0, 'CIRCUIT_BREAKER_OPEN');
-    this.name = 'CircuitBreakerOpenError';
+  constructor(message: string = "Circuit breaker is open") {
+    super(message, 0, "CIRCUIT_BREAKER_OPEN");
+    this.name = "CircuitBreakerOpenError";
   }
 
   override isRetryable(): boolean {
@@ -295,7 +295,7 @@ export class CircuitBreakerOpenError extends SpooledError {
 export function parseRateLimitHeaders(headers: Headers): RateLimitInfo {
   const info: RateLimitInfo = {};
 
-  const retryAfter = headers.get('Retry-After');
+  const retryAfter = headers.get("Retry-After");
   if (retryAfter) {
     const seconds = parseInt(retryAfter, 10);
     if (!isNaN(seconds)) {
@@ -303,7 +303,7 @@ export function parseRateLimitHeaders(headers: Headers): RateLimitInfo {
     }
   }
 
-  const limit = headers.get('X-RateLimit-Limit');
+  const limit = headers.get("X-RateLimit-Limit");
   if (limit) {
     const parsed = parseInt(limit, 10);
     if (!isNaN(parsed)) {
@@ -311,7 +311,7 @@ export function parseRateLimitHeaders(headers: Headers): RateLimitInfo {
     }
   }
 
-  const remaining = headers.get('X-RateLimit-Remaining');
+  const remaining = headers.get("X-RateLimit-Remaining");
   if (remaining) {
     const parsed = parseInt(remaining, 10);
     if (!isNaN(parsed)) {
@@ -319,7 +319,7 @@ export function parseRateLimitHeaders(headers: Headers): RateLimitInfo {
     }
   }
 
-  const reset = headers.get('X-RateLimit-Reset');
+  const reset = headers.get("X-RateLimit-Reset");
   if (reset) {
     const timestamp = parseInt(reset, 10);
     if (!isNaN(timestamp)) {
@@ -343,8 +343,10 @@ const MAX_RAW_ERROR_BODY_CHARS = 500;
  *   text as the message so a server's human-readable error — e.g. a proxy's
  *   `502 Bad Gateway` page — is not silently discarded.
  */
-async function parseErrorBody(response: Response): Promise<ApiErrorBody | null> {
-  const contentType = response.headers.get('Content-Type') || '';
+async function parseErrorBody(
+  response: Response,
+): Promise<ApiErrorBody | null> {
+  const contentType = response.headers.get("Content-Type") || "";
 
   let raw: string;
   try {
@@ -353,16 +355,18 @@ async function parseErrorBody(response: Response): Promise<ApiErrorBody | null> 
     return null;
   }
 
-  if (contentType.includes('application/json')) {
+  if (contentType.includes("application/json")) {
     try {
       const body = JSON.parse(raw) as Record<string, unknown>;
-      if (typeof body === 'object' && body !== null) {
+      if (typeof body === "object" && body !== null) {
         // Error bodies come in two shapes: {code, message} or {error, code, details}.
         // Fall back to `error` when `message` is absent so the server's
         // human-readable message is not lost.
-        const message = ((body.message as string) ?? (body.error as string)) || response.statusText;
+        const message =
+          ((body.message as string) ?? (body.error as string)) ||
+          response.statusText;
         return {
-          code: (body.code as string) || 'UNKNOWN_ERROR',
+          code: (body.code as string) || "UNKNOWN_ERROR",
           message,
           details: body.details as Record<string, unknown> | undefined,
         };
@@ -380,7 +384,7 @@ async function parseErrorBody(response: Response): Promise<ApiErrorBody | null> 
       trimmed.length > MAX_RAW_ERROR_BODY_CHARS
         ? `${trimmed.slice(0, MAX_RAW_ERROR_BODY_CHARS)}…`
         : trimmed;
-    return { code: 'UNKNOWN_ERROR', message };
+    return { code: "UNKNOWN_ERROR", message };
   }
 
   return null;
@@ -389,12 +393,15 @@ async function parseErrorBody(response: Response): Promise<ApiErrorBody | null> 
 /**
  * Create an appropriate error from an HTTP response
  */
-export async function createErrorFromResponse(response: Response): Promise<SpooledError> {
-  const requestId = response.headers.get('X-Request-ID') ?? undefined;
+export async function createErrorFromResponse(
+  response: Response,
+): Promise<SpooledError> {
+  const requestId = response.headers.get("X-Request-ID") ?? undefined;
   const body = await parseErrorBody(response);
 
-  const message = body?.message || response.statusText || `HTTP ${response.status}`;
-  const code = body?.code || 'UNKNOWN_ERROR';
+  const message =
+    body?.message || response.statusText || `HTTP ${response.status}`;
+  const code = body?.code || "UNKNOWN_ERROR";
   const details = body?.details;
 
   switch (response.status) {
@@ -418,14 +425,32 @@ export async function createErrorFromResponse(response: Response): Promise<Spool
 
     case 429: {
       const rateLimitInfo = parseRateLimitHeaders(response.headers);
-      return new RateLimitError(message, code, rateLimitInfo, details, requestId);
+      return new RateLimitError(
+        message,
+        code,
+        rateLimitInfo,
+        details,
+        requestId,
+      );
     }
 
     default:
       if (response.status >= 500) {
-        return new ServerError(message, response.status, code, details, requestId);
+        return new ServerError(
+          message,
+          response.status,
+          code,
+          details,
+          requestId,
+        );
       }
-      return new SpooledError(message, response.status, code, details, requestId);
+      return new SpooledError(
+        message,
+        response.status,
+        code,
+        details,
+        requestId,
+      );
   }
 }
 

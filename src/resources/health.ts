@@ -2,8 +2,8 @@
  * Health Resource
  */
 
-import type { HttpClient } from '../utils/http.js';
-import type { HealthResponse } from '../types/health.js';
+import type { HttpClient } from "../utils/http.js";
+import type { HealthResponse } from "../types/health.js";
 
 export class HealthResource {
   constructor(private readonly http: HttpClient) {}
@@ -14,7 +14,7 @@ export class HealthResource {
    * GET /health
    */
   async get(): Promise<HealthResponse> {
-    return this.http.get<HealthResponse>('/health', { skipApiPrefix: true });
+    return this.http.get<HealthResponse>("/health", { skipApiPrefix: true });
   }
 
   /**
@@ -24,8 +24,8 @@ export class HealthResource {
    */
   async liveness(): Promise<boolean> {
     try {
-      await this.http.request<string>('/health/live', {
-        method: 'GET',
+      await this.http.request<string>("/health/live", {
+        method: "GET",
         skipApiPrefix: true,
         skipRetry: true,
       });
@@ -42,8 +42,8 @@ export class HealthResource {
    */
   async readiness(): Promise<boolean> {
     try {
-      await this.http.request<string>('/health/ready', {
-        method: 'GET',
+      await this.http.request<string>("/health/ready", {
+        method: "GET",
         skipApiPrefix: true,
         skipRetry: true,
       });

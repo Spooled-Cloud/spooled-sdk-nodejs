@@ -4,8 +4,12 @@
  * Utilities for working with gRPC streaming in a TypeScript-friendly way.
  */
 
-import type * as grpc from '@grpc/grpc-js';
-import type { GrpcJob, GrpcProcessRequest, GrpcProcessResponse } from './types.js';
+import type * as grpc from "@grpc/grpc-js";
+import type {
+  GrpcJob,
+  GrpcProcessRequest,
+  GrpcProcessResponse,
+} from "./types.js";
 
 /**
  * Options for streaming operations
@@ -26,18 +30,22 @@ export interface StreamOptions {
  */
 export async function* asyncIterableFromStream<T>(
   stream: grpc.ClientReadableStream<T>,
-  options?: StreamOptions
+  options?: StreamOptions,
 ): AsyncGenerator<T, void, undefined> {
   const { signal, onConnected, onError, onEnd } = options ?? {};
 
   // Handle abort signal
   if (signal) {
-    signal.addEventListener('abort', () => {
+    signal.addEventListener("abort", () => {
       stream.cancel();
     });
   }
 
-  return yield* new AsyncIterableStream(stream, { onConnected, onError, onEnd });
+  return yield* new AsyncIterableStream(stream, {
+    onConnected,
+    onError,
+    onEnd,
+  });
 }
 
 /**
@@ -45,11 +53,11 @@ export async function* asyncIterableFromStream<T>(
  */
 class AsyncIterableStream<T> implements AsyncIterable<T> {
   private stream: grpc.ClientReadableStream<T>;
-  private options: Omit<StreamOptions, 'signal'>;
+  private options: Omit<StreamOptions, "signal">;
 
   constructor(
     stream: grpc.ClientReadableStream<T>,
-    options: Omit<StreamOptions, 'signal'> = {}
+    options: Omit<StreamOptions, "signal"> = {},
   ) {
     this.stream = stream;
     this.options = options;
@@ -62,24 +70,24 @@ class AsyncIterableStream<T> implements AsyncIterable<T> {
     let ended = false;
     let resolve: (() => void) | null = null;
 
-    this.stream.on('data', (data: T) => {
+    this.stream.on("data", (data: T) => {
       queue.push(data);
       resolve?.();
     });
 
-    this.stream.on('error', (err: Error) => {
+    this.stream.on("error", (err: Error) => {
       error = err;
       onError?.(err);
       resolve?.();
     });
 
-    this.stream.on('end', () => {
+    this.stream.on("end", () => {
       ended = true;
       onEnd?.();
       resolve?.();
     });
 
-    this.stream.on('status', (status: grpc.StatusObject) => {
+    this.stream.on("status", (status: grpc.StatusObject) => {
       if (status.code === 0) {
         onConnected?.();
       }
@@ -126,13 +134,13 @@ export interface ProcessJobsStream {
  */
 export function createProcessJobsStream(
   call: grpc.ClientDuplexStream<GrpcProcessRequest, GrpcProcessResponse>,
-  options?: StreamOptions
+  options?: StreamOptions,
 ): ProcessJobsStream {
   const { signal, onError, onEnd } = options ?? {};
 
   // Handle abort signal
   if (signal) {
-    signal.addEventListener('abort', () => {
+    signal.addEventListener("abort", () => {
       call.cancel();
     });
   }
@@ -169,13 +177,13 @@ export interface JobStream extends AsyncIterable<GrpcJob> {
  */
 export function createJobStream(
   call: grpc.ClientReadableStream<GrpcJob>,
-  options?: StreamOptions
+  options?: StreamOptions,
 ): JobStream {
   const { signal, onConnected, onError, onEnd } = options ?? {};
 
   // Handle abort signal
   if (signal) {
-    signal.addEventListener('abort', () => {
+    signal.addEventListener("abort", () => {
       call.cancel();
     });
   }

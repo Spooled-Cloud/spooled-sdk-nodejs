@@ -10,9 +10,9 @@ import type {
   RealtimeEventType,
   SubscriptionFilter,
   ConnectionState,
-} from './types.js';
-import { convertResponse } from '../utils/casing.js';
-import { mapEventType } from './event-map.js';
+} from "./types.js";
+import { convertResponse } from "../utils/casing.js";
+import { mapEventType } from "./event-map.js";
 
 /** Event handler type - simplified for internal use */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,7 +31,7 @@ export class SseRealtimeClient {
   private readonly options: Required<RealtimeConnectionOptions>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private eventSource: any = null;
-  private state: ConnectionState = 'disconnected';
+  private state: ConnectionState = "disconnected";
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private filter: SubscriptionFilter | null = null;
@@ -39,7 +39,8 @@ export class SseRealtimeClient {
   // Event handlers
   private eventHandlers: Map<RealtimeEventType, Set<EventHandler>> = new Map();
   private allEventsHandlers: Set<GenericEventHandler> = new Set();
-  private stateChangeHandlers: Set<(state: ConnectionState) => void> = new Set();
+  private stateChangeHandlers: Set<(state: ConnectionState) => void> =
+    new Set();
 
   constructor(options: RealtimeConnectionOptions) {
     // Defaults applied AFTER the spread — a pre-spread default is clobbered by an
@@ -76,13 +77,13 @@ export class SseRealtimeClient {
    * Connect to the SSE server with a subscription filter
    */
   async connect(filter?: SubscriptionFilter): Promise<void> {
-    if (this.state === 'connected' || this.state === 'connecting') {
+    if (this.state === "connected" || this.state === "connecting") {
       return;
     }
 
     this.filter = filter || null;
 
-    this.setState('connecting');
+    this.setState("connecting");
 
     const sseUrl = this.buildSseUrl(filter);
     this.options.debug(`Connecting to SSE: ${sseUrl}`);
@@ -90,17 +91,19 @@ export class SseRealtimeClient {
     // Use eventsource package in Node.js, native EventSource in browser
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let EventSourceImpl: any;
-    if (typeof EventSource !== 'undefined') {
+    if (typeof EventSource !== "undefined") {
       EventSourceImpl = EventSource;
     } else {
       // Dynamic import for ESM compatibility
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mod = await import('eventsource') as any;
+        const mod = (await import("eventsource")) as any;
         EventSourceImpl = mod.default || mod.EventSource || mod;
       } catch {
-        this.setState('disconnected');
-        throw new Error('eventsource package is required for SSE in Node.js. Install it with: npm install eventsource');
+        this.setState("disconnected");
+        throw new Error(
+          "eventsource package is required for SSE in Node.js. Install it with: npm install eventsource",
+        );
       }
     }
 
@@ -109,7 +112,7 @@ export class SseRealtimeClient {
     try {
       token = await this.options.tokenProvider(this.reconnectAttempts > 0);
     } catch (error) {
-      this.setState('disconnected');
+      this.setState("disconnected");
       throw new Error(`Failed to acquire realtime token: ${error}`);
     }
 
@@ -130,8 +133,8 @@ export class SseRealtimeClient {
         });
 
         this.eventSource.onopen = () => {
-          this.options.debug('SSE connected');
-          this.setState('connected');
+          this.options.debug("SSE connected");
+          this.setState("connected");
           this.reconnectAttempts = 0;
           resolve();
         };
@@ -142,24 +145,24 @@ export class SseRealtimeClient {
         };
 
         this.eventSource.onerror = () => {
-          this.options.debug('SSE error');
+          this.options.debug("SSE error");
 
-          if (this.state === 'connecting') {
-            this.setState('disconnected');
+          if (this.state === "connecting") {
+            this.setState("disconnected");
             // Close the abandoned EventSource so it doesn't keep auto-reconnecting
             // in the background after we reject the initial connect promise.
             if (this.eventSource) {
               this.eventSource.close();
               this.eventSource = null;
             }
-            reject(new Error('SSE connection failed'));
+            reject(new Error("SSE connection failed"));
             return;
           }
 
           this.handleDisconnect();
         };
       } catch (error) {
-        this.setState('disconnected');
+        this.setState("disconnected");
         reject(error);
       }
     });
@@ -179,7 +182,7 @@ export class SseRealtimeClient {
       this.eventSource = null;
     }
 
-    this.setState('disconnected');
+    this.setState("disconnected");
     this.filter = null;
   }
 
@@ -278,7 +281,7 @@ export class SseRealtimeClient {
           try {
             handler(eventData);
           } catch (error) {
-            this.options.debug('Event handler error', error);
+            this.options.debug("Event handler error", error);
           }
         });
       }
@@ -288,11 +291,11 @@ export class SseRealtimeClient {
         try {
           handler(event);
         } catch (error) {
-          this.options.debug('Event handler error', error);
+          this.options.debug("Event handler error", error);
         }
       });
     } catch (error) {
-      this.options.debug('Failed to parse SSE message', { data, error });
+      this.options.debug("Failed to parse SSE message", { data, error });
     }
   }
 
@@ -302,36 +305,44 @@ export class SseRealtimeClient {
       this.eventSource = null;
     }
 
-    if (this.options.autoReconnect && this.reconnectAttempts < this.options.maxReconnectAttempts) {
+    if (
+      this.options.autoReconnect &&
+      this.reconnectAttempts < this.options.maxReconnectAttempts
+    ) {
       this.scheduleReconnect();
     } else {
-      this.setState('disconnected');
+      this.setState("disconnected");
     }
   }
 
   private scheduleReconnect(): void {
-    this.setState('reconnecting');
+    this.setState("reconnecting");
     this.reconnectAttempts++;
 
     const baseDelay = Math.min(
       this.options.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
-      this.options.maxReconnectDelay
+      this.options.maxReconnectDelay,
     );
     // Add randomized jitter (up to +25%) to avoid synchronized reconnect
     // storms across clients. Matches utils/retry.ts.
     const delay = Math.floor(baseDelay + Math.random() * baseDelay * 0.25);
 
-    this.options.debug(`Scheduling SSE reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
+    this.options.debug(
+      `Scheduling SSE reconnect attempt ${this.reconnectAttempts} in ${delay}ms`,
+    );
 
     this.reconnectTimer = setTimeout(async () => {
       try {
         await this.connect(this.filter || undefined);
       } catch (error) {
-        this.options.debug('SSE reconnect failed', error);
-        if (this.options.autoReconnect && this.reconnectAttempts < this.options.maxReconnectAttempts) {
+        this.options.debug("SSE reconnect failed", error);
+        if (
+          this.options.autoReconnect &&
+          this.reconnectAttempts < this.options.maxReconnectAttempts
+        ) {
           this.scheduleReconnect();
         } else {
-          this.setState('disconnected');
+          this.setState("disconnected");
         }
       }
     }, delay);

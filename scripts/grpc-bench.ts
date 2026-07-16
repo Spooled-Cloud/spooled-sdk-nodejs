@@ -18,11 +18,15 @@ async function main() {
     try {
       const result = await client.queue.enqueue({
         queueName: `perf-test-${Date.now()}`,
-        payload: { test: i }
+        payload: { test: i },
       });
-      console.log(`Enqueue #${i+1}: ${Date.now() - start}ms (job: ${result.jobId.slice(0,8)}...)`);
+      console.log(
+        `Enqueue #${i + 1}: ${Date.now() - start}ms (job: ${result.jobId.slice(0, 8)}...)`,
+      );
     } catch (e: any) {
-      console.log(`Enqueue #${i+1}: ${Date.now() - start}ms ERROR: ${e.message}`);
+      console.log(
+        `Enqueue #${i + 1}: ${Date.now() - start}ms ERROR: ${e.message}`,
+      );
     }
   }
 
@@ -31,9 +35,11 @@ async function main() {
     start = Date.now();
     try {
       await client.queue.getQueueStats("perf-test");
-      console.log(`GetQueueStats #${i+1}: ${Date.now() - start}ms`);
+      console.log(`GetQueueStats #${i + 1}: ${Date.now() - start}ms`);
     } catch (e: any) {
-      console.log(`GetQueueStats #${i+1}: ${Date.now() - start}ms ERROR: ${e.message}`);
+      console.log(
+        `GetQueueStats #${i + 1}: ${Date.now() - start}ms ERROR: ${e.message}`,
+      );
     }
   }
 

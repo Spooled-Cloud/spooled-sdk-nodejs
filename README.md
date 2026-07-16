@@ -34,23 +34,23 @@ npm install @spooled/sdk
 ## Quick Start
 
 ```typescript
-import { SpooledClient } from '@spooled/sdk';
+import { SpooledClient } from "@spooled/sdk";
 
 const client = new SpooledClient({
-  apiKey: 'sp_live_your_api_key',
+  apiKey: "sp_live_your_api_key",
   // For self-hosted: baseUrl: 'https://your-spooled-server.com'
 });
 
 // Create a job
 const { id } = await client.jobs.create({
-  queueName: 'email-notifications',
+  queueName: "email-notifications",
   payload: {
-    to: 'user@example.com',
-    subject: 'Welcome!',
-    body: 'Thanks for signing up.'
+    to: "user@example.com",
+    subject: "Welcome!",
+    body: "Thanks for signing up.",
   },
   priority: 5,
-  maxRetries: 3
+  maxRetries: 3,
 });
 
 console.log(`Created job: ${id}`);
@@ -62,28 +62,28 @@ console.log(`Status: ${job.status}`);
 
 ## Documentation
 
-| Guide | Description |
-|-------|-------------|
-| [Getting Started](docs/getting-started.md) | Installation, setup, and first job |
-| [Configuration](docs/configuration.md) | All configuration options |
-| [Workers](docs/workers.md) | Job processing with SpooledWorker |
-| [Workflows](docs/workflows.md) | Building DAGs with job dependencies |
-| [gRPC](docs/grpc.md) | High-performance streaming |
-| [Resources](docs/resources.md) | Complete API reference |
+| Guide                                      | Description                         |
+| ------------------------------------------ | ----------------------------------- |
+| [Getting Started](docs/getting-started.md) | Installation, setup, and first job  |
+| [Configuration](docs/configuration.md)     | All configuration options           |
+| [Workers](docs/workers.md)                 | Job processing with SpooledWorker   |
+| [Workflows](docs/workflows.md)             | Building DAGs with job dependencies |
+| [gRPC](docs/grpc.md)                       | High-performance streaming          |
+| [Resources](docs/resources.md)             | Complete API reference              |
 
 ## Examples
 
 See the [`examples/`](examples/) directory for runnable code:
 
-| Example | Description |
-|---------|-------------|
-| [`quick-start.ts`](examples/quick-start.ts) | Basic SDK usage |
-| [`worker.ts`](examples/worker.ts) | Processing jobs with SpooledWorker |
-| [`workflow-dag.ts`](examples/workflow-dag.ts) | Complex workflows with dependencies |
-| [`grpc-streaming.ts`](examples/grpc-streaming.ts) | High-performance gRPC streaming |
-| [`realtime.ts`](examples/realtime.ts) | Real-time event streaming |
-| [`schedules.ts`](examples/schedules.ts) | Cron schedules |
-| [`error-handling.ts`](examples/error-handling.ts) | Error handling patterns |
+| Example                                           | Description                         |
+| ------------------------------------------------- | ----------------------------------- |
+| [`quick-start.ts`](examples/quick-start.ts)       | Basic SDK usage                     |
+| [`worker.ts`](examples/worker.ts)                 | Processing jobs with SpooledWorker  |
+| [`workflow-dag.ts`](examples/workflow-dag.ts)     | Complex workflows with dependencies |
+| [`grpc-streaming.ts`](examples/grpc-streaming.ts) | High-performance gRPC streaming     |
+| [`realtime.ts`](examples/realtime.ts)             | Real-time event streaming           |
+| [`schedules.ts`](examples/schedules.ts)           | Cron schedules                      |
+| [`error-handling.ts`](examples/error-handling.ts) | Error handling patterns             |
 
 ## Real-world examples (beginner friendly)
 
@@ -99,13 +99,13 @@ Jobs are units of work with payloads, priorities, and retry policies:
 
 ```typescript
 const { id } = await client.jobs.create({
-  queueName: 'my-queue',
-  payload: { data: 'value' },
-  priority: 5,                      // -100 to 100
+  queueName: "my-queue",
+  payload: { data: "value" },
+  priority: 5, // -100 to 100
   maxRetries: 3,
   timeoutSeconds: 300,
   scheduledAt: new Date(Date.now() + 60000),
-  idempotencyKey: 'unique-key',
+  idempotencyKey: "unique-key",
 });
 ```
 
@@ -114,12 +114,12 @@ const { id } = await client.jobs.create({
 Process jobs with the built-in worker runtime:
 
 ```typescript
-import { SpooledClient, SpooledWorker } from '@spooled/sdk';
+import { SpooledClient, SpooledWorker } from "@spooled/sdk";
 
-const client = new SpooledClient({ apiKey: 'sp_live_...' });
+const client = new SpooledClient({ apiKey: "sp_live_..." });
 
 const worker = new SpooledWorker(client, {
-  queueName: 'my-queue',
+  queueName: "my-queue",
   concurrency: 10,
 });
 
@@ -132,7 +132,7 @@ worker.process(async (ctx) => {
 await worker.start();
 
 // Graceful shutdown
-process.on('SIGTERM', () => worker.stop());
+process.on("SIGTERM", () => worker.stop());
 ```
 
 ### Workflows (DAGs)
@@ -141,11 +141,21 @@ Orchestrate multiple jobs with dependencies:
 
 ```typescript
 const workflow = await client.workflows.create({
-  name: 'ETL Pipeline',
+  name: "ETL Pipeline",
   jobs: [
-    { key: 'extract', queueName: 'etl', payload: { step: 'extract' } },
-    { key: 'transform', queueName: 'etl', payload: { step: 'transform' }, dependsOn: ['extract'] },
-    { key: 'load', queueName: 'etl', payload: { step: 'load' }, dependsOn: ['transform'] },
+    { key: "extract", queueName: "etl", payload: { step: "extract" } },
+    {
+      key: "transform",
+      queueName: "etl",
+      payload: { step: "transform" },
+      dependsOn: ["extract"],
+    },
+    {
+      key: "load",
+      queueName: "etl",
+      payload: { step: "load" },
+      dependsOn: ["transform"],
+    },
   ],
 });
 ```
@@ -156,11 +166,11 @@ Run jobs on a cron schedule:
 
 ```typescript
 const schedule = await client.schedules.create({
-  name: 'Daily Report',
-  cronExpression: '0 9 * * *',      // 9 AM daily; 5-field (min hour dom mon dow) or 6-field (leading seconds) both work
-  timezone: 'America/New_York',
-  queueName: 'reports',
-  payloadTemplate: { type: 'daily' },
+  name: "Daily Report",
+  cronExpression: "0 9 * * *", // 9 AM daily; 5-field (min hour dom mon dow) or 6-field (leading seconds) both work
+  timezone: "America/New_York",
+  queueName: "reports",
+  payloadTemplate: { type: "daily" },
 });
 ```
 
@@ -171,12 +181,12 @@ Subscribe to real-time job events:
 ```typescript
 const realtime = await client.realtime();
 
-realtime.on('job.completed', (data) => {
+realtime.on("job.completed", (data) => {
   console.log(`Job completed: ${data.jobId}`);
 });
 
 await realtime.connect();
-await realtime.subscribe({ queueName: 'my-queue' });
+await realtime.subscribe({ queueName: "my-queue" });
 ```
 
 ### Organization Management
@@ -186,14 +196,16 @@ Manage your organization and track usage:
 ```typescript
 // Get current usage and limits
 const usage = await client.organizations.getUsage();
-console.log(`Active jobs: ${usage.active_jobs.current}/${usage.active_jobs.limit}`);
+console.log(
+  `Active jobs: ${usage.active_jobs.current}/${usage.active_jobs.limit}`,
+);
 console.log(`Plan: ${usage.plan.tier}`);
 
 // Generate a unique slug for a new organization
-const { slug } = await client.organizations.generateSlug('My Company');
+const { slug } = await client.organizations.generateSlug("My Company");
 
 // Check if a slug is available
-const { available } = await client.organizations.checkSlug('my-company');
+const { available } = await client.organizations.checkSlug("my-company");
 ```
 
 ### Webhooks
@@ -203,10 +215,10 @@ Configure outgoing webhooks for job events:
 ```typescript
 // Create webhook
 const webhook = await client.webhooks.create({
-  url: 'https://your-app.com/webhooks/spooled',
-  events: ['job.completed', 'job.failed'],
-  queueName: 'my-queue',
-  secret: 'webhook_secret_key'
+  url: "https://your-app.com/webhooks/spooled",
+  events: ["job.completed", "job.failed"],
+  queueName: "my-queue",
+  secret: "webhook_secret_key",
 });
 
 // Retry a failed delivery
@@ -226,19 +238,19 @@ const dlqJobs = await client.jobs.dlq.list({ limit: 100 });
 
 // Retry specific jobs from DLQ
 await client.jobs.dlq.retry({
-  jobIds: ['job-1', 'job-2'],
+  jobIds: ["job-1", "job-2"],
 });
 
 // Retry jobs by queue
 await client.jobs.dlq.retry({
-  queueName: 'my-queue',
-  limit: 50
+  queueName: "my-queue",
+  limit: 50,
 });
 
 // Purge DLQ (requires confirmation)
 await client.jobs.dlq.purge({
-  queueName: 'my-queue',
-  confirm: true
+  queueName: "my-queue",
+  confirm: true,
 });
 ```
 
@@ -249,9 +261,9 @@ Manage API keys programmatically:
 ```typescript
 // Create a new API key
 const apiKey = await client.apiKeys.create({
-  name: 'Production Worker',
-  queues: ['emails', 'notifications'],
-  rateLimit: 1000
+  name: "Production Worker",
+  queues: ["emails", "notifications"],
+  rateLimit: 1000,
 });
 
 console.log(`Save this key: ${apiKey.key}`); // Only shown once!
@@ -273,7 +285,7 @@ const status = await client.billing.getStatus();
 
 // Create customer portal session
 const { url } = await client.billing.createPortal({
-  returnUrl: 'https://your-app.com/settings'
+  returnUrl: "https://your-app.com/settings",
 });
 
 // Redirect user to: url
@@ -285,15 +297,15 @@ Email-based passwordless authentication:
 
 ```typescript
 // Start email login flow
-await client.auth.startEmailLogin('user@example.com');
+await client.auth.startEmailLogin("user@example.com");
 // User receives email with login link
 
 // Check if email exists
-const { exists } = await client.auth.checkEmail('user@example.com');
+const { exists } = await client.auth.checkEmail("user@example.com");
 
 // Exchange API key for JWT
 const { accessToken, refreshToken } = await client.auth.login({
-  apiKey: 'sp_live_...'
+  apiKey: "sp_live_...",
 });
 
 // Use JWT for subsequent requests
@@ -304,13 +316,14 @@ const jwtClient = new SpooledClient({ accessToken });
 
 All operations automatically enforce tier-based limits:
 
-| Tier | Active Jobs | Daily Jobs | Queues | Workers | Webhooks |
-|------|-------------|------------|--------|---------|----------|
-| **Free** | 10 | 1,000 | 5 | 3 | 2 |
-| **Starter** | 100 | 100,000 | 25 | 25 | 10 |
-| **Enterprise** | Unlimited | Unlimited | Unlimited | Unlimited | Unlimited |
+| Tier           | Active Jobs | Daily Jobs | Queues    | Workers   | Webhooks  |
+| -------------- | ----------- | ---------- | --------- | --------- | --------- |
+| **Free**       | 10          | 1,000      | 5         | 3         | 2         |
+| **Starter**    | 100         | 100,000    | 25        | 25        | 10        |
+| **Enterprise** | Unlimited   | Unlimited  | Unlimited | Unlimited | Unlimited |
 
 **Limits are enforced on:**
+
 - ✅ HTTP job creation (`POST /jobs`, `POST /jobs/bulk`)
 - ✅ gRPC job enqueue
 - ✅ Workflow creation (counts all jobs in workflow)
@@ -327,16 +340,18 @@ metadata under a JSON `details` field; quota fields sent at the top level of the
 (such as `resource`, `current`, `limit`, and `plan`) are not currently exposed by the SDK.
 
 ```typescript
-import { RateLimitError } from '@spooled/sdk';
+import { RateLimitError } from "@spooled/sdk";
 
 try {
-  await client.jobs.create({ /* ... */ });
+  await client.jobs.create({
+    /* ... */
+  });
 } catch (error) {
-  if (error instanceof RateLimitError && error.code === 'QUOTA_EXCEEDED') {
+  if (error instanceof RateLimitError && error.code === "QUOTA_EXCEEDED") {
     console.log(`Plan limit: ${error.message}`);
-    console.log(`Request ID: ${error.requestId ?? 'not provided'}`);
+    console.log(`Request ID: ${error.requestId ?? "not provided"}`);
     // Present only if this server response included a nested `details` object.
-    if (error.details) console.log('Details:', error.details);
+    if (error.details) console.log("Details:", error.details);
   }
 }
 ```
@@ -354,13 +369,13 @@ import {
   ValidationError,
   AuthorizationError,
   isSpooledError,
-} from '@spooled/sdk';
+} from "@spooled/sdk";
 
 try {
-  await client.jobs.get('non-existent');
+  await client.jobs.get("non-existent");
 } catch (error) {
   if (error instanceof NotFoundError) {
-    console.log('Job not found');
+    console.log("Job not found");
   } else if (error instanceof AuthorizationError) {
     console.log(`Forbidden: ${error.message}`);
   } else if (error instanceof RateLimitError) {
@@ -377,37 +392,37 @@ try {
 For high-throughput workers, use the native gRPC API with the included gRPC client:
 
 ```typescript
-import { SpooledGrpcClient } from '@spooled/sdk';
+import { SpooledGrpcClient } from "@spooled/sdk";
 
 // Connect to gRPC server (Optimized for Cloudflare Tunnel)
 // useTls: true if connecting to grpc.spooled.cloud:443 (Cloudflare terminates TLS)
 // useTls: false if connecting to localhost or direct backend
 const grpcClient = new SpooledGrpcClient({
-  address: 'grpc.spooled.cloud:443',
-  apiKey: 'sp_live_your_key',
-  useTls: true
+  address: "grpc.spooled.cloud:443",
+  apiKey: "sp_live_your_key",
+  useTls: true,
 });
 
 // Register worker
 const { workerId } = await grpcClient.workers.register({
-  queueName: 'emails',
-  hostname: 'worker-1',
-  maxConcurrency: 10
+  queueName: "emails",
+  hostname: "worker-1",
+  maxConcurrency: 10,
 });
 
 // Enqueue job (enforces plan limits automatically)
 const { jobId } = await grpcClient.queue.enqueue({
-  queueName: 'emails',
-  payload: { to: 'user@example.com' },
-  priority: 5
+  queueName: "emails",
+  payload: { to: "user@example.com" },
+  priority: 5,
 });
 
 // Dequeue jobs in batch
 const { jobs } = await grpcClient.queue.dequeue({
-  queueName: 'emails',
+  queueName: "emails",
   workerId,
   batchSize: 10,
-  leaseDurationSecs: 300
+  leaseDurationSecs: 300,
 });
 
 // Process and complete. Echo leaseId when present so current servers can fence stale executions; legacy servers may omit it and then use worker-ID-only fencing.
@@ -417,12 +432,13 @@ for (const job of jobs) {
     jobId: job.id,
     workerId,
     leaseId: job.leaseId ?? undefined,
-    result: { success: true }
+    result: { success: true },
   });
 }
 ```
 
 **gRPC Features:**
+
 - **~28x faster** than HTTP (with Redis cache: ~50ms vs 1400ms)
 - **Automatic plan limit enforcement** on enqueue operations
 - **Batch operations** for higher throughput
@@ -438,12 +454,18 @@ Full TypeScript support with comprehensive type definitions:
 ```typescript
 import type {
   SpooledClientConfig,
-  Job, JobStatus, CreateJobParams,
-  Queue, QueueStats,
-  Schedule, CreateScheduleParams,
-  Workflow, CreateWorkflowParams,
-  Worker, WorkerStatus,
-} from '@spooled/sdk';
+  Job,
+  JobStatus,
+  CreateJobParams,
+  Queue,
+  QueueStats,
+  Schedule,
+  CreateScheduleParams,
+  Workflow,
+  CreateWorkflowParams,
+  Worker,
+  WorkerStatus,
+} from "@spooled/sdk";
 ```
 
 ## Development and releases

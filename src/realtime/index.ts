@@ -4,19 +4,19 @@
  * Provides WebSocket and SSE clients for real-time event streaming.
  */
 
-export * from './types.js';
-export { WebSocketRealtimeClient } from './websocket.js';
-export { SseRealtimeClient } from './sse.js';
+export * from "./types.js";
+export { WebSocketRealtimeClient } from "./websocket.js";
+export { SseRealtimeClient } from "./sse.js";
 
-import { WebSocketRealtimeClient } from './websocket.js';
-import { SseRealtimeClient } from './sse.js';
+import { WebSocketRealtimeClient } from "./websocket.js";
+import { SseRealtimeClient } from "./sse.js";
 import type {
   RealtimeConnectionOptions,
   RealtimeEvent,
   RealtimeEventType,
   SubscriptionFilter,
   ConnectionState,
-} from './types.js';
+} from "./types.js";
 
 /** Options for creating a SpooledRealtime instance */
 export interface SpooledRealtimeOptions {
@@ -27,7 +27,7 @@ export interface SpooledRealtimeOptions {
    * - WebSocket uses push/pubsub in the backend
    * - SSE job/queue endpoints poll the database periodically
    */
-  type?: 'websocket' | 'sse';
+  type?: "websocket" | "sse";
   /** Auto-reconnect on disconnect (default: true) */
   autoReconnect?: boolean;
   /** Maximum reconnect attempts (default: 10) */
@@ -77,7 +77,7 @@ export class SpooledRealtime {
       debug: options.debug,
     };
 
-    if (options.type === 'sse') {
+    if (options.type === "sse") {
       this.client = new SseRealtimeClient(connectionOptions);
     } else {
       this.client = new WebSocketRealtimeClient(connectionOptions);
@@ -119,7 +119,7 @@ export class SpooledRealtime {
    */
   async subscribe(filter: SubscriptionFilter): Promise<void> {
     // SSE subscriptions are effectively endpoint-based; change requires reconnect.
-    if (typeof this.client.subscribe === 'function') {
+    if (typeof this.client.subscribe === "function") {
       return this.client.subscribe(filter);
     }
     return this.client.reconnect(filter);
@@ -129,7 +129,7 @@ export class SpooledRealtime {
    * Unsubscribe from events matching a filter
    */
   async unsubscribe(filter: SubscriptionFilter): Promise<void> {
-    if (typeof this.client.unsubscribe === 'function') {
+    if (typeof this.client.unsubscribe === "function") {
       return this.client.unsubscribe(filter);
     }
     // For SSE, unsubscribing means disconnecting if the filter matches current connection.

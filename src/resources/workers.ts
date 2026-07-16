@@ -4,14 +4,14 @@
  * Handles worker registration and management.
  */
 
-import type { HttpClient } from '../utils/http.js';
+import type { HttpClient } from "../utils/http.js";
 import type {
   Worker,
   WorkerSummary,
   RegisterWorkerParams,
   RegisterWorkerResponse,
   WorkerHeartbeatParams,
-} from '../types/workers.js';
+} from "../types/workers.js";
 
 export class WorkersResource {
   constructor(private readonly http: HttpClient) {}
@@ -20,7 +20,7 @@ export class WorkersResource {
    * List all workers
    */
   async list(): Promise<WorkerSummary[]> {
-    return this.http.get<WorkerSummary[]>('/workers');
+    return this.http.get<WorkerSummary[]>("/workers");
   }
 
   /**
@@ -33,8 +33,10 @@ export class WorkersResource {
   /**
    * Register a new worker
    */
-  async register(params: RegisterWorkerParams): Promise<RegisterWorkerResponse> {
-    return this.http.post<RegisterWorkerResponse>('/workers/register', params);
+  async register(
+    params: RegisterWorkerParams,
+  ): Promise<RegisterWorkerResponse> {
+    return this.http.post<RegisterWorkerResponse>("/workers/register", params);
   }
 
   /**

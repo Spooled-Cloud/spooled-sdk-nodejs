@@ -4,7 +4,11 @@
  * Types for outgoing webhook operations.
  */
 
-import type { WebhookEventType, WebhookDeliveryStatus, JsonObject } from './common.js';
+import type {
+  WebhookEventType,
+  WebhookDeliveryStatus,
+  JsonObject,
+} from "./common.js";
 
 /** Outgoing webhook configuration */
 export interface OutgoingWebhook {
@@ -16,7 +20,7 @@ export interface OutgoingWebhook {
   enabled: boolean;
   failureCount: number;
   lastTriggeredAt?: string;
-  lastStatus?: 'success' | 'failed';
+  lastStatus?: "success" | "failed";
   createdAt: string;
   updatedAt: string;
 }

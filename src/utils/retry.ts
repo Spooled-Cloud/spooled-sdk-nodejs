@@ -4,8 +4,8 @@
  * Implements exponential backoff with jitter for retrying failed requests.
  */
 
-import type { RetryConfig } from '../config.js';
-import { RateLimitError, isRetryableError } from '../errors.js';
+import type { RetryConfig } from "../config.js";
+import { RateLimitError, isRetryableError } from "../errors.js";
 
 /** Options for a single retry operation */
 export interface RetryOptions {
@@ -28,7 +28,7 @@ export interface RetryOptions {
 export function calculateDelay(
   attempt: number,
   config: RetryConfig,
-  retryAfterSeconds?: number
+  retryAfterSeconds?: number,
 ): number {
   // If we have a Retry-After value, use it (but respect maxDelay)
   if (retryAfterSeconds !== undefined && retryAfterSeconds > 0) {
@@ -37,7 +37,8 @@ export function calculateDelay(
   }
 
   // Calculate exponential delay: baseDelay * factor^(attempt-1)
-  const exponentialDelay = config.baseDelay * Math.pow(config.factor, attempt - 1);
+  const exponentialDelay =
+    config.baseDelay * Math.pow(config.factor, attempt - 1);
 
   // Cap at maxDelay
   let delay = Math.min(exponentialDelay, config.maxDelay);
@@ -60,7 +61,11 @@ export function calculateDelay(
  * @param config - Retry configuration
  * @returns Whether the error is retryable
  */
-export function shouldRetry(error: Error, attempt: number, config: RetryConfig): boolean {
+export function shouldRetry(
+  error: Error,
+  attempt: number,
+  config: RetryConfig,
+): boolean {
   // Don't retry if we've exhausted attempts
   // attempt is 1-based, so with maxRetries=2, we allow attempts 1, 2, 3 (initial + 2 retries)
   if (attempt > config.maxRetries) {
@@ -86,21 +91,21 @@ export function shouldRetry(error: Error, attempt: number, config: RetryConfig):
 export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(new DOMException('Aborted', 'AbortError'));
+      reject(new DOMException("Aborted", "AbortError"));
       return;
     }
 
     const timeoutId = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort);
+      signal?.removeEventListener("abort", onAbort);
       resolve();
     }, ms);
 
     const onAbort = () => {
       clearTimeout(timeoutId);
-      reject(new DOMException('Aborted', 'AbortError'));
+      reject(new DOMException("Aborted", "AbortError"));
     };
 
-    signal?.addEventListener('abort', onAbort, { once: true });
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
 
@@ -114,7 +119,7 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
  */
 export async function withRetry<T>(
   fn: () => Promise<T>,
-  options: RetryOptions
+  options: RetryOptions,
 ): Promise<T> {
   const { config, signal, onRetry } = options;
   let lastError: Error | undefined;
@@ -122,7 +127,7 @@ export async function withRetry<T>(
   for (let attempt = 1; attempt <= config.maxRetries + 1; attempt++) {
     // Check if aborted before each attempt
     if (signal?.aborted) {
-      throw new DOMException('Aborted', 'AbortError');
+      throw new DOMException("Aborted", "AbortError");
     }
 
     try {
@@ -152,7 +157,7 @@ export async function withRetry<T>(
   }
 
   // Should not reach here, but throw last error just in case
-  throw lastError ?? new Error('Retry failed with unknown error');
+  throw lastError ?? new Error("Retry failed with unknown error");
 }
 
 /**
@@ -164,7 +169,7 @@ export async function withRetry<T>(
 export function createRetryWrapper(config: RetryConfig) {
   return function retry<T>(
     fn: () => Promise<T>,
-    options?: Partial<Omit<RetryOptions, 'config'>>
+    options?: Partial<Omit<RetryOptions, "config">>,
   ): Promise<T> {
     return withRetry(fn, {
       config,

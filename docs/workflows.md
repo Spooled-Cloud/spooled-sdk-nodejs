@@ -23,35 +23,35 @@ Workflows allow you to orchestrate multiple jobs with dependencies. Jobs only ex
 ## Creating a Workflow
 
 ```typescript
-import { SpooledClient } from '@spooled/sdk';
+import { SpooledClient } from "@spooled/sdk";
 
-const client = new SpooledClient({ apiKey: 'sp_live_...' });
+const client = new SpooledClient({ apiKey: "sp_live_..." });
 
 const workflow = await client.workflows.create({
-  name: 'ETL Pipeline',
+  name: "ETL Pipeline",
   jobs: [
     {
-      key: 'extract',
-      queueName: 'etl',
-      payload: { source: 's3://bucket/data.csv' },
+      key: "extract",
+      queueName: "etl",
+      payload: { source: "s3://bucket/data.csv" },
     },
     {
-      key: 'transform',
-      queueName: 'etl',
-      payload: { operations: ['clean', 'normalize'] },
-      dependsOn: ['extract'],
+      key: "transform",
+      queueName: "etl",
+      payload: { operations: ["clean", "normalize"] },
+      dependsOn: ["extract"],
     },
     {
-      key: 'load',
-      queueName: 'etl',
-      payload: { destination: 'postgres://db/table' },
-      dependsOn: ['transform'],
+      key: "load",
+      queueName: "etl",
+      payload: { destination: "postgres://db/table" },
+      dependsOn: ["transform"],
     },
   ],
 });
 
 console.log(`Workflow ID: ${workflow.workflowId}`);
-console.log('Jobs:', workflow.jobMappings);
+console.log("Jobs:", workflow.jobMappings);
 // { extract: 'job_abc', transform: 'job_def', load: 'job_ghi' }
 ```
 
@@ -61,14 +61,29 @@ console.log('Jobs:', workflow.jobMappings);
 
 ```typescript
 const workflow = await client.workflows.create({
-  name: 'Parallel Processing',
+  name: "Parallel Processing",
   jobs: [
-    { key: 'fetch', queueName: 'data', payload: { url: '...' } },
+    { key: "fetch", queueName: "data", payload: { url: "..." } },
 
     // These run in parallel after 'fetch' completes
-    { key: 'process-a', queueName: 'cpu', payload: { type: 'a' }, dependsOn: ['fetch'] },
-    { key: 'process-b', queueName: 'cpu', payload: { type: 'b' }, dependsOn: ['fetch'] },
-    { key: 'process-c', queueName: 'cpu', payload: { type: 'c' }, dependsOn: ['fetch'] },
+    {
+      key: "process-a",
+      queueName: "cpu",
+      payload: { type: "a" },
+      dependsOn: ["fetch"],
+    },
+    {
+      key: "process-b",
+      queueName: "cpu",
+      payload: { type: "b" },
+      dependsOn: ["fetch"],
+    },
+    {
+      key: "process-c",
+      queueName: "cpu",
+      payload: { type: "c" },
+      dependsOn: ["fetch"],
+    },
   ],
 });
 ```
@@ -89,19 +104,19 @@ const workflow = await client.workflows.create({
 
 ```typescript
 const workflow = await client.workflows.create({
-  name: 'Map-Reduce',
+  name: "Map-Reduce",
   jobs: [
     // Parallel map phase
-    { key: 'map-1', queueName: 'workers', payload: { partition: 1 } },
-    { key: 'map-2', queueName: 'workers', payload: { partition: 2 } },
-    { key: 'map-3', queueName: 'workers', payload: { partition: 3 } },
+    { key: "map-1", queueName: "workers", payload: { partition: 1 } },
+    { key: "map-2", queueName: "workers", payload: { partition: 2 } },
+    { key: "map-3", queueName: "workers", payload: { partition: 3 } },
 
     // Reduce phase - waits for all map jobs
     {
-      key: 'reduce',
-      queueName: 'workers',
-      payload: { operation: 'aggregate' },
-      dependsOn: ['map-1', 'map-2', 'map-3'],
+      key: "reduce",
+      queueName: "workers",
+      payload: { operation: "aggregate" },
+      dependsOn: ["map-1", "map-2", "map-3"],
     },
   ],
 });
@@ -122,14 +137,19 @@ const workflow = await client.workflows.create({
 
 ```typescript
 const workflow = await client.workflows.create({
-  name: 'Diamond Workflow',
+  name: "Diamond Workflow",
   jobs: [
-    { key: 'start', queueName: 'pipeline', payload: {} },
+    { key: "start", queueName: "pipeline", payload: {} },
 
-    { key: 'path-a', queueName: 'pipeline', payload: {}, dependsOn: ['start'] },
-    { key: 'path-b', queueName: 'pipeline', payload: {}, dependsOn: ['start'] },
+    { key: "path-a", queueName: "pipeline", payload: {}, dependsOn: ["start"] },
+    { key: "path-b", queueName: "pipeline", payload: {}, dependsOn: ["start"] },
 
-    { key: 'merge', queueName: 'pipeline', payload: {}, dependsOn: ['path-a', 'path-b'] },
+    {
+      key: "merge",
+      queueName: "pipeline",
+      payload: {},
+      dependsOn: ["path-a", "path-b"],
+    },
   ],
 });
 ```
@@ -154,28 +174,38 @@ const workflow = await client.workflows.create({
 
 ```typescript
 const workflow = await client.workflows.create({
-  name: 'CI/CD Pipeline',
+  name: "CI/CD Pipeline",
   jobs: [
     // Stage 1: Build
-    { key: 'checkout', queueName: 'ci', payload: { repo: 'github.com/...' } },
-    { key: 'install', queueName: 'ci', payload: {}, dependsOn: ['checkout'] },
-    { key: 'build', queueName: 'ci', payload: {}, dependsOn: ['install'] },
+    { key: "checkout", queueName: "ci", payload: { repo: "github.com/..." } },
+    { key: "install", queueName: "ci", payload: {}, dependsOn: ["checkout"] },
+    { key: "build", queueName: "ci", payload: {}, dependsOn: ["install"] },
 
     // Stage 2: Test (parallel)
-    { key: 'unit-tests', queueName: 'ci', payload: {}, dependsOn: ['build'] },
-    { key: 'integration-tests', queueName: 'ci', payload: {}, dependsOn: ['build'] },
-    { key: 'e2e-tests', queueName: 'ci', payload: {}, dependsOn: ['build'] },
+    { key: "unit-tests", queueName: "ci", payload: {}, dependsOn: ["build"] },
+    {
+      key: "integration-tests",
+      queueName: "ci",
+      payload: {},
+      dependsOn: ["build"],
+    },
+    { key: "e2e-tests", queueName: "ci", payload: {}, dependsOn: ["build"] },
 
     // Stage 3: Deploy (after all tests pass)
     {
-      key: 'deploy',
-      queueName: 'cd',
-      payload: { env: 'production' },
-      dependsOn: ['unit-tests', 'integration-tests', 'e2e-tests'],
+      key: "deploy",
+      queueName: "cd",
+      payload: { env: "production" },
+      dependsOn: ["unit-tests", "integration-tests", "e2e-tests"],
     },
 
     // Stage 4: Notify
-    { key: 'notify', queueName: 'notifications', payload: {}, dependsOn: ['deploy'] },
+    {
+      key: "notify",
+      queueName: "notifications",
+      payload: {},
+      dependsOn: ["deploy"],
+    },
   ],
 });
 ```
@@ -187,10 +217,10 @@ const workflow = await client.workflows.create({
 ```typescript
 const status = await client.workflows.get(workflow.workflowId);
 
-console.log('Workflow status:', status.status);
+console.log("Workflow status:", status.status);
 // 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
-console.log('Jobs:');
+console.log("Jobs:");
 for (const job of status.jobs) {
   console.log(`  ${job.key}: ${job.status}`);
 }
@@ -201,8 +231,8 @@ for (const job of status.jobs) {
 ```typescript
 const deps = await client.workflows.jobs.getDependencies(jobId);
 
-console.log('Depends on:', deps.dependsOn);
-console.log('Required by:', deps.dependedOnBy);
+console.log("Depends on:", deps.dependsOn);
+console.log("Required by:", deps.dependedOnBy);
 ```
 
 ## Cancelling Workflows
@@ -232,7 +262,7 @@ The simplest way to retry a failed workflow is to use the `retry` method:
 // Get the failed workflow
 const status = await client.workflows.get(workflowId);
 
-if (status.status === 'failed') {
+if (status.status === "failed") {
   // Retry all failed jobs in one call
   const workflow = await client.workflows.retry(workflowId);
   console.log(`Workflow ${workflow.status}`); // 'running'
@@ -240,6 +270,7 @@ if (status.status === 'failed') {
 ```
 
 This will:
+
 - Reset all failed/deadletter jobs back to pending
 - Clear retry counts and error messages
 - Resume the workflow (status changes to 'running')
@@ -251,7 +282,7 @@ For more granular control, you can retry individual jobs:
 
 ```typescript
 // Re-run only a specific failed job and its dependents
-const failedJobKey = 'transform';
+const failedJobKey = "transform";
 const jobId = workflow.jobMappings[failedJobKey];
 
 await client.jobs.retry(jobId);
@@ -264,7 +295,7 @@ Workers process workflow jobs like any other job:
 
 ```typescript
 const worker = new SpooledWorker(client, {
-  queueName: 'etl',
+  queueName: "etl",
   concurrency: 5,
 });
 
@@ -273,13 +304,13 @@ worker.process(async (ctx) => {
   const { step, workflowId } = ctx.payload;
 
   switch (step) {
-    case 'extract':
+    case "extract":
       return await extractData(ctx.payload.source);
 
-    case 'transform':
+    case "transform":
       return await transformData(ctx.payload.operations);
 
-    case 'load':
+    case "load":
       return await loadData(ctx.payload.destination);
 
     default:
@@ -297,7 +328,7 @@ Job results are available to downstream jobs via the result field:
 ```typescript
 // In the 'transform' job worker:
 worker.process(async (ctx) => {
-  if (ctx.payload.step === 'transform') {
+  if (ctx.payload.step === "transform") {
     // Get result from the 'extract' job
     const extractJobId = ctx.payload.dependencies?.extract;
     if (extractJobId) {
@@ -323,15 +354,15 @@ function createBatchWorkflow(items: string[]) {
   for (let i = 0; i < items.length; i++) {
     jobs.push({
       key: `process-${i}`,
-      queueName: 'batch',
+      queueName: "batch",
       payload: { item: items[i], index: i },
     });
   }
 
   // Add aggregation job that depends on all processing jobs
   jobs.push({
-    key: 'aggregate',
-    queueName: 'batch',
+    key: "aggregate",
+    queueName: "batch",
     payload: { totalItems: items.length },
     dependsOn: items.map((_, i) => `process-${i}`),
   });
@@ -343,7 +374,7 @@ function createBatchWorkflow(items: string[]) {
 }
 
 // Usage
-const workflow = await createBatchWorkflow(['a', 'b', 'c', 'd', 'e']);
+const workflow = await createBatchWorkflow(["a", "b", "c", "d", "e"]);
 ```
 
 ## Best Practices
@@ -402,20 +433,20 @@ Different stages may need different timeouts:
 
 ```typescript
 const workflow = await client.workflows.create({
-  name: 'Data Pipeline',
+  name: "Data Pipeline",
   jobs: [
     {
-      key: 'download',
-      queueName: 'io',
+      key: "download",
+      queueName: "io",
       payload: {},
       timeoutSeconds: 300, // 5 minutes for download
     },
     {
-      key: 'process',
-      queueName: 'cpu',
+      key: "process",
+      queueName: "cpu",
       payload: {},
       timeoutSeconds: 3600, // 1 hour for heavy processing
-      dependsOn: ['download'],
+      dependsOn: ["download"],
     },
   ],
 });

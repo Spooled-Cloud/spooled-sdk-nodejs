@@ -6,12 +6,12 @@
 
 /* global __dirname */
 
-import * as grpc from '@grpc/grpc-js';
-import * as protoLoader from '@grpc/proto-loader';
-import { existsSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import type { ServiceClientConstructor } from '@grpc/grpc-js';
+import * as grpc from "@grpc/grpc-js";
+import * as protoLoader from "@grpc/proto-loader";
+import { existsSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+import type { ServiceClientConstructor } from "@grpc/grpc-js";
 
 /** Proto loader options for consistent parsing */
 export const PROTO_LOADER_OPTIONS: protoLoader.Options = {
@@ -37,7 +37,7 @@ let cachedDefinition: SpooledProtoDefinition | null = null;
  * Resolve the directory that contains this module (ESM or CJS).
  */
 function getModuleDir(): string {
-  if (typeof import.meta?.url !== 'undefined') {
+  if (typeof import.meta?.url !== "undefined") {
     return dirname(fileURLToPath(import.meta.url));
   }
   return __dirname;
@@ -55,11 +55,11 @@ export function getProtoPath(): string {
   const moduleDir = getModuleDir();
   const candidates = [
     // Bundled ESM/CJS: dist/index.js → ../proto/spooled.proto
-    join(moduleDir, '../proto/spooled.proto'),
+    join(moduleDir, "../proto/spooled.proto"),
     // Source / unbundled: src/grpc/loader.ts → ../../proto/spooled.proto
-    join(moduleDir, '../../proto/spooled.proto'),
+    join(moduleDir, "../../proto/spooled.proto"),
     // Extra safety if moduleDir is package root
-    join(moduleDir, 'proto/spooled.proto'),
+    join(moduleDir, "proto/spooled.proto"),
   ];
 
   for (const candidate of candidates) {
@@ -69,8 +69,8 @@ export function getProtoPath(): string {
   }
 
   throw new Error(
-    `Spooled gRPC proto not found. Tried: ${candidates.join(', ')}. ` +
-      `Ensure the package's proto/spooled.proto is installed next to dist/.`
+    `Spooled gRPC proto not found. Tried: ${candidates.join(", ")}. ` +
+      `Ensure the package's proto/spooled.proto is installed next to dist/.`,
   );
 }
 
@@ -85,7 +85,10 @@ export function loadProtoDefinition(): SpooledProtoDefinition {
 
   const protoPath = getProtoPath();
 
-  const packageDefinition = protoLoader.loadSync(protoPath, PROTO_LOADER_OPTIONS);
+  const packageDefinition = protoLoader.loadSync(
+    protoPath,
+    PROTO_LOADER_OPTIONS,
+  );
   const grpcObject = grpc.loadPackageDefinition(packageDefinition);
 
   cachedDefinition = grpcObject as unknown as SpooledProtoDefinition;
@@ -102,7 +105,10 @@ export async function loadProtoDefinitionAsync(): Promise<SpooledProtoDefinition
 
   const protoPath = getProtoPath();
 
-  const packageDefinition = await protoLoader.load(protoPath, PROTO_LOADER_OPTIONS);
+  const packageDefinition = await protoLoader.load(
+    protoPath,
+    PROTO_LOADER_OPTIONS,
+  );
   const grpcObject = grpc.loadPackageDefinition(packageDefinition);
 
   cachedDefinition = grpcObject as unknown as SpooledProtoDefinition;

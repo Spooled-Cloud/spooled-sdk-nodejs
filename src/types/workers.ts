@@ -4,7 +4,7 @@
  * Types for worker-related operations.
  */
 
-import type { WorkerStatus, JsonObject } from './common.js';
+import type { WorkerStatus, JsonObject } from "./common.js";
 
 /** Full worker model */
 export interface Worker {

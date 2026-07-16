@@ -5,7 +5,7 @@
  * Uses proper enum names matching the proto (JOB_STATUS_PENDING, etc.)
  */
 
-import type * as grpc from '@grpc/grpc-js';
+import type * as grpc from "@grpc/grpc-js";
 
 // ============================================================================
 // Job Status Enum
@@ -13,14 +13,14 @@ import type * as grpc from '@grpc/grpc-js';
 
 /** Job status enum values (proto-style naming) */
 export enum GrpcJobStatus {
-  JOB_STATUS_UNSPECIFIED = 'JOB_STATUS_UNSPECIFIED',
-  JOB_STATUS_PENDING = 'JOB_STATUS_PENDING',
-  JOB_STATUS_SCHEDULED = 'JOB_STATUS_SCHEDULED',
-  JOB_STATUS_PROCESSING = 'JOB_STATUS_PROCESSING',
-  JOB_STATUS_COMPLETED = 'JOB_STATUS_COMPLETED',
-  JOB_STATUS_FAILED = 'JOB_STATUS_FAILED',
-  JOB_STATUS_DEADLETTER = 'JOB_STATUS_DEADLETTER',
-  JOB_STATUS_CANCELLED = 'JOB_STATUS_CANCELLED',
+  JOB_STATUS_UNSPECIFIED = "JOB_STATUS_UNSPECIFIED",
+  JOB_STATUS_PENDING = "JOB_STATUS_PENDING",
+  JOB_STATUS_SCHEDULED = "JOB_STATUS_SCHEDULED",
+  JOB_STATUS_PROCESSING = "JOB_STATUS_PROCESSING",
+  JOB_STATUS_COMPLETED = "JOB_STATUS_COMPLETED",
+  JOB_STATUS_FAILED = "JOB_STATUS_FAILED",
+  JOB_STATUS_DEADLETTER = "JOB_STATUS_DEADLETTER",
+  JOB_STATUS_CANCELLED = "JOB_STATUS_CANCELLED",
 }
 
 /** Numeric job status values (for backward compatibility) */
@@ -46,21 +46,26 @@ export interface GrpcTimestamp {
 }
 
 /** Convert timestamp to Date */
-export function timestampToDate(ts: GrpcTimestamp | string | undefined | null): Date | null {
+export function timestampToDate(
+  ts: GrpcTimestamp | string | undefined | null,
+): Date | null {
   if (!ts) return null;
 
-  if (typeof ts === 'string') {
+  if (typeof ts === "string") {
     return new Date(ts);
   }
 
-  const seconds = typeof ts.seconds === 'string' ? parseInt(ts.seconds, 10) : (ts.seconds ?? 0);
+  const seconds =
+    typeof ts.seconds === "string"
+      ? parseInt(ts.seconds, 10)
+      : (ts.seconds ?? 0);
   const nanos = ts.nanos ?? 0;
   return new Date(seconds * 1000 + Math.floor(nanos / 1_000_000));
 }
 
 /** Convert Date to timestamp object */
 export function dateToTimestamp(date: Date | string): GrpcTimestamp {
-  const d = typeof date === 'string' ? new Date(date) : date;
+  const d = typeof date === "string" ? new Date(date) : date;
   const ms = d.getTime();
   return {
     seconds: Math.floor(ms / 1000).toString(),

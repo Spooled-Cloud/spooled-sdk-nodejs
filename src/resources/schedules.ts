@@ -4,7 +4,7 @@
  * Handles cron schedule operations.
  */
 
-import type { HttpClient } from '../utils/http.js';
+import type { HttpClient } from "../utils/http.js";
 import type {
   Schedule,
   CreateScheduleParams,
@@ -13,7 +13,7 @@ import type {
   ListSchedulesParams,
   TriggerScheduleResponse,
   ScheduleRun,
-} from '../types/schedules.js';
+} from "../types/schedules.js";
 
 export class SchedulesResource {
   constructor(private readonly http: HttpClient) {}
@@ -22,14 +22,16 @@ export class SchedulesResource {
    * List all schedules
    */
   async list(params?: ListSchedulesParams): Promise<Schedule[]> {
-    return this.http.get<Schedule[]>('/schedules', { params: params as Record<string, string | number | boolean | undefined> });
+    return this.http.get<Schedule[]>("/schedules", {
+      params: params as Record<string, string | number | boolean | undefined>,
+    });
   }
 
   /**
    * Create a new schedule
    */
   async create(params: CreateScheduleParams): Promise<CreateScheduleResponse> {
-    return this.http.post<CreateScheduleResponse>('/schedules', params);
+    return this.http.post<CreateScheduleResponse>("/schedules", params);
   }
 
   /**

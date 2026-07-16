@@ -5,52 +5,54 @@ This guide covers all configuration options for the Spooled SDK.
 ## Client Configuration
 
 ```typescript
-import { SpooledClient } from '@spooled/sdk';
+import { SpooledClient } from "@spooled/sdk";
 
 const client = new SpooledClient({
   // === Authentication (required - one of these) ===
-  apiKey: 'sp_live_...',           // API key (sp_live_/sp_test_; legacy sk_ prefixes are also accepted)
-  accessToken: 'jwt_token',         // Or JWT access token
-  refreshToken: 'refresh_token',    // Optional: for auto token renewal
-  adminKey: 'admin_...',            // Optional: for admin endpoints
+  apiKey: "sp_live_...", // API key (sp_live_/sp_test_; legacy sk_ prefixes are also accepted)
+  accessToken: "jwt_token", // Or JWT access token
+  refreshToken: "refresh_token", // Optional: for auto token renewal
+  adminKey: "admin_...", // Optional: for admin endpoints
 
   // === API Settings ===
-  baseUrl: 'https://api.spooled.cloud',  // REST API base URL (default)
-  wsUrl: 'wss://api.spooled.cloud',      // WebSocket URL for realtime (default: derived from baseUrl)
-  grpcAddress: 'grpc.spooled.cloud:443', // gRPC server address (default)
-  timeout: 30000,                         // Request timeout in ms (default: 30000)
+  baseUrl: "https://api.spooled.cloud", // REST API base URL (default)
+  wsUrl: "wss://api.spooled.cloud", // WebSocket URL for realtime (default: derived from baseUrl)
+  grpcAddress: "grpc.spooled.cloud:443", // gRPC server address (default)
+  timeout: 30000, // Request timeout in ms (default: 30000)
 
   // === Retry Configuration ===
-  retries: 3,                       // Shorthand for retry.maxRetries
-  retryDelay: 1000,                 // Shorthand for retry.baseDelay
+  retries: 3, // Shorthand for retry.maxRetries
+  retryDelay: 1000, // Shorthand for retry.baseDelay
 
   retry: {
-    maxRetries: 3,                  // Max retry attempts (default: 3)
-    baseDelay: 1000,                // Base delay in ms (default: 1000)
-    maxDelay: 30000,                // Max delay cap in ms (default: 30000)
-    factor: 2,                      // Exponential backoff factor (default: 2)
-    jitter: true,                   // Add randomness to delays (default: true)
-    retryOn: (error, attempt) => {  // Custom retry logic
+    maxRetries: 3, // Max retry attempts (default: 3)
+    baseDelay: 1000, // Base delay in ms (default: 1000)
+    maxDelay: 30000, // Max delay cap in ms (default: 30000)
+    factor: 2, // Exponential backoff factor (default: 2)
+    jitter: true, // Add randomness to delays (default: true)
+    retryOn: (error, attempt) => {
+      // Custom retry logic
       return error.isRetryable();
     },
   },
 
   // === Circuit Breaker ===
   circuitBreaker: {
-    enabled: true,                  // Enable circuit breaker (default: true)
-    failureThreshold: 5,            // Failures to open circuit (default: 5)
-    successThreshold: 3,            // Successes to close circuit (default: 3)
-    timeout: 30000,                 // Time before retry after open (default: 30000)
+    enabled: true, // Enable circuit breaker (default: true)
+    failureThreshold: 5, // Failures to open circuit (default: 5)
+    successThreshold: 3, // Successes to close circuit (default: 3)
+    timeout: 30000, // Time before retry after open (default: 30000)
   },
 
   // === Advanced ===
-  headers: {                        // Custom headers for all requests
-    'X-Custom-Header': 'value',
+  headers: {
+    // Custom headers for all requests
+    "X-Custom-Header": "value",
   },
-  fetch: customFetch,               // Custom fetch implementation
-  userAgent: 'my-app/1.0.0',        // Custom user agent
-  debug: true,                      // Enable debug logging
-  autoRefreshToken: true,           // Auto-refresh JWT tokens (default: true)
+  fetch: customFetch, // Custom fetch implementation
+  userAgent: "my-app/1.0.0", // Custom user agent
+  debug: true, // Enable debug logging
+  autoRefreshToken: true, // Auto-refresh JWT tokens (default: true)
 });
 ```
 
@@ -78,7 +80,7 @@ const client = new SpooledClient({
   baseUrl: process.env.SPOOLED_API_URL,
   wsUrl: process.env.SPOOLED_WS_URL,
   grpcAddress: process.env.SPOOLED_GRPC_ADDRESS,
-  debug: process.env.SPOOLED_DEBUG === 'true',
+  debug: process.env.SPOOLED_DEBUG === "true",
 });
 ```
 
@@ -88,17 +90,17 @@ If you're running your own Spooled instance, configure the SDK to point to your 
 
 ```typescript
 const client = new SpooledClient({
-  apiKey: 'sp_live_your_key',
-  
+  apiKey: "sp_live_your_key",
+
   // Point to your self-hosted instance
-  baseUrl: 'https://spooled.your-company.com',
-  
+  baseUrl: "https://spooled.your-company.com",
+
   // WebSocket URL (optional - derived from baseUrl if not set)
   // Only needed if WebSocket is on a different host
-  wsUrl: 'wss://spooled.your-company.com',
-  
+  wsUrl: "wss://spooled.your-company.com",
+
   // gRPC address (optional - only if using gRPC workers)
-  grpcAddress: 'grpc.your-company.com:443',
+  grpcAddress: "grpc.your-company.com:443",
 });
 ```
 
@@ -107,7 +109,7 @@ const client = new SpooledClient({
 If `wsUrl` is not explicitly set, it's automatically derived from `baseUrl`:
 
 | `baseUrl`                         | Derived `wsUrl`                 |
-|-----------------------------------|---------------------------------|
+| --------------------------------- | ------------------------------- |
 | `https://api.example.com`         | `wss://api.example.com`         |
 | `http://localhost:8080`           | `ws://localhost:8080`           |
 | `https://spooled.company.com:443` | `wss://spooled.company.com:443` |
@@ -118,9 +120,9 @@ For local development, you might use:
 
 ```typescript
 const client = new SpooledClient({
-  apiKey: 'sp_test_local_dev_key',
-  baseUrl: 'http://localhost:8080',
-  grpcAddress: 'localhost:50051',
+  apiKey: "sp_test_local_dev_key",
+  baseUrl: "http://localhost:8080",
+  grpcAddress: "localhost:50051",
   debug: true,
 });
 ```
@@ -134,7 +136,7 @@ delay = min(maxDelay, baseDelay * (factor ^ attempt)) * (1 + random * jitter)
 ```
 
 | Attempt | Base Delay | With Jitter (approx) |
-|---------|------------|----------------------|
+| ------- | ---------- | -------------------- |
 | 1       | 1000ms     | 1000-1500ms          |
 | 2       | 2000ms     | 2000-3000ms          |
 | 3       | 4000ms     | 4000-6000ms          |
@@ -162,12 +164,12 @@ Non-retryable errors:
 
 ```typescript
 const client = new SpooledClient({
-  apiKey: 'sp_live_...',
+  apiKey: "sp_live_...",
   retry: {
     maxRetries: 5,
     retryOn: (error, attempt) => {
       // Don't retry validation errors
-      if (error.code === 'VALIDATION_ERROR') {
+      if (error.code === "VALIDATION_ERROR") {
         return false;
       }
       // Retry everything else up to 5 times
@@ -195,12 +197,12 @@ CLOSED → (failures >= threshold) → OPEN → (timeout expires) → HALF_OPEN
 
 ```typescript
 const client = new SpooledClient({
-  apiKey: 'sp_live_...',
+  apiKey: "sp_live_...",
   circuitBreaker: {
     enabled: true,
-    failureThreshold: 5,    // Open after 5 consecutive failures
-    successThreshold: 3,    // Close after 3 consecutive successes
-    timeout: 30000,         // Try again after 30 seconds
+    failureThreshold: 5, // Open after 5 consecutive failures
+    successThreshold: 3, // Close after 3 consecutive successes
+    timeout: 30000, // Try again after 30 seconds
   },
 });
 ```
@@ -225,7 +227,7 @@ Enable debug mode to see all API requests and responses:
 
 ```typescript
 const client = new SpooledClient({
-  apiKey: 'sp_live_...',
+  apiKey: "sp_live_...",
   debug: true,
 });
 ```
@@ -234,7 +236,7 @@ Or provide a custom logger:
 
 ```typescript
 const client = new SpooledClient({
-  apiKey: 'sp_live_...',
+  apiKey: "sp_live_...",
   debug: (message, meta) => {
     console.log(`[Spooled] ${message}`, meta);
   },
@@ -253,16 +255,16 @@ Example output:
 Useful for testing or special runtime environments:
 
 ```typescript
-import { SpooledClient } from '@spooled/sdk';
+import { SpooledClient } from "@spooled/sdk";
 
 // Mock fetch for testing
 const mockFetch = async (url: string, options: RequestInit) => {
-  console.log('Fetching:', url);
+  console.log("Fetching:", url);
   return fetch(url, options);
 };
 
 const client = new SpooledClient({
-  apiKey: 'sp_live_...',
+  apiKey: "sp_live_...",
   fetch: mockFetch,
 });
 ```
@@ -274,28 +276,28 @@ You can create multiple clients for different environments or API keys:
 ```typescript
 // Spooled Cloud (production)
 const cloudClient = new SpooledClient({
-  apiKey: 'sp_live_production_key',
+  apiKey: "sp_live_production_key",
 });
 
 // Self-hosted instance
 const selfHostedClient = new SpooledClient({
-  apiKey: 'sp_live_self_hosted_key',
-  baseUrl: 'https://spooled.your-company.com',
-  grpcAddress: 'grpc.your-company.com:443',
+  apiKey: "sp_live_self_hosted_key",
+  baseUrl: "https://spooled.your-company.com",
+  grpcAddress: "grpc.your-company.com:443",
 });
 
 // Local development
 const localClient = new SpooledClient({
-  apiKey: 'sp_test_dev_key',
-  baseUrl: 'http://localhost:8080',
-  grpcAddress: 'localhost:50051',
+  apiKey: "sp_test_dev_key",
+  baseUrl: "http://localhost:8080",
+  grpcAddress: "localhost:50051",
   debug: true,
 });
 
 // Admin client
 const adminClient = new SpooledClient({
-  apiKey: 'sp_live_...',
-  adminKey: 'admin_super_secret',
+  apiKey: "sp_live_...",
+  adminKey: "admin_super_secret",
 });
 ```
 
@@ -309,10 +311,10 @@ import type {
   RetryConfig,
   CircuitBreakerConfig,
   ResolvedConfig,
-} from '@spooled/sdk';
+} from "@spooled/sdk";
 
 const config: SpooledClientConfig = {
-  apiKey: 'sp_live_...',
+  apiKey: "sp_live_...",
   timeout: 60000,
 };
 ```

@@ -4,7 +4,7 @@
  * Handles workflow operations including job dependencies.
  */
 
-import type { HttpClient } from '../utils/http.js';
+import type { HttpClient } from "../utils/http.js";
 import type {
   WorkflowResponse,
   CreateWorkflowParams,
@@ -15,7 +15,7 @@ import type {
   AddDependenciesResponse,
   WorkflowJob,
   WorkflowJobStatus,
-} from '../types/workflows.js';
+} from "../types/workflows.js";
 
 /** Workflow job operations */
 export interface WorkflowJobOperations {
@@ -84,7 +84,10 @@ export interface WorkflowJobOperations {
    * });
    * ```
    */
-  addDependencies(jobId: string, params: AddDependenciesParams): Promise<AddDependenciesResponse>;
+  addDependencies(
+    jobId: string,
+    params: AddDependenciesParams,
+  ): Promise<AddDependenciesResponse>;
 }
 
 export class WorkflowsResource {
@@ -105,14 +108,16 @@ export class WorkflowsResource {
    * List all workflows
    */
   async list(params?: ListWorkflowsParams): Promise<WorkflowResponse[]> {
-    return this.http.get<WorkflowResponse[]>('/workflows', { params: params as Record<string, string | number | boolean | undefined> });
+    return this.http.get<WorkflowResponse[]>("/workflows", {
+      params: params as Record<string, string | number | boolean | undefined>,
+    });
   }
 
   /**
    * Create a new workflow
    */
   async create(params: CreateWorkflowParams): Promise<CreateWorkflowResponse> {
-    return this.http.post<CreateWorkflowResponse>('/workflows', params);
+    return this.http.post<CreateWorkflowResponse>("/workflows", params);
   }
 
   /**
@@ -145,22 +150,34 @@ export class WorkflowsResource {
     return this.http.get<WorkflowJob[]>(`/workflows/${workflowId}/jobs`);
   }
 
-  private async getWorkflowJob(workflowId: string, jobId: string): Promise<WorkflowJob> {
+  private async getWorkflowJob(
+    workflowId: string,
+    jobId: string,
+  ): Promise<WorkflowJob> {
     return this.http.get<WorkflowJob>(`/workflows/${workflowId}/jobs/${jobId}`);
   }
 
-  private async getWorkflowJobsStatus(workflowId: string): Promise<WorkflowJobStatus[]> {
-    return this.http.get<WorkflowJobStatus[]>(`/workflows/${workflowId}/jobs/status`);
+  private async getWorkflowJobsStatus(
+    workflowId: string,
+  ): Promise<WorkflowJobStatus[]> {
+    return this.http.get<WorkflowJobStatus[]>(
+      `/workflows/${workflowId}/jobs/status`,
+    );
   }
 
-  private async getJobDependencies(jobId: string): Promise<JobWithDependencies> {
+  private async getJobDependencies(
+    jobId: string,
+  ): Promise<JobWithDependencies> {
     return this.http.get<JobWithDependencies>(`/jobs/${jobId}/dependencies`);
   }
 
   private async addJobDependencies(
     jobId: string,
-    params: AddDependenciesParams
+    params: AddDependenciesParams,
   ): Promise<AddDependenciesResponse> {
-    return this.http.post<AddDependenciesResponse>(`/jobs/${jobId}/dependencies`, params);
+    return this.http.post<AddDependenciesResponse>(
+      `/jobs/${jobId}/dependencies`,
+      params,
+    );
   }
 }

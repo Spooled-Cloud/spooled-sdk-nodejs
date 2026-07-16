@@ -4,7 +4,12 @@
  * Types for workflow-related operations.
  */
 
-import type { WorkflowStatus, DependencyMode, JsonObject, ListParams } from './common.js';
+import type {
+  WorkflowStatus,
+  DependencyMode,
+  JsonObject,
+  ListParams,
+} from "./common.js";
 
 /** Full workflow model */
 export interface Workflow {
@@ -124,7 +129,14 @@ export interface WorkflowJob {
   /** Queue name */
   queueName: string;
   /** Current job status */
-  status: 'pending' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'deadletter';
+  status:
+    | "pending"
+    | "queued"
+    | "running"
+    | "completed"
+    | "failed"
+    | "cancelled"
+    | "deadletter";
   /** Job payload */
   payload: JsonObject;
   /** Job result (if completed) */

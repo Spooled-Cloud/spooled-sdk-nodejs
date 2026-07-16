@@ -4,7 +4,7 @@
  * Types for job-related operations.
  */
 
-import type { JobStatus, JsonObject, ListParams } from './common.js';
+import type { JobStatus, JsonObject, ListParams } from "./common.js";
 
 /** Full job model */
 export interface Job {

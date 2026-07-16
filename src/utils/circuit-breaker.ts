@@ -5,17 +5,17 @@
  * States: CLOSED (normal) -> OPEN (failing) -> HALF_OPEN (testing) -> CLOSED
  */
 
-import type { CircuitBreakerConfig } from '../config.js';
-import { CircuitBreakerOpenError, isRetryableError } from '../errors.js';
+import type { CircuitBreakerConfig } from "../config.js";
+import { CircuitBreakerOpenError, isRetryableError } from "../errors.js";
 
 /** Circuit breaker states */
 export enum CircuitState {
   /** Normal operation - requests flow through */
-  CLOSED = 'CLOSED',
+  CLOSED = "CLOSED",
   /** Circuit is open - requests are rejected immediately */
-  OPEN = 'OPEN',
+  OPEN = "OPEN",
   /** Testing state - limited requests allowed to test recovery */
-  HALF_OPEN = 'HALF_OPEN',
+  HALF_OPEN = "HALF_OPEN",
 }
 
 /** Circuit breaker state change event */
@@ -184,7 +184,7 @@ export class CircuitBreaker {
   async execute<T>(fn: () => Promise<T>): Promise<T> {
     if (!this.isAllowed()) {
       throw new CircuitBreakerOpenError(
-        `Circuit breaker is open. Will retry after ${this.config.timeout}ms`
+        `Circuit breaker is open. Will retry after ${this.config.timeout}ms`,
       );
     }
 
@@ -213,7 +213,9 @@ export class CircuitBreaker {
       state: this.getState(),
       failureCount: this.failureCount,
       successCount: this.successCount,
-      lastFailureTime: this.lastFailureTime ? new Date(this.lastFailureTime) : null,
+      lastFailureTime: this.lastFailureTime
+        ? new Date(this.lastFailureTime)
+        : null,
       config: {
         enabled: this.config.enabled,
         failureThreshold: this.config.failureThreshold,
@@ -227,7 +229,9 @@ export class CircuitBreaker {
 /**
  * Create a circuit breaker instance from configuration
  */
-export function createCircuitBreaker(config: CircuitBreakerConfig): CircuitBreaker {
+export function createCircuitBreaker(
+  config: CircuitBreakerConfig,
+): CircuitBreaker {
   return new CircuitBreaker(config);
 }
 

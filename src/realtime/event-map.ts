@@ -13,17 +13,17 @@
  * maps to its dotted SDK name.
  */
 export const BACKEND_EVENT_TYPE_MAP: Record<string, string> = {
-  JobStatusChange: 'job.status_changed',
-  JobCreated: 'job.created',
-  JobCompleted: 'job.completed',
-  JobFailed: 'job.failed',
-  QueueStats: 'queue.stats',
-  WorkerHeartbeat: 'worker.heartbeat',
-  WorkerRegistered: 'worker.registered',
-  WorkerDeregistered: 'worker.deregistered',
-  SystemHealth: 'system.health',
-  Ping: 'ping',
-  Error: 'error',
+  JobStatusChange: "job.status_changed",
+  JobCreated: "job.created",
+  JobCompleted: "job.completed",
+  JobFailed: "job.failed",
+  QueueStats: "queue.stats",
+  WorkerHeartbeat: "worker.heartbeat",
+  WorkerRegistered: "worker.registered",
+  WorkerDeregistered: "worker.deregistered",
+  SystemHealth: "system.health",
+  Ping: "ping",
+  Error: "error",
 };
 
 /**

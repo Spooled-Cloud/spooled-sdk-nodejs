@@ -5,10 +5,14 @@
  */
 
 // Main client
-export { SpooledGrpcClient, GrpcQueueOperations, GrpcWorkerOperations } from './client.js';
+export {
+  SpooledGrpcClient,
+  GrpcQueueOperations,
+  GrpcWorkerOperations,
+} from "./client.js";
 
 // Types
-export * from './types.js';
+export * from "./types.js";
 
 // Streaming utilities
 export {
@@ -18,7 +22,7 @@ export {
   type StreamOptions,
   type JobStream,
   type ProcessJobsStream,
-} from './streaming.js';
+} from "./streaming.js";
 
 // Proto loader (for advanced users)
 export {
@@ -28,4 +32,4 @@ export {
   clearProtoCache,
   PROTO_LOADER_OPTIONS,
   type SpooledProtoDefinition,
-} from './loader.js';
+} from "./loader.js";

@@ -94,9 +94,9 @@ export interface ResolvedConfig {
 
 /** Default configuration values */
 export const DEFAULT_CONFIG = {
-  baseUrl: 'https://api.spooled.cloud',
-  wsUrl: 'wss://api.spooled.cloud',
-  grpcAddress: 'grpc.spooled.cloud:443',
+  baseUrl: "https://api.spooled.cloud",
+  wsUrl: "wss://api.spooled.cloud",
+  grpcAddress: "grpc.spooled.cloud:443",
   timeout: 30000,
   retry: {
     maxRetries: 3,
@@ -111,15 +111,15 @@ export const DEFAULT_CONFIG = {
     successThreshold: 3,
     timeout: 30000,
   } satisfies CircuitBreakerConfig,
-  userAgent: '@spooled/sdk-nodejs/1.0.39',
+  userAgent: "@spooled/sdk-nodejs/1.0.39",
   autoRefreshToken: true,
 } as const;
 
 /** SDK version */
-export const SDK_VERSION = '1.0.39';
+export const SDK_VERSION = "1.0.39";
 
 /** API version prefix */
-export const API_VERSION = 'v1';
+export const API_VERSION = "v1";
 
 /** API base path */
 export const API_BASE_PATH = `/api/${API_VERSION}`;
@@ -134,7 +134,7 @@ function normalizeCredential(value: string | undefined): string | undefined {
     return undefined;
   }
   const trimmed = value.trim();
-  return trimmed === '' ? undefined : trimmed;
+  return trimmed === "" ? undefined : trimmed;
 }
 
 /**
@@ -146,9 +146,9 @@ export function resolveConfig(options: SpooledClientConfig): ResolvedConfig {
   if (options.debug === true) {
     debugFn = (message: string, meta?: unknown) => {
       // eslint-disable-next-line no-console
-      console.log(`[spooled-sdk] ${message}`, meta !== undefined ? meta : '');
+      console.log(`[spooled-sdk] ${message}`, meta !== undefined ? meta : "");
     };
-  } else if (typeof options.debug === 'function') {
+  } else if (typeof options.debug === "function") {
     debugFn = options.debug;
   }
 
@@ -169,17 +169,17 @@ export function resolveConfig(options: SpooledClientConfig): ResolvedConfig {
 
   // Build headers
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
+    "Content-Type": "application/json",
+    Accept: "application/json",
     ...options.headers,
   };
 
   // Resolve base URL first
   const baseUrl = options.baseUrl ?? DEFAULT_CONFIG.baseUrl;
-  
+
   // Derive WebSocket URL from base URL if not explicitly set
   // Replace http(s):// with ws(s)://
-  const derivedWsUrl = baseUrl.replace(/^http/, 'ws');
+  const derivedWsUrl = baseUrl.replace(/^http/, "ws");
   const wsUrl = options.wsUrl ?? derivedWsUrl;
 
   // Trim whitespace (including a stray trailing '\n') from every credential.
@@ -202,7 +202,8 @@ export function resolveConfig(options: SpooledClientConfig): ResolvedConfig {
     fetch: options.fetch ?? globalThis.fetch,
     userAgent: options.userAgent ?? DEFAULT_CONFIG.userAgent,
     debug: debugFn,
-    autoRefreshToken: options.autoRefreshToken ?? DEFAULT_CONFIG.autoRefreshToken,
+    autoRefreshToken:
+      options.autoRefreshToken ?? DEFAULT_CONFIG.autoRefreshToken,
   };
 }
 
@@ -214,52 +215,59 @@ export function validateConfig(config: ResolvedConfig): void {
   // Must have at least one auth method
   if (!config.apiKey && !config.accessToken) {
     throw new Error(
-      'SpooledClient requires either apiKey or accessToken for authentication'
+      "SpooledClient requires either apiKey or accessToken for authentication",
     );
   }
 
   // Validate API key format if provided
   // Accept both sp_ (new standard) and sk_ (legacy) prefixes
-  if (config.apiKey && !config.apiKey.startsWith('sp_') && !config.apiKey.startsWith('sk_')) {
+  if (
+    config.apiKey &&
+    !config.apiKey.startsWith("sp_") &&
+    !config.apiKey.startsWith("sk_")
+  ) {
     throw new Error(
-      'Invalid API key format. API keys should start with sp_live_, sp_test_, sk_live_, or sk_test_'
+      "Invalid API key format. API keys should start with sp_live_, sp_test_, sk_live_, or sk_test_",
     );
   }
 
   // Validate baseUrl
-  if (!config.baseUrl.startsWith('http://') && !config.baseUrl.startsWith('https://')) {
-    throw new Error('baseUrl must start with http:// or https://');
+  if (
+    !config.baseUrl.startsWith("http://") &&
+    !config.baseUrl.startsWith("https://")
+  ) {
+    throw new Error("baseUrl must start with http:// or https://");
   }
 
   // Validate timeout
   if (config.timeout <= 0) {
-    throw new Error('timeout must be a positive number');
+    throw new Error("timeout must be a positive number");
   }
 
   // Validate retry config
   if (config.retry.maxRetries < 0) {
-    throw new Error('retry.maxRetries must be non-negative');
+    throw new Error("retry.maxRetries must be non-negative");
   }
   if (config.retry.baseDelay <= 0) {
-    throw new Error('retry.baseDelay must be positive');
+    throw new Error("retry.baseDelay must be positive");
   }
   if (config.retry.maxDelay < config.retry.baseDelay) {
-    throw new Error('retry.maxDelay must be >= retry.baseDelay');
+    throw new Error("retry.maxDelay must be >= retry.baseDelay");
   }
   if (config.retry.factor < 1) {
-    throw new Error('retry.factor must be >= 1');
+    throw new Error("retry.factor must be >= 1");
   }
 
   // Validate circuit breaker config
   if (config.circuitBreaker.enabled) {
     if (config.circuitBreaker.failureThreshold <= 0) {
-      throw new Error('circuitBreaker.failureThreshold must be positive');
+      throw new Error("circuitBreaker.failureThreshold must be positive");
     }
     if (config.circuitBreaker.successThreshold <= 0) {
-      throw new Error('circuitBreaker.successThreshold must be positive');
+      throw new Error("circuitBreaker.successThreshold must be positive");
     }
     if (config.circuitBreaker.timeout <= 0) {
-      throw new Error('circuitBreaker.timeout must be positive');
+      throw new Error("circuitBreaker.timeout must be positive");
     }
   }
 }

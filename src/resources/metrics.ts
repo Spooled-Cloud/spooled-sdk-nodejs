@@ -2,7 +2,7 @@
  * Metrics Resource
  */
 
-import type { HttpClient } from '../utils/http.js';
+import type { HttpClient } from "../utils/http.js";
 
 export class MetricsResource {
   constructor(private readonly http: HttpClient) {}
@@ -13,10 +13,10 @@ export class MetricsResource {
    * GET /metrics
    */
   async get(): Promise<string> {
-    return this.http.get<string>('/metrics', {
+    return this.http.get<string>("/metrics", {
       skipApiPrefix: true,
       // Ensure we get the raw text response.
-      headers: { Accept: 'text/plain' },
+      headers: { Accept: "text/plain" },
     });
   }
 }

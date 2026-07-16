@@ -23,10 +23,10 @@ pnpm add @spooled/sdk
 ## Creating a Client
 
 ```typescript
-import { SpooledClient } from '@spooled/sdk';
+import { SpooledClient } from "@spooled/sdk";
 
 const client = new SpooledClient({
-  apiKey: 'sp_live_your_api_key',
+  apiKey: "sp_live_your_api_key",
 });
 ```
 
@@ -35,7 +35,7 @@ For local development or testing:
 ```typescript
 const client = new SpooledClient({
   apiKey: process.env.SPOOLED_API_KEY,
-  baseUrl: process.env.SPOOLED_API_URL || 'https://api.spooled.cloud',
+  baseUrl: process.env.SPOOLED_API_URL || "https://api.spooled.cloud",
 });
 ```
 
@@ -45,9 +45,9 @@ const client = new SpooledClient({
 
 ```typescript
 const { id, created } = await client.jobs.create({
-  queueName: 'my-first-queue',
+  queueName: "my-first-queue",
   payload: {
-    message: 'Hello, Spooled!',
+    message: "Hello, Spooled!",
     timestamp: Date.now(),
   },
 });
@@ -68,8 +68,8 @@ console.log(`Status: ${job.status}`);
 
 ```typescript
 const jobs = await client.jobs.list({
-  queueName: 'my-first-queue',
-  status: 'pending',
+  queueName: "my-first-queue",
+  status: "pending",
   limit: 10,
 });
 
@@ -83,19 +83,19 @@ for (const job of jobs) {
 The SDK includes a built-in worker runtime for processing jobs:
 
 ```typescript
-import { SpooledClient, SpooledWorker } from '@spooled/sdk';
+import { SpooledClient, SpooledWorker } from "@spooled/sdk";
 
-const client = new SpooledClient({ apiKey: 'sp_live_...' });
+const client = new SpooledClient({ apiKey: "sp_live_..." });
 
 const worker = new SpooledWorker(client, {
-  queueName: 'my-first-queue',
+  queueName: "my-first-queue",
   concurrency: 5,
 });
 
 // Define how to process each job
 worker.process(async (ctx) => {
   console.log(`Processing job ${ctx.jobId}`);
-  console.log('Payload:', ctx.payload);
+  console.log("Payload:", ctx.payload);
 
   // Your business logic here
   await doSomething(ctx.payload);
@@ -108,7 +108,7 @@ worker.process(async (ctx) => {
 await worker.start();
 
 // Graceful shutdown on SIGTERM
-process.on('SIGTERM', () => worker.stop());
+process.on("SIGTERM", () => worker.stop());
 ```
 
 ## Key Concepts
@@ -122,7 +122,7 @@ Queues are logical groupings of jobs. Jobs are processed in priority order withi
 const queues = await client.queues.list();
 
 // Get queue statistics
-const stats = await client.queues.getStats('my-queue');
+const stats = await client.queues.getStats("my-queue");
 console.log(`Pending: ${stats.pending}, Processing: ${stats.processing}`);
 ```
 
@@ -133,14 +133,14 @@ Jobs have a priority from -100 (lowest) to 100 (highest). Default is 0.
 ```typescript
 // High priority job
 await client.jobs.create({
-  queueName: 'urgent',
-  payload: { alert: 'critical' },
+  queueName: "urgent",
+  payload: { alert: "critical" },
   priority: 100,
 });
 
 // Low priority background task
 await client.jobs.create({
-  queueName: 'background',
+  queueName: "background",
   payload: { cleanup: true },
   priority: -50,
 });
@@ -152,10 +152,10 @@ Failed jobs are automatically retried based on the `maxRetries` setting:
 
 ```typescript
 await client.jobs.create({
-  queueName: 'emails',
-  payload: { to: 'user@example.com' },
-  maxRetries: 5,           // Retry up to 5 times
-  timeoutSeconds: 60,      // 60 second timeout per attempt
+  queueName: "emails",
+  payload: { to: "user@example.com" },
+  maxRetries: 5, // Retry up to 5 times
+  timeoutSeconds: 60, // 60 second timeout per attempt
 });
 ```
 
@@ -166,7 +166,7 @@ Delay job execution or run at a specific time:
 ```typescript
 // Execute in 5 minutes
 await client.jobs.create({
-  queueName: 'notifications',
+  queueName: "notifications",
   payload: { reminder: true },
   scheduledAt: new Date(Date.now() + 5 * 60 * 1000),
 });
@@ -178,9 +178,9 @@ Prevent duplicate jobs with idempotency keys:
 
 ```typescript
 const result = await client.jobs.create({
-  queueName: 'payments',
-  payload: { orderId: 'order-123' },
-  idempotencyKey: 'payment-order-123',
+  queueName: "payments",
+  payload: { orderId: "order-123" },
+  idempotencyKey: "payment-order-123",
 });
 
 console.log(result.created); // false if job already exists
@@ -191,29 +191,32 @@ console.log(result.created); // false if job already exists
 All operations automatically enforce tier-based limits:
 
 ```typescript
-import { RateLimitError } from '@spooled/sdk';
+import { RateLimitError } from "@spooled/sdk";
 
 try {
-  await client.jobs.create({ /* ... */ });
+  await client.jobs.create({
+    /* ... */
+  });
 } catch (error) {
-  if (error instanceof RateLimitError && error.code === 'QUOTA_EXCEEDED') {
+  if (error instanceof RateLimitError && error.code === "QUOTA_EXCEEDED") {
     console.log(`Plan quota exceeded: ${error.message}`);
-    console.log(`Request ID: ${error.requestId ?? 'not provided'}`);
+    console.log(`Request ID: ${error.requestId ?? "not provided"}`);
     // Only server metadata nested under `details` is preserved here.
-    if (error.details) console.log('Details:', error.details);
+    if (error.details) console.log("Details:", error.details);
   }
 }
 ```
 
 The SDK reliably preserves the HTTP status, code, message, request ID, and rate-limit headers. `error.details` is available only when the server nests metadata under `details`; top-level quota payload fields such as `resource`, `current`, `limit`, and `plan` are not currently exposed by the SDK.
 
-| Tier | Active Jobs | Daily Jobs | Queues | Workers |
-|------|-------------|------------|--------|---------|
-| **Free** | 10 | 1,000 | 5 | 3 |
-| **Starter** | 100 | 100,000 | 25 | 25 |
-| **Enterprise** | Unlimited | Unlimited | Unlimited | Unlimited |
+| Tier           | Active Jobs | Daily Jobs | Queues    | Workers   |
+| -------------- | ----------- | ---------- | --------- | --------- |
+| **Free**       | 10          | 1,000      | 5         | 3         |
+| **Starter**    | 100         | 100,000    | 25        | 25        |
+| **Enterprise** | Unlimited   | Unlimited  | Unlimited | Unlimited |
 
 Limits are enforced on:
+
 - ✅ Job creation (HTTP & gRPC)
 - ✅ Workflow creation
 - ✅ Schedule triggers
@@ -227,12 +230,14 @@ Track usage and manage your organization:
 ```typescript
 // Get current usage and limits
 const usage = await client.organizations.getUsage();
-console.log(`Active jobs: ${usage.active_jobs.current}/${usage.active_jobs.limit}`);
+console.log(
+  `Active jobs: ${usage.active_jobs.current}/${usage.active_jobs.limit}`,
+);
 console.log(`Plan: ${usage.plan.tier}`);
 
 // Check if at risk of hitting limits
 if (usage.active_jobs.percentage && usage.active_jobs.percentage > 80) {
-  console.warn('Approaching active jobs limit!');
+  console.warn("Approaching active jobs limit!");
 }
 ```
 
@@ -246,15 +251,15 @@ const dlqJobs = await client.jobs.dlq.list({ limit: 100 });
 
 // Retry failed jobs
 await client.jobs.dlq.retry({
-  queueName: 'emails',
-  limit: 50
+  queueName: "emails",
+  limit: 50,
 });
 
 // Purge old failures
 await client.jobs.dlq.purge({
-  queueName: 'emails',
+  queueName: "emails",
   confirm: true,
-  olderThan: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // 7 days old
+  olderThan: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 days old
 });
 ```
 
@@ -265,10 +270,10 @@ Get notified when job events occur:
 ```typescript
 // Create webhook for job events
 const webhook = await client.webhooks.create({
-  url: 'https://your-app.com/webhooks/spooled',
-  events: ['job.completed', 'job.failed'],
-  queueName: 'my-queue',
-  secret: 'webhook_secret_key'
+  url: "https://your-app.com/webhooks/spooled",
+  events: ["job.completed", "job.failed"],
+  queueName: "my-queue",
+  secret: "webhook_secret_key",
 });
 
 // Retry a failed delivery

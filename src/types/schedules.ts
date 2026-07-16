@@ -4,7 +4,7 @@
  * Types for schedule/cron-related operations.
  */
 
-import type { ScheduleRunStatus, JsonObject, ListParams } from './common.js';
+import type { ScheduleRunStatus, JsonObject, ListParams } from "./common.js";
 
 /** Full schedule model */
 export interface Schedule {

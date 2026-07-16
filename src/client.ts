@@ -9,10 +9,13 @@ import {
   type ResolvedConfig,
   resolveConfig,
   validateConfig,
-} from './config.js';
-import { AuthenticationError } from './errors.js';
-import { HttpClient, createHttpClient } from './utils/http.js';
-import { CircuitBreaker, createCircuitBreaker } from './utils/circuit-breaker.js';
+} from "./config.js";
+import { AuthenticationError } from "./errors.js";
+import { HttpClient, createHttpClient } from "./utils/http.js";
+import {
+  CircuitBreaker,
+  createCircuitBreaker,
+} from "./utils/circuit-breaker.js";
 import {
   AuthResource,
   JobsResource,
@@ -29,10 +32,10 @@ import {
   MetricsResource,
   AdminResource,
   WebhookIngestionResource,
-} from './resources/index.js';
-import { SpooledRealtime } from './realtime/index.js';
-import type { SpooledRealtimeOptions } from './realtime/index.js';
-import { SpooledGrpcClient } from './grpc/client.js';
+} from "./resources/index.js";
+import { SpooledRealtime } from "./realtime/index.js";
+import type { SpooledRealtimeOptions } from "./realtime/index.js";
+import { SpooledGrpcClient } from "./grpc/client.js";
 
 /**
  * Spooled Cloud SDK Client
@@ -133,7 +136,11 @@ export class SpooledClient {
     this.http = createHttpClient(this.config, this.circuitBreaker);
 
     // Set up token refresh if using JWT
-    if (this.config.accessToken && this.config.refreshToken && this.config.autoRefreshToken) {
+    if (
+      this.config.accessToken &&
+      this.config.refreshToken &&
+      this.config.autoRefreshToken
+    ) {
       this.http.setRefreshTokenFn(this.refreshAccessToken.bind(this));
     }
 
@@ -154,7 +161,7 @@ export class SpooledClient {
     this.admin = new AdminResource(this.http, this.config.adminKey);
     this.ingest = new WebhookIngestionResource(this.http);
 
-    this.config.debug?.('SpooledClient initialized', {
+    this.config.debug?.("SpooledClient initialized", {
       baseUrl: this.config.baseUrl,
       hasApiKey: !!this.config.apiKey,
       hasAccessToken: !!this.config.accessToken,
@@ -190,7 +197,7 @@ export class SpooledClient {
       const apiKey = this.config.apiKey;
 
       if (!apiKey) {
-        throw new AuthenticationError('gRPC client requires an API key');
+        throw new AuthenticationError("gRPC client requires an API key");
       }
 
       this._grpc = new SpooledGrpcClient({
@@ -272,7 +279,9 @@ export class SpooledClient {
       return this.loginForJwt();
     }
 
-    throw new AuthenticationError('No authentication method available for realtime connection');
+    throw new AuthenticationError(
+      "No authentication method available for realtime connection",
+    );
   }
 
   /**
@@ -327,7 +336,7 @@ export class SpooledClient {
     }
 
     if (!this.config.refreshToken) {
-      throw new AuthenticationError('No refresh token available');
+      throw new AuthenticationError("No refresh token available");
     }
 
     this.refreshPromise = this.doRefreshToken();
@@ -352,7 +361,7 @@ export class SpooledClient {
     this.tokenExpiresAt = Date.now() + response.expiresIn * 1000;
     (this.config as ResolvedConfig).accessToken = response.accessToken;
 
-    this.config.debug?.('Token refreshed successfully');
+    this.config.debug?.("Token refreshed successfully");
 
     return response.accessToken;
   }
@@ -406,7 +415,7 @@ export class SpooledClient {
    */
   private resolveGrpcAddress(): string {
     return this.config.grpcAddress;
-    }
+  }
 
   /**
    * Close all connections including gRPC
@@ -439,13 +448,13 @@ export function createClient(options: SpooledClientConfig): SpooledClient {
  * the token. Returns null for a malformed token or one with no numeric `exp`.
  */
 export function decodeJwtExp(token: string): number | null {
-  const parts = token.split('.');
+  const parts = token.split(".");
   if (parts.length < 2) {
     return null;
   }
   try {
     const payload = JSON.parse(base64UrlDecode(parts[1])) as { exp?: unknown };
-    return typeof payload.exp === 'number' ? payload.exp : null;
+    return typeof payload.exp === "number" ? payload.exp : null;
   } catch {
     return null;
   }
@@ -466,11 +475,11 @@ export function isJwtNearExpiry(token: string, skewMs = 60_000): boolean {
 
 /** Base64url-decode a JWT segment to a UTF-8 string, across Node and browsers. */
 function base64UrlDecode(segment: string): string {
-  const b64 = segment.replace(/-/g, '+').replace(/_/g, '/');
+  const b64 = segment.replace(/-/g, "+").replace(/_/g, "/");
   // Prefer Node's Buffer; fall back to atob for browsers / non-Node runtimes.
   // Referenced via globalThis so neither global is a hard dependency.
-  if (typeof globalThis.Buffer !== 'undefined') {
-    return globalThis.Buffer.from(b64, 'base64').toString('utf8');
+  if (typeof globalThis.Buffer !== "undefined") {
+    return globalThis.Buffer.from(b64, "base64").toString("utf8");
   }
   const binary = globalThis.atob(b64);
   const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));

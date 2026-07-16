@@ -11,9 +11,9 @@ import type {
   SubscriptionFilter,
   ConnectionState,
   WebSocketCommand,
-} from './types.js';
-import { convertResponse } from '../utils/casing.js';
-import { mapEventType } from './event-map.js';
+} from "./types.js";
+import { convertResponse } from "../utils/casing.js";
+import { mapEventType } from "./event-map.js";
 
 /** Event handler type - simplified for internal use */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,7 +31,7 @@ export class WebSocketRealtimeClient {
   private readonly options: Required<RealtimeConnectionOptions>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private ws: any = null;
-  private state: ConnectionState = 'disconnected';
+  private state: ConnectionState = "disconnected";
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   /**
@@ -45,7 +45,8 @@ export class WebSocketRealtimeClient {
   // Event handlers
   private eventHandlers: Map<RealtimeEventType, Set<EventHandler>> = new Map();
   private allEventsHandlers: Set<GenericEventHandler> = new Set();
-  private stateChangeHandlers: Set<(state: ConnectionState) => void> = new Set();
+  private stateChangeHandlers: Set<(state: ConnectionState) => void> =
+    new Set();
 
   constructor(options: RealtimeConnectionOptions) {
     // All defaults are applied AFTER the spread. SpooledRealtime forwards each of
@@ -77,11 +78,11 @@ export class WebSocketRealtimeClient {
    * Get WebSocket implementation (browser native or Node.js ws package)
    */
   private async getWebSocketImpl(): Promise<typeof WebSocket> {
-    if (typeof WebSocket !== 'undefined') {
+    if (typeof WebSocket !== "undefined") {
       return WebSocket;
     }
     // Node.js environment - use ws package with dynamic import for ESM compatibility
-    const wsModule = await import('ws');
+    const wsModule = await import("ws");
     return wsModule.default as unknown as typeof WebSocket;
   }
 
@@ -89,18 +90,18 @@ export class WebSocketRealtimeClient {
    * Connect to the WebSocket server
    */
   async connect(): Promise<void> {
-    if (this.state === 'connected' || this.state === 'connecting') {
+    if (this.state === "connected" || this.state === "connecting") {
       return;
     }
 
-    this.setState('connecting');
+    this.setState("connecting");
 
     // Build WebSocket URL with a freshly-minted token
     let wsUrl: string;
     try {
       wsUrl = await this.buildWsUrl();
     } catch (error) {
-      this.setState('disconnected');
+      this.setState("disconnected");
       throw new Error(`Failed to acquire realtime token: ${error}`);
     }
     // Redact the token query param so JWTs never land in logs.
@@ -111,7 +112,7 @@ export class WebSocketRealtimeClient {
     try {
       WebSocketImpl = await this.getWebSocketImpl();
     } catch (error) {
-      this.setState('disconnected');
+      this.setState("disconnected");
       throw new Error(`Failed to load WebSocket implementation: ${error}`);
     }
 
@@ -120,8 +121,8 @@ export class WebSocketRealtimeClient {
         this.ws = new WebSocketImpl(wsUrl);
 
         this.ws.onopen = () => {
-          this.options.debug('WebSocket connected');
-          this.setState('connected');
+          this.options.debug("WebSocket connected");
+          this.setState("connected");
           this.reconnectAttempts = 0;
           this.resubscribeAll();
           resolve();
@@ -129,22 +130,28 @@ export class WebSocketRealtimeClient {
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         this.ws.onmessage = (event: any) => {
-          this.handleMessage(typeof event.data === 'string' ? event.data : String(event.data));
+          this.handleMessage(
+            typeof event.data === "string" ? event.data : String(event.data),
+          );
         };
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         this.ws.onclose = (event: any) => {
           this.options.debug(`WebSocket closed: ${event.code} ${event.reason}`);
-          const wasConnecting = this.state === 'connecting';
+          const wasConnecting = this.state === "connecting";
           this.handleDisconnect();
           if (wasConnecting) {
-            reject(new Error(`WebSocket connection failed: ${event.reason || 'Unknown error'}`));
+            reject(
+              new Error(
+                `WebSocket connection failed: ${event.reason || "Unknown error"}`,
+              ),
+            );
           }
         };
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         this.ws.onerror = (event: any) => {
-          this.options.debug('WebSocket error', event);
+          this.options.debug("WebSocket error", event);
           // The Node `ws` package surfaces a rejected upgrade here as an error
           // whose message is e.g. "Unexpected server response: 401". Flag it so
           // the next reconnect forces a fresh token rather than replaying the
@@ -155,7 +162,7 @@ export class WebSocketRealtimeClient {
           }
         };
       } catch (error) {
-        this.setState('disconnected');
+        this.setState("disconnected");
         reject(error);
       }
     });
@@ -172,11 +179,11 @@ export class WebSocketRealtimeClient {
 
     if (this.ws) {
       this.ws.onclose = null; // Prevent reconnect
-      this.ws.close(1000, 'Client disconnect');
+      this.ws.close(1000, "Client disconnect");
       this.ws = null;
     }
 
-    this.setState('disconnected');
+    this.setState("disconnected");
     this.subscriptions.clear();
   }
 
@@ -196,8 +203,8 @@ export class WebSocketRealtimeClient {
 
     this.subscriptions.set(filterId, filter);
 
-    if (this.state === 'connected') {
-      this.sendCommand('Subscribe', filter);
+    if (this.state === "connected") {
+      this.sendCommand("Subscribe", filter);
     }
   }
 
@@ -215,8 +222,8 @@ export class WebSocketRealtimeClient {
 
     this.subscriptions.delete(filterId);
 
-    if (this.state === 'connected') {
-      this.sendCommand('Unsubscribe', filter);
+    if (this.state === "connected") {
+      this.sendCommand("Unsubscribe", filter);
     }
   }
 
@@ -307,7 +314,7 @@ export class WebSocketRealtimeClient {
           try {
             handler(eventData);
           } catch (error) {
-            this.options.debug('Event handler error', error);
+            this.options.debug("Event handler error", error);
           }
         });
       }
@@ -317,47 +324,55 @@ export class WebSocketRealtimeClient {
         try {
           handler(event);
         } catch (error) {
-          this.options.debug('Event handler error', error);
+          this.options.debug("Event handler error", error);
         }
       });
     } catch (error) {
-      this.options.debug('Failed to parse message', { data, error });
+      this.options.debug("Failed to parse message", { data, error });
     }
   }
 
   private handleDisconnect(): void {
     this.ws = null;
 
-    if (this.options.autoReconnect && this.reconnectAttempts < this.options.maxReconnectAttempts) {
+    if (
+      this.options.autoReconnect &&
+      this.reconnectAttempts < this.options.maxReconnectAttempts
+    ) {
       this.scheduleReconnect();
     } else {
-      this.setState('disconnected');
+      this.setState("disconnected");
     }
   }
 
   private scheduleReconnect(): void {
-    this.setState('reconnecting');
+    this.setState("reconnecting");
     this.reconnectAttempts++;
 
     const baseDelay = Math.min(
       this.options.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
-      this.options.maxReconnectDelay
+      this.options.maxReconnectDelay,
     );
     // Add randomized jitter (up to +25%) to avoid a thundering-herd reconnect
     // storm when many clients drop at the same moment. Matches utils/retry.ts.
     const delay = Math.floor(baseDelay + Math.random() * baseDelay * 0.25);
 
-    this.options.debug(`Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
+    this.options.debug(
+      `Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms`,
+    );
 
     this.reconnectTimer = setTimeout(async () => {
       try {
         await this.connect();
       } catch (error) {
-        this.options.debug('Reconnect failed', error);
-        if (this.options.autoReconnect && this.reconnectAttempts < this.options.maxReconnectAttempts) {
+        this.options.debug("Reconnect failed", error);
+        if (
+          this.options.autoReconnect &&
+          this.reconnectAttempts < this.options.maxReconnectAttempts
+        ) {
           this.scheduleReconnect();
         } else {
-          this.setState('disconnected');
+          this.setState("disconnected");
         }
       }
     }, delay);
@@ -366,9 +381,9 @@ export class WebSocketRealtimeClient {
   private resubscribeAll(): void {
     for (const filter of this.subscriptions.values()) {
       try {
-        this.sendCommand('Subscribe', filter);
+        this.sendCommand("Subscribe", filter);
       } catch (error) {
-        this.options.debug('Failed to resubscribe', { filter, error });
+        this.options.debug("Failed to resubscribe", { filter, error });
       }
     }
   }
@@ -381,9 +396,12 @@ export class WebSocketRealtimeClient {
    * and returns. The `SubscriptionFilter`'s `workerId`/`scheduleId` have no
    * server-side equivalent and are ignored.
    */
-  private sendCommand(cmd: 'Subscribe' | 'Unsubscribe', filter: SubscriptionFilter): void {
-    if (!this.ws || this.state !== 'connected') {
-      throw new Error('WebSocket not connected');
+  private sendCommand(
+    cmd: "Subscribe" | "Unsubscribe",
+    filter: SubscriptionFilter,
+  ): void {
+    if (!this.ws || this.state !== "connected") {
+      throw new Error("WebSocket not connected");
     }
 
     const command: WebSocketCommand = {
@@ -403,7 +421,7 @@ export class WebSocketRealtimeClient {
  * Redact sensitive auth query params (token/api_key) from a URL for logging.
  */
 export function redactToken(url: string): string {
-  return url.replace(/([?&](?:token|api_key)=)[^&]*/gi, '$1***');
+  return url.replace(/([?&](?:token|api_key)=)[^&]*/gi, "$1***");
 }
 
 /**
@@ -421,6 +439,8 @@ export function isAuthFailureEvent(event: any): boolean {
   if (status === 401 || status === 403) {
     return true;
   }
-  const text = String(event.message ?? event.error?.message ?? event.reason ?? '');
+  const text = String(
+    event.message ?? event.error?.message ?? event.reason ?? "",
+  );
   return /\b(401|403)\b/.test(text);
 }

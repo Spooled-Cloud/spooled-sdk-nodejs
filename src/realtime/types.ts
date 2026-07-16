@@ -4,7 +4,7 @@
  * Types for WebSocket and SSE realtime connections.
  */
 
-import type { JsonObject, JobStatus } from '../types/common.js';
+import type { JsonObject, JobStatus } from "../types/common.js";
 
 /** Subscription filter */
 export interface SubscriptionFilter {
@@ -28,7 +28,7 @@ export interface RealtimeEventBase {
 
 /** Job created event */
 export interface JobCreatedEvent extends RealtimeEventBase {
-  type: 'job.created';
+  type: "job.created";
   data: {
     jobId: string;
     queueName: string;
@@ -38,7 +38,7 @@ export interface JobCreatedEvent extends RealtimeEventBase {
 
 /** Job started event */
 export interface JobStartedEvent extends RealtimeEventBase {
-  type: 'job.started';
+  type: "job.started";
   data: {
     jobId: string;
     queueName: string;
@@ -48,7 +48,7 @@ export interface JobStartedEvent extends RealtimeEventBase {
 
 /** Job completed event */
 export interface JobCompletedEvent extends RealtimeEventBase {
-  type: 'job.completed';
+  type: "job.completed";
   data: {
     jobId: string;
     queueName: string;
@@ -59,7 +59,7 @@ export interface JobCompletedEvent extends RealtimeEventBase {
 
 /** Job failed event */
 export interface JobFailedEvent extends RealtimeEventBase {
-  type: 'job.failed';
+  type: "job.failed";
   data: {
     jobId: string;
     queueName: string;
@@ -71,7 +71,7 @@ export interface JobFailedEvent extends RealtimeEventBase {
 
 /** Job progress event */
 export interface JobProgressEvent extends RealtimeEventBase {
-  type: 'job.progress';
+  type: "job.progress";
   data: {
     jobId: string;
     queueName: string;
@@ -82,7 +82,7 @@ export interface JobProgressEvent extends RealtimeEventBase {
 
 /** Job status changed event */
 export interface JobStatusChangedEvent extends RealtimeEventBase {
-  type: 'job.status_changed';
+  type: "job.status_changed";
   data: {
     jobId: string;
     queueName: string;
@@ -93,7 +93,7 @@ export interface JobStatusChangedEvent extends RealtimeEventBase {
 
 /** Queue stats update event (backend `QueueStats`) */
 export interface QueueStatsEvent extends RealtimeEventBase {
-  type: 'queue.stats';
+  type: "queue.stats";
   data: {
     queueName: string;
     pending: number;
@@ -105,7 +105,7 @@ export interface QueueStatsEvent extends RealtimeEventBase {
 
 /** Worker heartbeat event (backend `WorkerHeartbeat`) */
 export interface WorkerHeartbeatEvent extends RealtimeEventBase {
-  type: 'worker.heartbeat';
+  type: "worker.heartbeat";
   data: {
     workerId: string;
     status: string;
@@ -115,7 +115,7 @@ export interface WorkerHeartbeatEvent extends RealtimeEventBase {
 
 /** Queue paused event */
 export interface QueuePausedEvent extends RealtimeEventBase {
-  type: 'queue.paused';
+  type: "queue.paused";
   data: {
     queueName: string;
     reason?: string;
@@ -124,7 +124,7 @@ export interface QueuePausedEvent extends RealtimeEventBase {
 
 /** Queue resumed event */
 export interface QueueResumedEvent extends RealtimeEventBase {
-  type: 'queue.resumed';
+  type: "queue.resumed";
   data: {
     queueName: string;
   };
@@ -132,7 +132,7 @@ export interface QueueResumedEvent extends RealtimeEventBase {
 
 /** Worker registered event */
 export interface WorkerRegisteredEvent extends RealtimeEventBase {
-  type: 'worker.registered';
+  type: "worker.registered";
   data: {
     workerId: string;
     queueName: string;
@@ -142,7 +142,7 @@ export interface WorkerRegisteredEvent extends RealtimeEventBase {
 
 /** Worker deregistered event */
 export interface WorkerDeregisteredEvent extends RealtimeEventBase {
-  type: 'worker.deregistered';
+  type: "worker.deregistered";
   data: {
     workerId: string;
     queueName: string;
@@ -151,7 +151,7 @@ export interface WorkerDeregisteredEvent extends RealtimeEventBase {
 
 /** Schedule triggered event */
 export interface ScheduleTriggeredEvent extends RealtimeEventBase {
-  type: 'schedule.triggered';
+  type: "schedule.triggered";
   data: {
     scheduleId: string;
     jobId: string;
@@ -160,7 +160,7 @@ export interface ScheduleTriggeredEvent extends RealtimeEventBase {
 
 /** Heartbeat event (for connection keep-alive) */
 export interface HeartbeatEvent extends RealtimeEventBase {
-  type: 'heartbeat';
+  type: "heartbeat";
   data: {
     serverTime: string;
   };
@@ -184,16 +184,20 @@ export type RealtimeEvent =
   | HeartbeatEvent;
 
 /** Event type names */
-export type RealtimeEventType = RealtimeEvent['type'];
+export type RealtimeEventType = RealtimeEvent["type"];
 
 /** Extract event data type from event type name */
 export type RealtimeEventData<T extends RealtimeEventType> = Extract<
   RealtimeEvent,
   { type: T }
->['data'];
+>["data"];
 
 /** Connection state */
-export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
+export type ConnectionState =
+  | "disconnected"
+  | "connecting"
+  | "connected"
+  | "reconnecting";
 
 /** Realtime connection options */
 export interface RealtimeConnectionOptions {
@@ -237,7 +241,7 @@ export interface RealtimeConnectionOptions {
  */
 export interface WebSocketCommand {
   /** Command tag — the backend serde variant name. */
-  cmd: 'Subscribe' | 'Unsubscribe' | 'Ping';
+  cmd: "Subscribe" | "Unsubscribe" | "Ping";
   /** Queue name filter (backend `queue`). Omitted when not filtering. */
   queue?: string;
   /** Job ID filter (backend `job_id`). Omitted when not filtering. */

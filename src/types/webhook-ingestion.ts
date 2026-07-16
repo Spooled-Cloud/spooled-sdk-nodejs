@@ -5,7 +5,7 @@
  * and are authenticated via signatures (not API keys).
  */
 
-import type { JsonValue } from './common.js';
+import type { JsonValue } from "./common.js";
 
 export interface IngestCustomWebhookParams {
   queueName: string;
@@ -21,7 +21,7 @@ export interface IngestGitHubWebhookOptions {
   /** Optional org-scoped webhook token (X-Webhook-Token) */
   webhookToken?: string;
   /** Optional X-Forwarded-Proto override (production servers may require https) */
-  forwardedProto?: 'https' | 'http' | string;
+  forwardedProto?: "https" | "http" | string;
   /** Provide a precomputed X-Hub-Signature-256 header value (sha256=<hex>) */
   signature?: string;
   /** If provided, the SDK will compute the signature for you */
@@ -32,7 +32,7 @@ export interface IngestStripeWebhookOptions {
   /** Optional org-scoped webhook token (X-Webhook-Token) */
   webhookToken?: string;
   /** Optional X-Forwarded-Proto override */
-  forwardedProto?: 'https' | 'http' | string;
+  forwardedProto?: "https" | "http" | string;
   /** Provide a precomputed Stripe-Signature header */
   signature?: string;
   /** If provided, the SDK will compute the signature for you */

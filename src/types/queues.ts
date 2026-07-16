@@ -4,7 +4,7 @@
  * Types for queue-related operations.
  */
 
-import type { JsonObject } from './common.js';
+import type { JsonObject } from "./common.js";
 
 /** Queue configuration */
 export interface QueueConfig {

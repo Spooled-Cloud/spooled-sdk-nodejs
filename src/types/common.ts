@@ -20,44 +20,49 @@ export type JsonArray = JsonValue[];
 
 /** Job status enum values */
 export type JobStatus =
-  | 'pending'
-  | 'scheduled'
-  | 'processing'
-  | 'completed'
-  | 'failed'
-  | 'deadletter'
-  | 'cancelled';
+  | "pending"
+  | "scheduled"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "deadletter"
+  | "cancelled";
 
 /** Worker status enum values */
-export type WorkerStatus = 'healthy' | 'degraded' | 'offline' | 'draining';
+export type WorkerStatus = "healthy" | "degraded" | "offline" | "draining";
 
 /** Workflow status enum values */
-export type WorkflowStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type WorkflowStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 /** Plan tier enum values */
-export type PlanTier = 'free' | 'starter' | 'pro' | 'enterprise';
+export type PlanTier = "free" | "starter" | "pro" | "enterprise";
 
 /** Schedule run status */
-export type ScheduleRunStatus = 'pending' | 'running' | 'completed' | 'failed';
+export type ScheduleRunStatus = "pending" | "running" | "completed" | "failed";
 
 /** Webhook delivery status */
-export type WebhookDeliveryStatus = 'pending' | 'success' | 'failed';
+export type WebhookDeliveryStatus = "pending" | "success" | "failed";
 
 /** Webhook event types */
 export type WebhookEventType =
-  | 'job.created'
-  | 'job.started'
-  | 'job.completed'
-  | 'job.failed'
-  | 'job.cancelled'
-  | 'queue.paused'
-  | 'queue.resumed'
-  | 'worker.registered'
-  | 'worker.deregistered'
-  | 'schedule.triggered';
+  | "job.created"
+  | "job.started"
+  | "job.completed"
+  | "job.failed"
+  | "job.cancelled"
+  | "queue.paused"
+  | "queue.resumed"
+  | "worker.registered"
+  | "worker.deregistered"
+  | "schedule.triggered";
 
 /** Dependency mode for workflows */
-export type DependencyMode = 'all' | 'any';
+export type DependencyMode = "all" | "any";
 
 /** Pagination parameters */
 export interface PaginationParams {
@@ -72,7 +77,7 @@ export interface ListParams extends PaginationParams {
   /** Field to order by */
   orderBy?: string;
   /** Sort direction */
-  orderDir?: 'asc' | 'desc';
+  orderDir?: "asc" | "desc";
 }
 
 /** Paginated response wrapper */
@@ -96,7 +101,7 @@ export function createPaginatedResponse<T>(
   items: T[],
   limit: number,
   offset: number = 0,
-  total?: number
+  total?: number,
 ): PaginatedResponse<T> {
   return {
     data: items,

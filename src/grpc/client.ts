@@ -5,15 +5,15 @@
  * Supports unary calls, server streaming, and bidirectional streaming.
  */
 
-import * as grpc from '@grpc/grpc-js';
-import { loadProtoDefinition } from './loader.js';
+import * as grpc from "@grpc/grpc-js";
+import { loadProtoDefinition } from "./loader.js";
 import {
   createJobStream,
   createProcessJobsStream,
   type JobStream,
   type ProcessJobsStream,
   type StreamOptions,
-} from './streaming.js';
+} from "./streaming.js";
 import type {
   GrpcClientOptions,
   GrpcEnqueueRequest,
@@ -40,7 +40,7 @@ import type {
   GrpcProcessRequest,
   GrpcProcessResponse,
   GrpcJob,
-} from './types.js';
+} from "./types.js";
 
 // Type definitions for dynamic gRPC clients
 type UnaryCallback<T> = (error: grpc.ServiceError | null, response: T) => void;
@@ -57,13 +57,15 @@ interface ProtobufStruct {
   fields: Record<string, ProtobufValue>;
 }
 
-function encodeStruct(value: Record<string, unknown> | null | undefined): ProtobufStruct | undefined {
+function encodeStruct(
+  value: Record<string, unknown> | null | undefined,
+): ProtobufStruct | undefined {
   if (value == null) {
     return undefined;
   }
   return {
     fields: Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, encodeValue(entry)])
+      Object.entries(value).map(([key, entry]) => [key, encodeValue(entry)]),
     ),
   };
 }
@@ -76,44 +78,48 @@ function encodeValue(value: unknown): ProtobufValue {
     return { listValue: { values: value.map(encodeValue) } };
   }
   switch (typeof value) {
-    case 'number':
+    case "number":
       return { numberValue: value };
-    case 'string':
+    case "string":
       return { stringValue: value };
-    case 'boolean':
+    case "boolean":
       return { boolValue: value };
-    case 'object':
+    case "object":
       return { structValue: encodeStruct(value as Record<string, unknown>)! };
     default:
       return { stringValue: String(value) };
   }
 }
 
-function decodeStruct(value: unknown): Record<string, unknown> | null | undefined {
-  if (!value || typeof value !== 'object' || !('fields' in value)) {
+function decodeStruct(
+  value: unknown,
+): Record<string, unknown> | null | undefined {
+  if (!value || typeof value !== "object" || !("fields" in value)) {
     return value as Record<string, unknown> | null | undefined;
   }
   const fields = (value as ProtobufStruct).fields ?? {};
-  return Object.fromEntries(Object.entries(fields).map(([key, entry]) => [key, decodeValue(entry)]));
+  return Object.fromEntries(
+    Object.entries(fields).map(([key, entry]) => [key, decodeValue(entry)]),
+  );
 }
 
 function decodeValue(value: ProtobufValue): unknown {
-  if ('nullValue' in value) {
+  if ("nullValue" in value) {
     return null;
   }
-  if ('numberValue' in value) {
+  if ("numberValue" in value) {
     return value.numberValue;
   }
-  if ('stringValue' in value) {
+  if ("stringValue" in value) {
     return value.stringValue;
   }
-  if ('boolValue' in value) {
+  if ("boolValue" in value) {
     return value.boolValue;
   }
-  if ('structValue' in value) {
+  if ("structValue" in value) {
     return decodeStruct(value.structValue);
   }
-  if ('listValue' in value) {
+  if ("listValue" in value) {
     return (value.listValue.values ?? []).map(decodeValue);
   }
   return undefined;
@@ -135,7 +141,7 @@ function encodeEnqueueRequest(params: GrpcEnqueueRequest): GrpcEnqueueRequest {
   if (params.timeoutSeconds !== undefined) {
     encoded.timeoutSeconds = params.timeoutSeconds;
   }
-  if (params.idempotencyKey !== undefined && params.idempotencyKey !== '') {
+  if (params.idempotencyKey !== undefined && params.idempotencyKey !== "") {
     encoded.idempotencyKey = params.idempotencyKey;
   }
   if (params.scheduledAt !== undefined) {
@@ -147,8 +153,13 @@ function encodeEnqueueRequest(params: GrpcEnqueueRequest): GrpcEnqueueRequest {
   return encoded as unknown as GrpcEnqueueRequest;
 }
 
-function encodeCompleteRequest(params: GrpcCompleteRequest): GrpcCompleteRequest {
-  return { ...params, result: encodeStruct(params.result) as unknown as Record<string, unknown> };
+function encodeCompleteRequest(
+  params: GrpcCompleteRequest,
+): GrpcCompleteRequest {
+  return {
+    ...params,
+    result: encodeStruct(params.result) as unknown as Record<string, unknown>,
+  };
 }
 
 function decodeJob(job: GrpcJob): GrpcJob {
@@ -160,21 +171,66 @@ function decodeJob(job: GrpcJob): GrpcJob {
 }
 
 interface QueueServiceClient extends grpc.Client {
-  Enqueue(request: GrpcEnqueueRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcEnqueueResponse>): void;
-  Dequeue(request: GrpcDequeueRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcDequeueResponse>): void;
-  Complete(request: GrpcCompleteRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcCompleteResponse>): void;
-  Fail(request: GrpcFailRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcFailResponse>): void;
-  RenewLease(request: GrpcRenewLeaseRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcRenewLeaseResponse>): void;
-  GetJob(request: GrpcGetJobRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcGetJobResponse>): void;
-  GetQueueStats(request: GrpcGetQueueStatsRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcGetQueueStatsResponse>): void;
-  StreamJobs(request: GrpcStreamJobsRequest, metadata: grpc.Metadata): grpc.ClientReadableStream<GrpcJob>;
-  ProcessJobs(metadata: grpc.Metadata): grpc.ClientDuplexStream<GrpcProcessRequest, GrpcProcessResponse>;
+  Enqueue(
+    request: GrpcEnqueueRequest,
+    metadata: grpc.Metadata,
+    callback: UnaryCallback<GrpcEnqueueResponse>,
+  ): void;
+  Dequeue(
+    request: GrpcDequeueRequest,
+    metadata: grpc.Metadata,
+    callback: UnaryCallback<GrpcDequeueResponse>,
+  ): void;
+  Complete(
+    request: GrpcCompleteRequest,
+    metadata: grpc.Metadata,
+    callback: UnaryCallback<GrpcCompleteResponse>,
+  ): void;
+  Fail(
+    request: GrpcFailRequest,
+    metadata: grpc.Metadata,
+    callback: UnaryCallback<GrpcFailResponse>,
+  ): void;
+  RenewLease(
+    request: GrpcRenewLeaseRequest,
+    metadata: grpc.Metadata,
+    callback: UnaryCallback<GrpcRenewLeaseResponse>,
+  ): void;
+  GetJob(
+    request: GrpcGetJobRequest,
+    metadata: grpc.Metadata,
+    callback: UnaryCallback<GrpcGetJobResponse>,
+  ): void;
+  GetQueueStats(
+    request: GrpcGetQueueStatsRequest,
+    metadata: grpc.Metadata,
+    callback: UnaryCallback<GrpcGetQueueStatsResponse>,
+  ): void;
+  StreamJobs(
+    request: GrpcStreamJobsRequest,
+    metadata: grpc.Metadata,
+  ): grpc.ClientReadableStream<GrpcJob>;
+  ProcessJobs(
+    metadata: grpc.Metadata,
+  ): grpc.ClientDuplexStream<GrpcProcessRequest, GrpcProcessResponse>;
 }
 
 interface WorkerServiceClient extends grpc.Client {
-  Register(request: GrpcRegisterWorkerRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcRegisterWorkerResponse>): void;
-  Heartbeat(request: GrpcHeartbeatRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcHeartbeatResponse>): void;
-  Deregister(request: GrpcDeregisterRequest, metadata: grpc.Metadata, callback: UnaryCallback<GrpcDeregisterResponse>): void;
+  Register(
+    request: GrpcRegisterWorkerRequest,
+    metadata: grpc.Metadata,
+    callback: UnaryCallback<GrpcRegisterWorkerResponse>,
+  ): void;
+  Heartbeat(
+    request: GrpcHeartbeatRequest,
+    metadata: grpc.Metadata,
+    callback: UnaryCallback<GrpcHeartbeatResponse>,
+  ): void;
+  Deregister(
+    request: GrpcDeregisterRequest,
+    metadata: grpc.Metadata,
+    callback: UnaryCallback<GrpcDeregisterResponse>,
+  ): void;
 }
 
 /**
@@ -182,9 +238,13 @@ interface WorkerServiceClient extends grpc.Client {
  */
 function promisify<TReq, TRes>(
   client: grpc.Client,
-  method: (request: TReq, metadata: grpc.Metadata, callback: UnaryCallback<TRes>) => void,
+  method: (
+    request: TReq,
+    metadata: grpc.Metadata,
+    callback: UnaryCallback<TRes>,
+  ) => void,
   request: TReq,
-  metadata: grpc.Metadata
+  metadata: grpc.Metadata,
 ): Promise<TRes> {
   return new Promise((resolve, reject) => {
     method.call(client, request, metadata, (error, response) => {
@@ -205,8 +265,10 @@ function shouldUseTls(address: string, explicitTls?: boolean): boolean {
     return explicitTls;
   }
   // Default to insecure for localhost/127.0.0.1
-  const host = address.split(':')[0].toLowerCase();
-  return host !== 'localhost' && host !== '127.0.0.1' && !host.startsWith('[::1]');
+  const host = address.split(":")[0].toLowerCase();
+  return (
+    host !== "localhost" && host !== "127.0.0.1" && !host.startsWith("[::1]")
+  );
 }
 
 /**
@@ -215,21 +277,31 @@ function shouldUseTls(address: string, explicitTls?: boolean): boolean {
 export class GrpcQueueOperations {
   constructor(
     private readonly client: QueueServiceClient,
-    private readonly metadata: grpc.Metadata
+    private readonly metadata: grpc.Metadata,
   ) {}
 
   /**
    * Enqueue a new job
    */
   async enqueue(params: GrpcEnqueueRequest): Promise<GrpcEnqueueResponse> {
-    return promisify(this.client, this.client.Enqueue, encodeEnqueueRequest(params), this.metadata);
+    return promisify(
+      this.client,
+      this.client.Enqueue,
+      encodeEnqueueRequest(params),
+      this.metadata,
+    );
   }
 
   /**
    * Dequeue a job (for workers)
    */
   async dequeue(params: GrpcDequeueRequest): Promise<GrpcDequeueResponse> {
-    const response = await promisify(this.client, this.client.Dequeue, params, this.metadata);
+    const response = await promisify(
+      this.client,
+      this.client.Dequeue,
+      params,
+      this.metadata,
+    );
     return { ...response, jobs: response.jobs.map(decodeJob) };
   }
 
@@ -237,7 +309,12 @@ export class GrpcQueueOperations {
    * Complete a job successfully
    */
   async complete(params: GrpcCompleteRequest): Promise<GrpcCompleteResponse> {
-    return promisify(this.client, this.client.Complete, encodeCompleteRequest(params), this.metadata);
+    return promisify(
+      this.client,
+      this.client.Complete,
+      encodeCompleteRequest(params),
+      this.metadata,
+    );
   }
 
   /**
@@ -245,28 +322,48 @@ export class GrpcQueueOperations {
    */
   async fail(params: GrpcFailRequest): Promise<GrpcFailResponse> {
     return promisify(this.client, this.client.Fail, params, this.metadata);
-}
+  }
 
   /**
    * Renew a job's lease
    */
-  async renewLease(params: GrpcRenewLeaseRequest): Promise<GrpcRenewLeaseResponse> {
-    return promisify(this.client, this.client.RenewLease, params, this.metadata);
+  async renewLease(
+    params: GrpcRenewLeaseRequest,
+  ): Promise<GrpcRenewLeaseResponse> {
+    return promisify(
+      this.client,
+      this.client.RenewLease,
+      params,
+      this.metadata,
+    );
   }
 
   /**
    * Get a job by ID
    */
   async getJob(jobId: string): Promise<GrpcGetJobResponse> {
-    const response = await promisify(this.client, this.client.GetJob, { jobId }, this.metadata);
-    return { ...response, job: response.job ? decodeJob(response.job) : response.job };
+    const response = await promisify(
+      this.client,
+      this.client.GetJob,
+      { jobId },
+      this.metadata,
+    );
+    return {
+      ...response,
+      job: response.job ? decodeJob(response.job) : response.job,
+    };
   }
 
   /**
    * Get queue statistics
    */
   async getQueueStats(queueName: string): Promise<GrpcGetQueueStatsResponse> {
-    return promisify(this.client, this.client.GetQueueStats, { queueName }, this.metadata);
+    return promisify(
+      this.client,
+      this.client.GetQueueStats,
+      { queueName },
+      this.metadata,
+    );
   }
 
   /**
@@ -284,7 +381,10 @@ export class GrpcQueueOperations {
    * }
    * ```
    */
-  streamJobs(params: GrpcStreamJobsRequest, options?: StreamOptions): JobStream {
+  streamJobs(
+    params: GrpcStreamJobsRequest,
+    options?: StreamOptions,
+  ): JobStream {
     const call = this.client.StreamJobs(params, this.metadata);
     return createJobStream(call, options);
   }
@@ -322,20 +422,24 @@ export class GrpcQueueOperations {
 export class GrpcWorkerOperations {
   constructor(
     private readonly client: WorkerServiceClient,
-    private readonly metadata: grpc.Metadata
+    private readonly metadata: grpc.Metadata,
   ) {}
 
   /**
    * Register a new worker
    */
-  async register(params: GrpcRegisterWorkerRequest): Promise<GrpcRegisterWorkerResponse> {
+  async register(
+    params: GrpcRegisterWorkerRequest,
+  ): Promise<GrpcRegisterWorkerResponse> {
     return promisify(this.client, this.client.Register, params, this.metadata);
   }
 
   /**
    * Send heartbeat
    */
-  async heartbeat(params: GrpcHeartbeatRequest): Promise<GrpcHeartbeatResponse> {
+  async heartbeat(
+    params: GrpcHeartbeatRequest,
+  ): Promise<GrpcHeartbeatResponse> {
     return promisify(this.client, this.client.Heartbeat, params, this.metadata);
   }
 
@@ -343,7 +447,12 @@ export class GrpcWorkerOperations {
    * Deregister a worker
    */
   async deregister(workerId: string): Promise<GrpcDeregisterResponse> {
-    return promisify(this.client, this.client.Deregister, { workerId }, this.metadata);
+    return promisify(
+      this.client,
+      this.client.Deregister,
+      { workerId },
+      this.metadata,
+    );
   }
 }
 
@@ -389,13 +498,15 @@ export class SpooledGrpcClient {
     const { address, apiKey, useTls, credentials, channelOptions } = options;
 
     // Create credentials
-    const creds = credentials ?? (shouldUseTls(address, useTls)
-      ? grpc.credentials.createSsl()
-      : grpc.credentials.createInsecure());
+    const creds =
+      credentials ??
+      (shouldUseTls(address, useTls)
+        ? grpc.credentials.createSsl()
+        : grpc.credentials.createInsecure());
 
     // Create metadata with API key
     this.metadata = new grpc.Metadata();
-    this.metadata.add('x-api-key', apiKey);
+    this.metadata.add("x-api-key", apiKey);
 
     // Load proto definition
     const proto = loadProtoDefinition();
@@ -404,13 +515,13 @@ export class SpooledGrpcClient {
     this.queueClient = new proto.spooled.v1.QueueService(
       address,
       creds,
-      channelOptions
+      channelOptions,
     ) as unknown as QueueServiceClient;
 
     this.workerClient = new proto.spooled.v1.WorkerService(
       address,
       creds,
-      channelOptions
+      channelOptions,
     ) as unknown as WorkerServiceClient;
 
     // Initialize operation namespaces
@@ -451,6 +562,8 @@ export class SpooledGrpcClient {
    * Get the current connection state
    */
   getState(tryToConnect?: boolean): grpc.connectivityState {
-    return this.queueClient.getChannel().getConnectivityState(tryToConnect ?? false);
+    return this.queueClient
+      .getChannel()
+      .getConnectivityState(tryToConnect ?? false);
   }
 }

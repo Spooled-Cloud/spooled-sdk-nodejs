@@ -33,7 +33,7 @@
  */
 
 // Main client
-export { SpooledClient, createClient } from './client.js';
+export { SpooledClient, createClient } from "./client.js";
 
 // Configuration
 export type {
@@ -42,8 +42,14 @@ export type {
   RetryConfig,
   CircuitBreakerConfig,
   DebugFn,
-} from './config.js';
-export { resolveConfig, validateConfig, DEFAULT_CONFIG, SDK_VERSION, API_VERSION } from './config.js';
+} from "./config.js";
+export {
+  resolveConfig,
+  validateConfig,
+  DEFAULT_CONFIG,
+  SDK_VERSION,
+  API_VERSION,
+} from "./config.js";
 
 // Errors
 export {
@@ -63,14 +69,14 @@ export {
   isRetryableError,
   parseRateLimitHeaders,
   createErrorFromResponse,
-} from './errors.js';
-export type { ApiErrorBody, RateLimitInfo } from './errors.js';
+} from "./errors.js";
+export type { ApiErrorBody, RateLimitInfo } from "./errors.js";
 
 // Types
-export * from './types/index.js';
+export * from "./types/index.js";
 
 // gRPC (HTTP/2 + Protobuf)
-export * from './grpc/index.js';
+export * from "./grpc/index.js";
 
 // Resources
 export {
@@ -89,10 +95,14 @@ export {
   MetricsResource,
   AdminResource,
   WebhookIngestionResource,
-} from './resources/index.js';
+} from "./resources/index.js";
 
 // Realtime
-export { SpooledRealtime, WebSocketRealtimeClient, SseRealtimeClient } from './realtime/index.js';
+export {
+  SpooledRealtime,
+  WebSocketRealtimeClient,
+  SseRealtimeClient,
+} from "./realtime/index.js";
 export type {
   SpooledRealtimeOptions,
   RealtimeConnectionOptions,
@@ -113,10 +123,10 @@ export type {
   WorkerDeregisteredEvent,
   ScheduleTriggeredEvent,
   HeartbeatEvent,
-} from './realtime/index.js';
+} from "./realtime/index.js";
 
 // Worker
-export { SpooledWorker } from './worker/index.js';
+export { SpooledWorker } from "./worker/index.js";
 export type {
   SpooledWorkerOptions,
   WorkerState,
@@ -125,18 +135,22 @@ export type {
   JobResult,
   WorkerEvent,
   WorkerEventData,
-} from './worker/index.js';
+} from "./worker/index.js";
 
 // Utilities (for advanced users)
-export { CircuitBreaker, CircuitState, createCircuitBreaker } from './utils/circuit-breaker.js';
-export { HttpClient, createHttpClient } from './utils/http.js';
+export {
+  CircuitBreaker,
+  CircuitState,
+  createCircuitBreaker,
+} from "./utils/circuit-breaker.js";
+export { HttpClient, createHttpClient } from "./utils/http.js";
 export {
   withRetry,
   calculateDelay,
   shouldRetry,
   sleep,
   createRetryWrapper,
-} from './utils/retry.js';
+} from "./utils/retry.js";
 export {
   camelToSnake,
   snakeToCamel,
@@ -145,4 +159,4 @@ export {
   convertRequest,
   convertResponse,
   convertQueryParams,
-} from './utils/casing.js';
+} from "./utils/casing.js";

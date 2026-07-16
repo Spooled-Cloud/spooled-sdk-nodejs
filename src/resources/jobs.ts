@@ -4,7 +4,7 @@
  * Handles job operations including worker processing endpoints.
  */
 
-import type { HttpClient } from '../utils/http.js';
+import type { HttpClient } from "../utils/http.js";
 import type {
   Job,
   JobSummary,
@@ -26,7 +26,7 @@ import type {
   RetryDlqResponse,
   PurgeDlqParams,
   PurgeDlqResponse,
-} from '../types/jobs.js';
+} from "../types/jobs.js";
 
 /** DLQ operations */
 export interface DlqOperations {
@@ -54,7 +54,7 @@ export class JobsResource {
    * Create a new job
    */
   async create(params: CreateJobParams): Promise<CreateJobResult> {
-    return this.http.post<CreateJobResult>('/jobs', params);
+    return this.http.post<CreateJobResult>("/jobs", params);
   }
 
   /**
@@ -69,7 +69,9 @@ export class JobsResource {
    * List jobs with optional filtering
    */
   async list(params?: ListJobsParams): Promise<JobSummary[]> {
-    return this.http.get<JobSummary[]>('/jobs', { params: params as Record<string, string | number | boolean | undefined> });
+    return this.http.get<JobSummary[]>("/jobs", {
+      params: params as Record<string, string | number | boolean | undefined>,
+    });
   }
 
   /**
@@ -96,15 +98,20 @@ export class JobsResource {
   /**
    * Boost job priority
    */
-  async boostPriority(id: string, priority: number): Promise<BoostPriorityResponse> {
-    return this.http.put<BoostPriorityResponse>(`/jobs/${id}/priority`, { priority });
+  async boostPriority(
+    id: string,
+    priority: number,
+  ): Promise<BoostPriorityResponse> {
+    return this.http.put<BoostPriorityResponse>(`/jobs/${id}/priority`, {
+      priority,
+    });
   }
 
   /**
    * Get job statistics
    */
   async getStats(): Promise<JobStats> {
-    return this.http.get<JobStats>('/jobs/stats');
+    return this.http.get<JobStats>("/jobs/stats");
   }
 
   /**
@@ -115,10 +122,10 @@ export class JobsResource {
       return [];
     }
     if (ids.length > 100) {
-      throw new Error('Maximum 100 job IDs allowed per request');
+      throw new Error("Maximum 100 job IDs allowed per request");
     }
-    return this.http.get<BatchJobStatus[]>('/jobs/status', {
-      params: { ids: ids.join(',') },
+    return this.http.get<BatchJobStatus[]>("/jobs/status", {
+      params: { ids: ids.join(",") },
     });
   }
 
@@ -126,7 +133,7 @@ export class JobsResource {
    * Bulk enqueue multiple jobs
    */
   async bulkEnqueue(params: BulkEnqueueParams): Promise<BulkEnqueueResponse> {
-    return this.http.post<BulkEnqueueResponse>('/jobs/bulk', params);
+    return this.http.post<BulkEnqueueResponse>("/jobs/bulk", params);
   }
 
   // Worker processing endpoints
@@ -135,41 +142,58 @@ export class JobsResource {
    * Claim jobs for worker processing
    */
   async claim(params: ClaimJobsParams): Promise<ClaimJobsResult> {
-    return this.http.post<ClaimJobsResult>('/jobs/claim', params);
+    return this.http.post<ClaimJobsResult>("/jobs/claim", params);
   }
 
   /**
    * Complete a job (worker ack)
    */
-  async complete(id: string, params: CompleteJobParams): Promise<{ success: boolean }> {
+  async complete(
+    id: string,
+    params: CompleteJobParams,
+  ): Promise<{ success: boolean }> {
     return this.http.post<{ success: boolean }>(`/jobs/${id}/complete`, params);
   }
 
   /**
    * Fail a job (worker nack)
    */
-  async fail(id: string, params: FailJobParams): Promise<{ success: boolean; error?: string }> {
-    return this.http.post<{ success: boolean; error?: string }>(`/jobs/${id}/fail`, params);
+  async fail(
+    id: string,
+    params: FailJobParams,
+  ): Promise<{ success: boolean; error?: string }> {
+    return this.http.post<{ success: boolean; error?: string }>(
+      `/jobs/${id}/fail`,
+      params,
+    );
   }
 
   /**
    * Extend job lease (heartbeat)
    */
-  async heartbeat(id: string, params: HeartbeatJobParams): Promise<{ success: boolean }> {
-    return this.http.post<{ success: boolean }>(`/jobs/${id}/heartbeat`, params);
+  async heartbeat(
+    id: string,
+    params: HeartbeatJobParams,
+  ): Promise<{ success: boolean }> {
+    return this.http.post<{ success: boolean }>(
+      `/jobs/${id}/heartbeat`,
+      params,
+    );
   }
 
   // DLQ operations (private implementations)
 
   private async listDlq(params?: ListDlqParams): Promise<JobSummary[]> {
-    return this.http.get<JobSummary[]>('/jobs/dlq', { params: params as Record<string, string | number | boolean | undefined> });
+    return this.http.get<JobSummary[]>("/jobs/dlq", {
+      params: params as Record<string, string | number | boolean | undefined>,
+    });
   }
 
   private async retryDlq(params: RetryDlqParams): Promise<RetryDlqResponse> {
-    return this.http.post<RetryDlqResponse>('/jobs/dlq/retry', params);
+    return this.http.post<RetryDlqResponse>("/jobs/dlq/retry", params);
   }
 
   private async purgeDlq(params: PurgeDlqParams): Promise<PurgeDlqResponse> {
-    return this.http.post<PurgeDlqResponse>('/jobs/dlq/purge', params);
+    return this.http.post<PurgeDlqResponse>("/jobs/dlq/purge", params);
   }
 }

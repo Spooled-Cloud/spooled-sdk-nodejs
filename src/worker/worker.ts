@@ -4,10 +4,10 @@
  * Worker runtime for processing jobs from a queue.
  */
 
-import type { SpooledClient } from '../client.js';
-import { SDK_VERSION } from '../config.js';
-import type { JsonObject } from '../types/common.js';
-import type { ClaimedJob } from '../types/jobs.js';
+import type { SpooledClient } from "../client.js";
+import { SDK_VERSION } from "../config.js";
+import type { JsonObject } from "../types/common.js";
+import type { ClaimedJob } from "../types/jobs.js";
 import type {
   SpooledWorkerOptions,
   WorkerState,
@@ -16,8 +16,8 @@ import type {
   WorkerEvent,
   WorkerEventData,
   ActiveJob,
-} from './types.js';
-import { hostname as osHostname } from 'os';
+} from "./types.js";
+import { hostname as osHostname } from "os";
 
 /** Default options */
 const DEFAULT_OPTIONS = {
@@ -59,7 +59,7 @@ export class SpooledWorker {
   private readonly options: Required<SpooledWorkerOptions>;
   private readonly debug: (msg: string, meta?: unknown) => void;
 
-  private state: WorkerState = 'idle';
+  private state: WorkerState = "idle";
   private workerId: string | null = null;
   private handler: JobHandler | null = null;
   private activeJobs: Map<symbol, ActiveJob> = new Map();
@@ -68,14 +68,15 @@ export class SpooledWorker {
   private shutdownPromise: Promise<void> | null = null;
 
   // Event handlers
-  private eventHandlers: Map<WorkerEvent, Set<EventHandler<WorkerEvent>>> = new Map();
+  private eventHandlers: Map<WorkerEvent, Set<EventHandler<WorkerEvent>>> =
+    new Map();
 
   constructor(client: SpooledClient, options: SpooledWorkerOptions) {
     this.client = client;
     this.options = {
       ...DEFAULT_OPTIONS,
       hostname: osHostname(),
-      workerType: 'nodejs',
+      workerType: "nodejs",
       version: SDK_VERSION,
       metadata: {},
       ...options,
@@ -116,8 +117,8 @@ export class SpooledWorker {
    * Register job handler
    */
   process(handler: JobHandler): void {
-    if (this.state !== 'idle') {
-      throw new Error('Cannot set handler after worker has started');
+    if (this.state !== "idle") {
+      throw new Error("Cannot set handler after worker has started");
     }
     this.handler = handler;
   }
@@ -126,15 +127,15 @@ export class SpooledWorker {
    * Start the worker
    */
   async start(): Promise<void> {
-    if (this.state !== 'idle') {
+    if (this.state !== "idle") {
       throw new Error(`Cannot start worker in state: ${this.state}`);
     }
 
     if (!this.handler) {
-      throw new Error('No job handler registered. Call process() first.');
+      throw new Error("No job handler registered. Call process() first.");
     }
 
-    this.state = 'starting';
+    this.state = "starting";
     this.debug(`Starting worker for queue: ${this.options.queueName}`);
 
     try {
@@ -158,12 +159,15 @@ export class SpooledWorker {
       }, heartbeatInterval);
 
       // Start polling
-      this.state = 'running';
-      this.emit('started', { workerId: this.workerId, queueName: this.options.queueName });
+      this.state = "running";
+      this.emit("started", {
+        workerId: this.workerId,
+        queueName: this.options.queueName,
+      });
       this.schedulePoll();
     } catch (error) {
-      this.state = 'error';
-      this.emit('error', { error: error as Error });
+      this.state = "error";
+      this.emit("error", { error: error as Error });
       throw error;
     }
   }
@@ -172,7 +176,7 @@ export class SpooledWorker {
    * Stop the worker gracefully
    */
   async stop(): Promise<void> {
-    if (this.state !== 'running') {
+    if (this.state !== "running") {
       return;
     }
 
@@ -186,8 +190,8 @@ export class SpooledWorker {
   }
 
   private async doStop(): Promise<void> {
-    this.state = 'stopping';
-    this.debug('Stopping worker...');
+    this.state = "stopping";
+    this.debug("Stopping worker...");
 
     // Stop polling
     if (this.pollTimer) {
@@ -208,7 +212,9 @@ export class SpooledWorker {
 
     // Wait for active jobs to complete (with timeout)
     if (this.activeJobs.size > 0) {
-      this.debug(`Waiting for ${this.activeJobs.size} active jobs to complete...`);
+      this.debug(
+        `Waiting for ${this.activeJobs.size} active jobs to complete...`,
+      );
 
       await Promise.race([
         this.waitForActiveJobs(),
@@ -219,8 +225,10 @@ export class SpooledWorker {
       // cleanupJob() mutates the activeJobs map as we go.
       const remaining = Array.from(this.activeJobs.values());
       for (const active of remaining) {
-        this.debug(`Force-failing job ${active.job.id} due to shutdown timeout`);
-        await this.failJob(active.job, 'Worker shutdown timeout');
+        this.debug(
+          `Force-failing job ${active.job.id} due to shutdown timeout`,
+        );
+        await this.failJob(active.job, "Worker shutdown timeout");
         // The handler's finally may never run if user code ignores the abort
         // signal, so explicitly clear this exact execution's timer.
         this.cleanupJob(active);
@@ -231,15 +239,15 @@ export class SpooledWorker {
     if (this.workerId) {
       try {
         await this.client.workers.deregister(this.workerId);
-        this.debug('Worker deregistered');
+        this.debug("Worker deregistered");
       } catch (error) {
-        this.debug('Failed to deregister worker', error);
+        this.debug("Failed to deregister worker", error);
       }
     }
 
-    this.state = 'stopped';
+    this.state = "stopped";
     this.workerId = null;
-    this.emit('stopped', { workerId: this.workerId ?? '', reason: 'graceful' });
+    this.emit("stopped", { workerId: this.workerId ?? "", reason: "graceful" });
     this.shutdownPromise = null;
   }
 
@@ -266,21 +274,24 @@ export class SpooledWorker {
 
   // Private methods
 
-  private emit<E extends WorkerEvent>(event: E, data: WorkerEventData[E]): void {
+  private emit<E extends WorkerEvent>(
+    event: E,
+    data: WorkerEventData[E],
+  ): void {
     const handlers = this.eventHandlers.get(event);
     if (handlers) {
       handlers.forEach((handler) => {
         try {
           handler(data);
         } catch (error) {
-          this.debug('Event handler error', { event, error });
+          this.debug("Event handler error", { event, error });
         }
       });
     }
   }
 
   private schedulePoll(): void {
-    if (this.state !== 'running') {
+    if (this.state !== "running") {
       return;
     }
 
@@ -288,7 +299,7 @@ export class SpooledWorker {
   }
 
   private async poll(): Promise<void> {
-    if (this.state !== 'running' || !this.workerId) {
+    if (this.state !== "running" || !this.workerId) {
       return;
     }
 
@@ -313,8 +324,8 @@ export class SpooledWorker {
         this.processJob(job);
       }
     } catch (error) {
-      this.debug('Poll failed', error);
-      this.emit('error', { error: error as Error });
+      this.debug("Poll failed", error);
+      this.emit("error", { error: error as Error });
     }
 
     // Schedule next poll
@@ -322,7 +333,7 @@ export class SpooledWorker {
   }
 
   private processJob(job: ClaimedJob): void {
-    this.emit('job:claimed', { jobId: job.id, queueName: job.queueName });
+    this.emit("job:claimed", { jobId: job.id, queueName: job.queueName });
 
     const abortController = new AbortController();
     const activeJob: ActiveJob = {
@@ -335,7 +346,8 @@ export class SpooledWorker {
     this.activeJobs.set(activeJob.executionId, activeJob);
 
     // Capture the immutable execution so a replacement lease cannot be borrowed.
-    const heartbeatInterval = this.options.leaseDuration * this.options.heartbeatFraction * 1000;
+    const heartbeatInterval =
+      this.options.leaseDuration * this.options.heartbeatFraction * 1000;
     activeJob.heartbeatTimer = setInterval(() => {
       this.sendJobHeartbeat(activeJob);
     }, heartbeatInterval);
@@ -348,7 +360,7 @@ export class SpooledWorker {
     const { job, abortController } = activeJob;
     const { signal } = abortController;
 
-    this.emit('job:started', { jobId: job.id, queueName: job.queueName });
+    this.emit("job:started", { jobId: job.id, queueName: job.queueName });
 
     const context: JobContext = {
       jobId: job.id,
@@ -384,14 +396,18 @@ export class SpooledWorker {
         return;
       }
 
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       await this.failJob(job, errorMessage);
     } finally {
       this.cleanupJob(activeJob);
     }
   }
 
-  private async completeJob(job: ClaimedJob, result?: JsonObject): Promise<void> {
+  private async completeJob(
+    job: ClaimedJob,
+    result?: JsonObject,
+  ): Promise<void> {
     if (!this.workerId) return;
 
     try {
@@ -401,7 +417,7 @@ export class SpooledWorker {
         ...(job.leaseId != null && { leaseId: job.leaseId }),
       });
 
-      this.emit('job:completed', {
+      this.emit("job:completed", {
         jobId: job.id,
         queueName: job.queueName,
         result,
@@ -423,7 +439,7 @@ export class SpooledWorker {
         ...(job.leaseId != null && { leaseId: job.leaseId }),
       });
 
-      this.emit('job:failed', {
+      this.emit("job:failed", {
         jobId: job.id,
         queueName: job.queueName,
         error: errorMessage,
@@ -462,15 +478,15 @@ export class SpooledWorker {
   }
 
   private async sendWorkerHeartbeat(): Promise<void> {
-    if (!this.workerId || this.state !== 'running') return;
+    if (!this.workerId || this.state !== "running") return;
 
     try {
       await this.client.workers.heartbeat(this.workerId, {
         currentJobs: this.activeJobs.size,
-        status: 'healthy',
+        status: "healthy",
       });
     } catch (error) {
-      this.debug('Worker heartbeat failed', error);
+      this.debug("Worker heartbeat failed", error);
     }
   }
 

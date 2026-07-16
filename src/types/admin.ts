@@ -2,8 +2,12 @@
  * Admin API Types
  */
 
-import type { JsonValue } from './common.js';
-import type { Organization, OrganizationUsage, PlanLimits } from './organizations.js';
+import type { JsonValue } from "./common.js";
+import type {
+  Organization,
+  OrganizationUsage,
+  PlanLimits,
+} from "./organizations.js";
 
 export interface AdminListOrganizationsParams {
   planTier?: string;
@@ -11,7 +15,7 @@ export interface AdminListOrganizationsParams {
   limit?: number;
   offset?: number;
   sortBy?: string;
-  sortOrder?: 'asc' | 'desc' | string;
+  sortOrder?: "asc" | "desc" | string;
 }
 
 export interface AdminUsageStats {
