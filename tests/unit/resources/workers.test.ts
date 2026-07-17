@@ -75,6 +75,8 @@ describe("WorkersResource", () => {
             metadata: { version: "1.0.26" },
             version: "1.0.26",
             registered_at: "2024-01-01T00:00:00Z",
+            queue_names: ["my-queue"],
+            updated_at: "2024-01-01T12:00:00Z",
           });
         }),
       );
@@ -84,7 +86,9 @@ describe("WorkersResource", () => {
 
       expect(worker.id).toBe("worker_123");
       expect(worker.queueName).toBe("my-queue");
+      expect(worker.queueNames).toEqual(["my-queue"]);
       expect(worker.maxConcurrency).toBe(10);
+      expect(worker.updatedAt).toBe("2024-01-01T12:00:00Z");
       expect(worker.metadata).toEqual({ version: "1.0.26" });
     });
   });

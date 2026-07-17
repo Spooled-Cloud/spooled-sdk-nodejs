@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Worker detail type now includes optional `queueNames` and `updatedAt`, matching the stable public REST worker detail response.
+
 ### Fixed
 
 - Release workflow diagnostics no longer print user or project `.npmrc` contents.

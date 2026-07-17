@@ -11,6 +11,8 @@ export interface Worker {
   id: string;
   organizationId: string;
   queueName: string;
+  /** Multi-queue membership when present (detail response). */
+  queueNames?: string[];
   hostname: string;
   workerType?: string;
   maxConcurrency: number;
@@ -20,6 +22,8 @@ export interface Worker {
   metadata: JsonObject;
   version?: string;
   registeredAt: string;
+  /** Last row update (detail response). */
+  updatedAt?: string;
 }
 
 /** Worker summary for list responses */
