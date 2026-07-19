@@ -1,6 +1,6 @@
 # Spooled Node SDK — Agent Knowledge Base
 
-Package: `@spooled/sdk` **1.0.39** (`SDK_VERSION` / User-Agent `@spooled/sdk-nodejs/1.0.39` in `src/config.ts`).
+Package: `@spooled/sdk` **1.0.40** (`SDK_VERSION` / User-Agent `@spooled/sdk-nodejs/1.0.40` in `src/config.ts`).
 
 ## Read order
 

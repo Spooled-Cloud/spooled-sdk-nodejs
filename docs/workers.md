@@ -47,7 +47,7 @@ const worker = new SpooledWorker(client, {
   // Identification
   hostname: "worker-01", // Worker hostname (default: os.hostname())
   workerType: "nodejs", // Worker type identifier
-  version: "my-worker/2.3.0", // Optional application version (defaults to SDK 1.0.39)
+  version: "my-worker/2.3.0", // Optional application version (defaults to SDK 1.0.40)
   metadata: {
     // Custom metadata
     env: "production",
