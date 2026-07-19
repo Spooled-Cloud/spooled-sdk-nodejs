@@ -14,13 +14,15 @@ export interface Worker {
   /** Multi-queue membership when present (detail response). */
   queueNames?: string[];
   hostname: string;
-  workerType?: string;
+  /** Serialized as explicit null by the backend when not set. */
+  workerType?: string | null;
   maxConcurrency: number;
   currentJobs: number;
   status: WorkerStatus;
   lastHeartbeat: string;
   metadata: JsonObject;
-  version?: string;
+  /** Serialized as explicit null by the backend when not set. */
+  version?: string | null;
   registeredAt: string;
   /** Last row update (detail response). */
   updatedAt?: string;

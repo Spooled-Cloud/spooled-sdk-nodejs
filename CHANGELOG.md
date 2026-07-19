@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release identity verification handles both single- and double-quoted TypeScript literals.
 - gRPC unary calls now use the configured client timeout and map `ServiceError` statuses into SDK error classes instead of rejecting raw gRPC errors.
 - Worker `progress()` now emits local debug output instead of silently no-oping.
+- `Worker.workerType` and `Worker.version` are typed `string | null` to match the backend, which serializes explicit `null` for unset values.
 - Workflow examples now typecheck against the current workflow response and job-list APIs.
 
 ## [1.0.39] - 2026-07-15
