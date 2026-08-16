@@ -48,7 +48,7 @@ const worker = new SpooledWorker(client, {
   workerId: "emails-worker-01", // Stable id (default: server-minted UUID)
   hostname: "worker-01", // Worker hostname (default: os.hostname())
   workerType: "nodejs", // Worker type identifier
-  version: "my-worker/2.3.0", // Optional application version (defaults to SDK 1.0.40)
+  version: "my-worker/2.3.0", // Optional application version (defaults to SDK 1.1.0)
   metadata: {
     // Custom metadata
     env: "production",
