@@ -5,6 +5,40 @@ All notable changes to the Spooled Node.js SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-08-16
+
+### Added
+
+- Optional stable `worker_id` on worker registration. Supplying the same id
+  across restarts makes registration an upsert, so a restarting worker reuses
+  its row instead of leaving the old one against the plan worker cap until the
+  stale-worker reaper clears it (~2 minutes). Omitting it keeps the previous
+  behaviour of a server-minted UUID. An id owned by another organization
+  returns 409.
+- `auto_disabled` in the outgoing-webhook `last_status` domain. The backend now
+  disables a webhook after 20 consecutive failed deliveries; re-enable it by
+  setting `enabled: true`, which is charged against the plan webhook cap and can
+  therefore return `429 QUOTA_EXCEEDED`.
+
+### Changed
+
+- Webhook updates can now express clearing the signing secret distinctly from
+  leaving it alone. Backend 0.1.111 treats an explicit `null` as a destructive
+  clear, so an untouched secret must be omitted rather than serialised.
+- `failure_count` on outgoing webhooks is now counted once per delivery rather
+  than once per retry attempt, so for the same failures it is roughly 5x smaller
+  than before.
+- Documented that `last_used` on API keys is coarse (written at most once per
+  key per five minutes) and that webhook delivery history is retained by plan
+  rather than kept indefinitely.
+
+### Note
+
+- Backend 0.1.111 no longer accepts API keys in the query string on REST
+  endpoints. This SDK sends credentials as an `Authorization` header on REST;
+  SSE and WebSocket connections continue to use the query string, which the
+  backend still supports for those routes.
+
 ## [1.0.40] - 2026-07-19
 
 ### Added
