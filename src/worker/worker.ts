@@ -56,7 +56,13 @@ type EventHandler<E extends WorkerEvent> = (data: WorkerEventData[E]) => void;
  */
 export class SpooledWorker {
   private readonly client: SpooledClient;
-  private readonly options: Required<SpooledWorkerOptions>;
+  /**
+   * Options with every defaultable field filled in. `workerId` stays optional:
+   * there is no sensible default for it, and omitting it is what makes the
+   * server mint a UUID.
+   */
+  private readonly options: Required<Omit<SpooledWorkerOptions, "workerId">> &
+    Pick<SpooledWorkerOptions, "workerId">;
   private readonly debug: (msg: string, meta?: unknown) => void;
 
   private state: WorkerState = "idle";
@@ -80,7 +86,8 @@ export class SpooledWorker {
       version: SDK_VERSION,
       metadata: {},
       ...options,
-    } as Required<SpooledWorkerOptions>;
+    } as Required<Omit<SpooledWorkerOptions, "workerId">> &
+      Pick<SpooledWorkerOptions, "workerId">;
 
     // Get debug from client config
     const config = client.getConfig();
@@ -142,6 +149,7 @@ export class SpooledWorker {
       // Register with the API
       const registration = await this.client.workers.register({
         queueName: this.options.queueName,
+        workerId: this.options.workerId,
         hostname: this.options.hostname,
         workerType: this.options.workerType,
         maxConcurrency: this.options.concurrency,

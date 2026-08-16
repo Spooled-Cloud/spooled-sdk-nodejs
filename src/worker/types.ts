@@ -11,6 +11,16 @@ import type { JsonObject } from "../types/common.js";
 export interface SpooledWorkerOptions {
   /** Queue name to process */
   queueName: string;
+  /**
+   * Stable worker identifier (1-128 chars, `[A-Za-z0-9._-]`).
+   *
+   * Set this on any worker that restarts or redeploys: registration becomes an
+   * upsert, so the process reuses one row instead of leaving the previous
+   * registration to occupy the plan worker cap until the stale-worker reaper
+   * clears it (~2 minutes). Omit it and the server mints a UUID on every
+   * start. An id owned by a different organization is rejected with HTTP 409.
+   */
+  workerId?: string;
   /** Worker hostname (default: auto-detected) */
   hostname?: string;
   /** Worker type identifier */

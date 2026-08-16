@@ -12,6 +12,12 @@ export interface ApiKeySummary {
   rateLimit?: number;
   isActive: boolean;
   createdAt: string;
+  /**
+   * Coarse last-use timestamp, written at most once per key per 5 minutes
+   * rather than on every request. Treat it as "used recently", not as a live
+   * signal: it can lag actual use by up to 5 minutes, so it cannot answer
+   * "is this key in use right now" and idle-key checks must allow for the lag.
+   */
   lastUsed?: string;
   expiresAt?: string;
 }

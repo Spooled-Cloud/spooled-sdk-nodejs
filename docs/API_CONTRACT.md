@@ -30,7 +30,23 @@ Token can be either:
 - **API Key**: `sp_live_...` or `sp_test_...` (legacy `sk_live_...` / `sk_test_...` prefixes are also accepted)
 - **JWT Access Token**: obtained via `POST /api/v1/auth/login`
 
-WebSocket endpoint requires JWT token in query string: `/api/v1/ws?token=<jwt>`.
+REST endpoints do **not** accept credentials in the query string. `?api_key=` and `?token=` are
+rejected with `401`; move the credential into the `Authorization` header. Query strings are recorded
+by reverse-proxy and CDN access logs, tracing spans, browser history and the `Referer` header, and
+API keys do not expire by default (CWE-598).
+
+Query-string credentials are still accepted on exactly four realtime routes, because browser
+`EventSource` and `WebSocket` cannot set request headers:
+
+| Path                           | Description             |
+| ------------------------------ | ----------------------- |
+| `/api/v1/ws`                   | WebSocket connection    |
+| `/api/v1/events`               | SSE stream (all events) |
+| `/api/v1/events/jobs/{id}`     | SSE for specific job    |
+| `/api/v1/events/queues/{name}` | SSE for specific queue  |
+
+The WebSocket endpoint takes a JWT: `/api/v1/ws?token=<jwt>`. The SDK's own SSE client runs outside
+the browser and authenticates by header.
 
 ---
 
@@ -455,6 +471,7 @@ interface WorkerSummary {
 
 interface RegisterWorkerRequest {
   queue_name: string;
+  worker_id?: string; // 1-128 chars, [A-Za-z0-9._-]; stable id = upsert
   hostname: string;
   worker_type?: string;
   max_concurrency?: number; // 1-100, default 5
@@ -475,6 +492,15 @@ interface WorkerHeartbeatRequest {
   metadata?: object;
 }
 ```
+
+### Worker Identity
+
+`worker_id` is optional and controls how a re-registering process is counted. Supplying a stable id
+makes registration an upsert: the worker reuses one row, and re-registering an id the organization
+already owns is not charged against the plan worker cap. Omitting it makes the server mint a UUID,
+so every restart leaves the previous row counting against the cap until the stale-worker reaper
+clears it (~2 minutes) — enough for a crash-looping worker on a tight plan to 429 itself out of
+registering. An id owned by a different organization returns `409`.
 
 ---
 
@@ -631,6 +657,20 @@ interface CreateWorkflowResponse {
 | POST   | `/api/v1/outgoing-webhooks/{id}/test`       | Test webhook     |
 | GET    | `/api/v1/outgoing-webhooks/{id}/deliveries` | Delivery history |
 
+### Delivery Failures
+
+`failure_count` counts consecutive failed deliveries. It increments once per DELIVERY, not once per
+retry attempt, so for the same real-world failures it is roughly 5x smaller than a per-attempt
+count. A successful delivery resets it to 0, including a successful manual retry.
+
+After 20 consecutive failed deliveries the webhook is disabled automatically: `enabled` becomes
+`false` and `last_status` becomes `"auto_disabled"`. It receives no further events until it is
+re-enabled with `PUT /api/v1/outgoing-webhooks/{id}` `{"enabled": true}`, which is charged against
+the plan webhook cap and can therefore return `429` `QUOTA_EXCEEDED`.
+
+Deliveries are dispatched with a process-wide concurrency cap, so under heavy load they queue rather
+than all firing at once. Delivery ordering is not guaranteed.
+
 ### Webhook Events
 
 Valid event types:
@@ -656,9 +696,9 @@ interface OutgoingWebhook {
   url: string;
   events: string[];
   enabled: boolean;
-  failure_count: number;
+  failure_count: number; // consecutive failed deliveries; 20 = auto-disable
   last_triggered_at?: string;
-  last_status?: "success" | "failed";
+  last_status?: "success" | "failed" | "auto_disabled";
   created_at: string;
   updated_at: string;
 }
@@ -669,6 +709,14 @@ interface CreateOutgoingWebhookRequest {
   events: string[];
   secret?: string;
   enabled?: boolean;
+}
+
+interface UpdateOutgoingWebhookRequest {
+  name?: string;
+  url?: string;
+  events?: string[];
+  secret?: string | null; // omit = keep, null = clear, string = replace
+  enabled?: boolean; // true re-enables an auto-disabled webhook
 }
 
 interface TestWebhookResponse {
@@ -692,6 +740,31 @@ interface OutgoingWebhookDelivery {
   delivered_at?: string;
 }
 ```
+
+### PUT /api/v1/outgoing-webhooks/{id}
+
+Only the fields present in the request body are changed. `secret` is three-state and the destructive
+state is reachable by accident:
+
+| Body                   | Effect                                                                   |
+| ---------------------- | ------------------------------------------------------------------------ |
+| field omitted          | Keep the current secret                                                  |
+| `"secret": null`       | **Clear** it — deliveries then go out unsigned, no `X-Spooled-Signature` |
+| `"secret": "<string>"` | Replace it                                                               |
+
+Earlier releases ignored `null` here, so a secret could never be removed. Client code that
+round-trips a webhook and serialises unchanged fields as explicit `null` now wipes a live secret;
+send `undefined` (or omit the key) for fields you are not changing.
+
+`{"enabled": true}` is how an auto-disabled webhook is brought back. It is charged against the plan
+webhook cap, so it can return `429` `QUOTA_EXCEEDED`.
+
+### GET /api/v1/outgoing-webhooks/{id}/deliveries
+
+Delivery history is a retention window, not an audit log. Rows are deleted by the per-organization
+retention sweep using the plan's `history_retention_days` — free 1, starter 7, pro 30, enterprise
+90 — and only the newest 100 deliveries per webhook are readable through the endpoint in any case.
+Copy anything you need to keep into your own store.
 
 ---
 
@@ -757,7 +830,7 @@ interface ApiKeySummary {
   rate_limit?: number;
   is_active: boolean;
   created_at: string;
-  last_used?: string;
+  last_used?: string; // written at most once per key per 5 minutes
   expires_at?: string;
 }
 
@@ -783,6 +856,10 @@ interface UpdateApiKeyRequest {
   is_active?: boolean;
 }
 ```
+
+`last_used` is coarse by design: it is written at most once per key per 5 minutes, not once per
+request, so it can lag actual use by up to 5 minutes. It answers "was this key used recently", not
+"is this key in use right now"; idle-key checks must allow for the lag.
 
 ---
 

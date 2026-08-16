@@ -21,6 +21,7 @@ async function main() {
   // Create a worker
   const worker = new SpooledWorker(client, {
     queueName: "email-notifications",
+    workerId: "email-notifications-worker-01", // Stable id: restarts reuse one row
     concurrency: 5, // Process up to 5 jobs at a time
     pollInterval: 1000, // Poll every second
     leaseDuration: 30, // 30 second lease

@@ -43,6 +43,18 @@ export interface WorkerSummary {
 export interface RegisterWorkerParams {
   /** Queue name to process */
   queueName: string;
+  /**
+   * Stable worker identifier (1-128 chars, `[A-Za-z0-9._-]`).
+   *
+   * Supplying one makes registration an upsert, so a restarting worker reuses
+   * a single row and re-registering an id you already own is not charged
+   * against the plan worker cap. Omit it and the server mints a UUID, which
+   * means every restart leaves the old row occupying the cap until the
+   * stale-worker reaper clears it (~2 minutes) — enough for a crash-looping
+   * worker on a tight plan to 429 itself out of registering. An id owned by a
+   * different organization is rejected with HTTP 409.
+   */
+  workerId?: string;
   /** Worker hostname */
   hostname: string;
   /** Worker type identifier */

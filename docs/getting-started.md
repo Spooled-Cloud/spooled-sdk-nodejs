@@ -270,15 +270,29 @@ Get notified when job events occur:
 ```typescript
 // Create webhook for job events
 const webhook = await client.webhooks.create({
+  name: "App notifications",
   url: "https://your-app.com/webhooks/spooled",
   events: ["job.completed", "job.failed"],
-  queueName: "my-queue",
   secret: "webhook_secret_key",
 });
 
 // Retry a failed delivery
 await client.webhooks.retryDelivery(webhookId, deliveryId);
 ```
+
+Keep an eye on failures: after 20 consecutive failed deliveries a webhook is disabled automatically
+and stops receiving events entirely. You will see `enabled: false` and `lastStatus: "auto_disabled"`
+on it. Nothing resumes on its own — re-enable it explicitly:
+
+```typescript
+const wh = await client.webhooks.get(webhookId);
+if (wh.lastStatus === "auto_disabled") {
+  await client.webhooks.update(webhookId, { enabled: true });
+}
+```
+
+Re-enabling counts against your plan's webhook limit, so it can fail with `QUOTA_EXCEEDED` if you
+are already at the cap.
 
 ## What's Next?
 

@@ -350,6 +350,41 @@ await client.webhooks.update("webhook_id", { enabled: false });
 await client.webhooks.delete("webhook_id");
 ```
 
+`update` changes only the fields you pass. Two of them carry behaviour worth knowing before you
+call it:
+
+```typescript
+// Clear the signing secret. Destructive: deliveries then go out unsigned,
+// with no X-Spooled-Signature header, and the old secret is gone.
+await client.webhooks.update("webhook_id", { secret: null });
+
+// Replace it instead.
+await client.webhooks.update("webhook_id", { secret: "new-hmac-secret" });
+
+// Leave it alone by omitting the field. Passing `null` for fields you did not
+// mean to change wipes a live secret — pass `undefined` or drop the key.
+await client.webhooks.update("webhook_id", { url: "https://new-target" });
+
+// Re-enable a webhook that was auto-disabled after 20 consecutive failed
+// deliveries. Charged against the plan webhook cap, so it can throw
+// RateLimitError with code QUOTA_EXCEEDED.
+await client.webhooks.update("webhook_id", { enabled: true });
+```
+
+### Auto-Disable
+
+`webhook.failureCount` counts consecutive failed deliveries — once per delivery, not once per retry
+attempt — and a successful delivery resets it to 0, including a successful `retryDelivery()`. At 20
+the webhook is disabled automatically: `enabled` is `false` and `lastStatus` is `"auto_disabled"`.
+No further events are delivered until it is re-enabled.
+
+```typescript
+const wh = await client.webhooks.get("webhook_id");
+if (wh.lastStatus === "auto_disabled") {
+  await client.webhooks.update("webhook_id", { enabled: true });
+}
+```
+
 ### Test Webhook
 
 ```typescript
@@ -360,10 +395,13 @@ const result = await client.webhooks.test("webhook_id");
 ### Get Deliveries
 
 ```typescript
-const deliveries = await client.webhooks.getDeliveries("webhook_id", {
-  limit: 50,
-});
+const deliveries = await client.webhooks.getDeliveries("webhook_id");
 ```
+
+Delivery history is a retention window, not an audit log. Rows are removed by the per-organization
+retention sweep using the plan's history retention period — free 1 day, starter 7, pro 30,
+enterprise 90 — and only the newest 100 deliveries per webhook are returned in any case. Copy
+anything you need to keep into your own store.
 
 ### Retry Delivery
 
@@ -393,6 +431,7 @@ const worker = await client.workers.get("worker_id");
 ```typescript
 const registration = await client.workers.register({
   queueName: "my-queue",
+  workerId: "worker-01", // stable id (1-128 chars, [A-Za-z0-9._-])
   hostname: "worker-01",
   workerType: "nodejs",
   maxConcurrency: 10,
@@ -401,6 +440,13 @@ const registration = await client.workers.register({
 });
 // { id, leaseDurationSecs, heartbeatIntervalSecs }
 ```
+
+`workerId` is optional but worth setting on anything that restarts. With a stable id, registration
+is an upsert: the process reuses one row, and re-registering an id you already own is not charged
+against the plan worker cap. Omit it and the server mints a UUID, so every restart leaves the old
+row counting against the cap until the stale-worker reaper clears it (~2 minutes) — enough for a
+crash-looping worker on a tight plan to 429 itself out of registering. An id owned by a different
+organization is rejected with HTTP 409.
 
 ### Heartbeat
 

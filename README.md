@@ -120,6 +120,7 @@ const client = new SpooledClient({ apiKey: "sp_live_..." });
 
 const worker = new SpooledWorker(client, {
   queueName: "my-queue",
+  workerId: "my-queue-worker-01", // stable id — see below
   concurrency: 10,
 });
 
@@ -134,6 +135,11 @@ await worker.start();
 // Graceful shutdown
 process.on("SIGTERM", () => worker.stop());
 ```
+
+Give any worker that restarts a stable `workerId` (1-128 chars, `[A-Za-z0-9._-]`). Registration then
+upserts a single row instead of minting a new UUID each start, which otherwise leaves the previous
+registration counting against your plan's worker limit until the stale-worker reaper clears it
+(~2 minutes).
 
 ### Workflows (DAGs)
 
@@ -215,18 +221,31 @@ Configure outgoing webhooks for job events:
 ```typescript
 // Create webhook
 const webhook = await client.webhooks.create({
+  name: "App notifications",
   url: "https://your-app.com/webhooks/spooled",
   events: ["job.completed", "job.failed"],
-  queueName: "my-queue",
   secret: "webhook_secret_key",
 });
 
 // Retry a failed delivery
 await client.webhooks.retryDelivery(webhookId, deliveryId);
 
-// Get delivery history
+// Get delivery history (retention-bounded: free 1 day, starter 7, pro 30,
+// enterprise 90 — and only the newest 100 deliveries per webhook)
 const deliveries = await client.webhooks.getDeliveries(webhookId);
 ```
+
+After 20 consecutive failed deliveries a webhook is disabled automatically (`enabled: false`,
+`lastStatus: "auto_disabled"`) and stops receiving events until you turn it back on:
+
+```typescript
+await client.webhooks.update(webhookId, { enabled: true });
+```
+
+Updating changes only the fields you send. `secret` is three-state — omit it to keep the current
+secret, pass a string to replace it, or pass `null` to clear it. Clearing is destructive: deliveries
+then go out unsigned, with no `X-Spooled-Signature` header. Do not serialise unchanged fields as
+`null`.
 
 ### Dead Letter Queue (DLQ)
 
@@ -329,9 +348,9 @@ All operations automatically enforce tier-based limits:
 - ✅ Workflow creation (counts all jobs in workflow)
 - ✅ Schedule triggers
 - ✅ DLQ retry operations
-- ✅ Worker registration
+- ✅ Worker registration (re-registering your own stable `workerId` is not charged again)
 - ✅ Queue creation
-- ✅ Webhook creation
+- ✅ Webhook creation, and re-enabling a disabled webhook
 
 When a plan quota or limit is exceeded, you'll receive an `HTTP 429` response with
 `code: "QUOTA_EXCEEDED"`. The SDK reliably preserves the HTTP status, error code, message,

@@ -45,6 +45,7 @@ const worker = new SpooledWorker(client, {
   shutdownTimeout: 30000, // Max wait for graceful shutdown (default: 30000)
 
   // Identification
+  workerId: "emails-worker-01", // Stable id (default: server-minted UUID)
   hostname: "worker-01", // Worker hostname (default: os.hostname())
   workerType: "nodejs", // Worker type identifier
   version: "my-worker/2.3.0", // Optional application version (defaults to SDK 1.0.40)
@@ -57,6 +58,29 @@ const worker = new SpooledWorker(client, {
 ```
 
 The runtime captures each claimed execution's immutable `leaseId` and echoes it on heartbeat, completion, and failure. If the same job is reclaimed, an older handler cannot settle or clean up the replacement lease.
+
+### Stable Worker IDs
+
+Set `workerId` on any worker that restarts or redeploys. It must be 1-128 characters from
+`[A-Za-z0-9._-]`, and it makes registration an upsert: the process reuses a single worker row, and
+re-registering an id you already own is not charged against the plan worker cap.
+
+Leave it unset and the server mints a fresh UUID on every start, so each restart leaves the previous
+registration counting against the cap until the stale-worker reaper clears it (~2 minutes). A worker
+that crash-loops on a tight plan can exhaust its own worker limit that way and start failing to
+register with HTTP 429.
+
+Derive the id from something stable about the deployment — a Kubernetes pod name, a systemd instance
+name, a container hostname — rather than generating one per process:
+
+```typescript
+const worker = new SpooledWorker(client, {
+  queueName: "emails",
+  workerId: process.env.HOSTNAME ?? "emails-worker-01",
+});
+```
+
+An id owned by a different organization is rejected with HTTP 409.
 
 ## Job Context
 
