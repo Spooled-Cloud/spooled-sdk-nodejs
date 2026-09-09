@@ -3363,11 +3363,11 @@ async function testOrganizationWebhookToken(
     async () => {
       try {
         const result = await client.organizations.getWebhookToken();
-        // Token may be null/undefined for new orgs
-        if (result.token) {
-          initialToken = result.token;
+        // Token may be null for new orgs
+        if (result.webhookToken) {
+          initialToken = result.webhookToken;
           log(
-            `Webhook token (first 8 chars): ${result.token.substring(0, 8)}...`,
+            `Webhook token (first 8 chars): ${result.webhookToken.substring(0, 8)}...`,
           );
         } else {
           log("Webhook token not set yet (expected for new orgs)");
@@ -3390,9 +3390,11 @@ async function testOrganizationWebhookToken(
     async () => {
       try {
         const result = await client.organizations.regenerateWebhookToken();
-        if (result.token) {
-          log(`New token (first 8 chars): ${result.token.substring(0, 8)}...`);
-          if (initialToken && result.token === initialToken) {
+        if (result.webhookToken) {
+          log(
+            `New token (first 8 chars): ${result.webhookToken.substring(0, 8)}...`,
+          );
+          if (initialToken && result.webhookToken === initialToken) {
             log("Warning: Token unchanged after regeneration");
           }
         } else {

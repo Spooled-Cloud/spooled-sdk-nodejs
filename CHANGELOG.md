@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `workflows.jobs.getDependencies` now types `dependents`, `dependenciesMet`,
   and `queueName` on each edge from `GET /jobs/{id}/dependencies`. It previously
   typed a parent `status` and per-edge `dependencyType` the API never sends.
+- `organizations.getWebhookToken` / `regenerateWebhookToken` now type
+  `webhookToken` and `webhookUrl`. They previously typed a `token` field the
+  API never sends (`webhook_token` camelCases to `webhookToken`), so
+  `result.token` was always undefined.
 
 ## [1.1.0] - 2026-08-16
 

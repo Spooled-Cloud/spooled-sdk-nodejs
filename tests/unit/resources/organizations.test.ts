@@ -278,4 +278,55 @@ describe("OrganizationsResource", () => {
       expect(result.valid).toBe(true);
     });
   });
+
+  describe("getWebhookToken", () => {
+    it("maps webhookToken and webhookUrl, not a token field the API never sends", async () => {
+      server.use(
+        http.get(
+          "https://api.spooled.cloud/api/v1/organizations/webhook-token",
+          () => {
+            return HttpResponse.json({
+              webhook_token: "whk_abc123",
+              webhook_url:
+                "https://api.spooled.cloud/api/v1/webhooks/org_123/custom",
+            });
+          },
+        ),
+      );
+
+      const client = createClient();
+      const result = await client.organizations.getWebhookToken();
+
+      expect(result.webhookToken).toBe("whk_abc123");
+      expect(result.webhookUrl).toBe(
+        "https://api.spooled.cloud/api/v1/webhooks/org_123/custom",
+      );
+      expect(
+        (result as typeof result & { token?: string }).token,
+      ).toBeUndefined();
+    });
+  });
+
+  describe("regenerateWebhookToken", () => {
+    it("maps webhookToken from regenerate, not token", async () => {
+      server.use(
+        http.post(
+          "https://api.spooled.cloud/api/v1/organizations/webhook-token/regenerate",
+          () => {
+            return HttpResponse.json({
+              webhook_token: "whk_new456",
+              webhook_url:
+                "https://api.spooled.cloud/api/v1/webhooks/org_123/custom",
+            });
+          },
+        ),
+      );
+
+      const client = createClient();
+      const result = await client.organizations.regenerateWebhookToken();
+
+      expect(result.webhookToken).toBe("whk_new456");
+      expect(result.webhookUrl).toContain("/webhooks/org_123/custom");
+    });
+  });
 });

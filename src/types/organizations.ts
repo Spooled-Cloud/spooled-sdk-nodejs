@@ -139,8 +139,10 @@ export interface CheckSlugResponse {
   suggestion?: string;
 }
 
-/** Webhook token response */
+/** GET/POST /organizations/webhook-token — backend sends webhook_token + webhook_url */
 export interface WebhookTokenResponse {
-  /** The webhook verification token */
-  token: string;
+  /** Org webhook token. Null on GET when none is configured. */
+  webhookToken: string | null;
+  /** Inbound webhook URL for this organization */
+  webhookUrl: string;
 }

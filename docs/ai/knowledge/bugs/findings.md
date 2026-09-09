@@ -12,5 +12,6 @@
 | NS-08 | P2  | Workflow examples used stale response fields                                              | `examples/workflow-dag.ts`          | fixed in `1.0.40`                 |
 | NS-09 | P1  | ~~`startEmailLogin` typed `success` the API never sends; `checkEmail` dropped `available`/`signupEnabled`~~ **FIXED** | `src/resources/auth.ts` | working tree |
 | NS-10 | P2  | ~~`getDependencies` typed `status`/`dependencyType`; dropped `queueName`/`dependenciesMet`~~ **FIXED** | `src/types/workflows.ts` | working tree |
+| NS-11 | P1  | ~~`getWebhookToken` typed `token`; API sends `webhook_token`/`webhook_url`~~ **FIXED** | `src/types/organizations.ts` | working tree |
 
 See `findings.jsonl`.

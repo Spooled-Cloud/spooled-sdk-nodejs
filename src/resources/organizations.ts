@@ -100,8 +100,8 @@ export class OrganizationsResource {
    *
    * @example
    * ```typescript
-   * const { token } = await client.organizations.getWebhookToken();
-   * console.log('Webhook token:', token);
+   * const { webhookToken, webhookUrl } = await client.organizations.getWebhookToken();
+   * console.log('Webhook token:', webhookToken);
    * ```
    */
   async getWebhookToken(): Promise<WebhookTokenResponse> {
@@ -116,7 +116,7 @@ export class OrganizationsResource {
    *
    * @example
    * ```typescript
-   * const { token: newToken } = await client.organizations.regenerateWebhookToken();
+   * const { webhookToken: newToken } = await client.organizations.regenerateWebhookToken();
    * console.log('New webhook token:', newToken);
    * ```
    */
