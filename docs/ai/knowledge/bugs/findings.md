@@ -15,5 +15,6 @@
 | NS-11 | P1  | ~~`getWebhookToken` typed `token`; API sends `webhook_token`/`webhook_url`~~ **FIXED** | `src/types/organizations.ts` | working tree |
 | NS-12 | P1  | ~~`schedules.trigger` typed `scheduledAt`; API sends `triggered_at`~~ **FIXED** | `src/types/schedules.ts` | working tree |
 | NS-13 | P1  | ~~`JobSummary.retryCount` always undefined; list JSON sends `attempt`~~ **FIXED** | `src/types/jobs.ts` | working tree |
+| NS-14 | P1  | ~~`workflows.get()` left `totalJobs`/`completedJobs`/`failedJobs` undefined~~ **FIXED** | `src/resources/workflows.ts`; GET detail puts counts under `progress` | working tree |
 
 See `findings.jsonl`.

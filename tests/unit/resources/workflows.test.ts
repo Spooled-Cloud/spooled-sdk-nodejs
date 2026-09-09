@@ -118,10 +118,17 @@ describe("WorkflowsResource", () => {
               id: "workflow_123",
               name: "My Workflow",
               status: "running",
-              total_jobs: 5,
-              completed_jobs: 2,
-              failed_jobs: 1,
-              progress_percent: 40,
+              jobs: [
+                { id: "job_1", queue: "etl", status: "completed" },
+                { id: "job_2", queue: "etl", status: "pending" },
+              ],
+              progress: {
+                total: 2,
+                completed: 1,
+                failed: 0,
+                pending: 1,
+                processing: 0,
+              },
               created_at: "2024-01-01T00:00:00Z",
             });
           },
@@ -132,8 +139,10 @@ describe("WorkflowsResource", () => {
       const workflow = await client.workflows.get("workflow_123");
 
       expect(workflow.id).toBe("workflow_123");
-      expect(workflow.totalJobs).toBe(5);
-      expect(workflow.failedJobs).toBe(1);
+      expect(workflow.totalJobs).toBe(2);
+      expect(workflow.completedJobs).toBe(1);
+      expect(workflow.failedJobs).toBe(0);
+      expect(workflow.progressPercent).toBe(50);
     });
   });
 

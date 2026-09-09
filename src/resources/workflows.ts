@@ -126,7 +126,8 @@ export class WorkflowsResource {
    * Get a workflow by ID
    */
   async get(id: string): Promise<WorkflowResponse> {
-    return this.http.get<WorkflowResponse>(`/workflows/${id}`);
+    const raw = await this.http.get<WorkflowGetPayload>(`/workflows/${id}`);
+    return mapWorkflowGetResponse(raw);
   }
 
   /**
@@ -225,6 +226,48 @@ interface WorkflowDetailPayload {
     parentJobId?: string;
     childJobId?: string;
   }>;
+}
+
+/** GET /workflows/{id} after camelCase conversion. */
+export interface WorkflowGetPayload {
+  id?: string;
+  name?: string;
+  status?: WorkflowResponse["status"];
+  createdAt?: string;
+  completedAt?: string;
+  totalJobs?: number;
+  completedJobs?: number;
+  failedJobs?: number;
+  progressPercent?: number;
+  progress?: {
+    total?: number;
+    completed?: number;
+    failed?: number;
+  };
+}
+
+/**
+ * GET /workflows/{id} is WorkflowDetailResponse: counts live under
+ * `progress`, not top-level total_jobs like list/cancel/retry.
+ */
+export function mapWorkflowGetResponse(raw: WorkflowGetPayload): WorkflowResponse {
+  const totalJobs = raw.totalJobs ?? raw.progress?.total ?? 0;
+  const completedJobs = raw.completedJobs ?? raw.progress?.completed ?? 0;
+  const failedJobs = raw.failedJobs ?? raw.progress?.failed ?? 0;
+  const progressPercent =
+    raw.progressPercent ??
+    (totalJobs > 0 ? (completedJobs / totalJobs) * 100 : 0);
+  return {
+    id: String(raw.id ?? ""),
+    name: String(raw.name ?? ""),
+    status: raw.status ?? "pending",
+    totalJobs,
+    completedJobs,
+    failedJobs,
+    progressPercent,
+    createdAt: String(raw.createdAt ?? ""),
+    completedAt: raw.completedAt,
+  };
 }
 
 function mapWorkflowDetailJobs(detail: WorkflowDetailPayload): WorkflowJob[] {
