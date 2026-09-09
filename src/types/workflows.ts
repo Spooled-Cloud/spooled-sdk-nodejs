@@ -102,15 +102,19 @@ export interface JobWithDependencies {
 
 /** Parameters for adding dependencies */
 export interface AddDependenciesParams {
-  /** Job IDs that this job depends on */
-  dependsOnJobIds: string[];
-  /** Dependency type (default: 'completion') */
+  /** Job IDs that this job depends on (backend `depends_on`) */
+  dependsOnJobIds?: string[];
+  dependsOn?: string[];
+  /** Backend `dependency_mode`: all (default) or any */
+  dependencyMode?: "all" | "any";
+  /** Accepted when it is `all` or `any`; other values are ignored */
   dependencyType?: string;
 }
 
 /** Response for adding dependencies */
 export interface AddDependenciesResponse {
   added: number;
+  dependenciesMet: boolean;
   dependencies: Array<{
     jobId: string;
     dependsOnJobId: string;

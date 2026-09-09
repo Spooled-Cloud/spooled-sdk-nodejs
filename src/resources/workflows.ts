@@ -5,6 +5,8 @@
  */
 
 import type { HttpClient } from "../utils/http.js";
+import { NotFoundError } from "../errors.js";
+import type { JsonObject } from "../types/common.js";
 import type {
   WorkflowResponse,
   CreateWorkflowParams,
@@ -145,24 +147,40 @@ export class WorkflowsResource {
   }
 
   // Workflow job operations (private implementations)
+  //
+  // The backend has no /workflows/{id}/jobs routes. Job rows and dependency
+  // edges are on GET /workflows/{id} (WorkflowDetailResponse).
 
   private async listWorkflowJobs(workflowId: string): Promise<WorkflowJob[]> {
-    return this.http.get<WorkflowJob[]>(`/workflows/${workflowId}/jobs`);
+    const detail = await this.http.get<WorkflowDetailPayload>(
+      `/workflows/${workflowId}`,
+    );
+    return mapWorkflowDetailJobs(detail);
   }
 
   private async getWorkflowJob(
     workflowId: string,
     jobId: string,
   ): Promise<WorkflowJob> {
-    return this.http.get<WorkflowJob>(`/workflows/${workflowId}/jobs/${jobId}`);
+    const jobs = await this.listWorkflowJobs(workflowId);
+    const job = jobs.find((item) => item.id === jobId);
+    if (!job) {
+      throw new NotFoundError(
+        `Job ${jobId} not found in workflow ${workflowId}`,
+      );
+    }
+    return job;
   }
 
   private async getWorkflowJobsStatus(
     workflowId: string,
   ): Promise<WorkflowJobStatus[]> {
-    return this.http.get<WorkflowJobStatus[]>(
-      `/workflows/${workflowId}/jobs/status`,
-    );
+    const jobs = await this.listWorkflowJobs(workflowId);
+    return jobs.map((job) => ({
+      jobId: job.id,
+      key: job.key,
+      status: job.status,
+    }));
   }
 
   private async getJobDependencies(
@@ -175,9 +193,80 @@ export class WorkflowsResource {
     jobId: string,
     params: AddDependenciesParams,
   ): Promise<AddDependenciesResponse> {
-    return this.http.post<AddDependenciesResponse>(
+    const dependsOn = params.dependsOn ?? params.dependsOnJobIds ?? [];
+    const mode =
+      params.dependencyMode ??
+      (params.dependencyType === "any" || params.dependencyType === "all"
+        ? params.dependencyType
+        : undefined);
+    const raw = await this.http.post<{
+      dependenciesAdded?: number;
+      dependenciesMet?: boolean;
+    }>(
       `/jobs/${jobId}/dependencies`,
-      params,
+      {
+        depends_on: dependsOn,
+        ...(mode ? { dependency_mode: mode } : {}),
+      },
+      { skipRequestConversion: true },
     );
+    return {
+      added: raw.dependenciesAdded ?? 0,
+      dependenciesMet: raw.dependenciesMet ?? false,
+      dependencies: [],
+    };
   }
+}
+
+interface WorkflowDetailPayload {
+  id?: string;
+  jobs?: Array<Record<string, unknown>>;
+  dependencies?: Array<{
+    parentJobId?: string;
+    childJobId?: string;
+  }>;
+}
+
+function mapWorkflowDetailJobs(detail: WorkflowDetailPayload): WorkflowJob[] {
+  const workflowId = String(detail.id ?? "");
+  const deps = detail.dependencies ?? [];
+  return (detail.jobs ?? []).map((job) => {
+    const id = String(job.id ?? "");
+    const timeoutMs =
+      typeof job.timeoutMs === "number" ? job.timeoutMs : undefined;
+    const errorObj = job.error;
+    let error: string | undefined;
+    if (typeof errorObj === "string") {
+      error = errorObj;
+    } else if (
+      errorObj &&
+      typeof errorObj === "object" &&
+      "message" in errorObj
+    ) {
+      error = String((errorObj as { message: unknown }).message);
+    }
+    return {
+      id,
+      workflowId: String(job.workflowId ?? workflowId),
+      key: String(job.key ?? ""),
+      queueName: String(job.queueName ?? job.queue ?? ""),
+      status: job.status as WorkflowJob["status"],
+      payload: (job.payload as JsonObject) ?? {},
+      result: (job.result as JsonObject | undefined) ?? undefined,
+      error,
+      dependsOn: deps
+        .filter((dep) => dep.childJobId === id)
+        .map((dep) => String(dep.parentJobId ?? "")),
+      priority: Number(job.priority ?? 0),
+      maxRetries: Number(job.maxRetries ?? 0),
+      attempt: Number(job.attempt ?? 0),
+      timeoutSeconds:
+        timeoutMs != null
+          ? Math.max(1, Math.floor(timeoutMs / 1000))
+          : undefined,
+      createdAt: String(job.createdAt ?? ""),
+      startedAt: (job.startedAt as string | undefined) ?? undefined,
+      completedAt: (job.completedAt as string | undefined) ?? undefined,
+    };
+  });
 }

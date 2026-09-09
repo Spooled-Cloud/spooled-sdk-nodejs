@@ -236,19 +236,8 @@ describe("WorkflowsResource", () => {
           async ({ request }) => {
             receivedBody = await request.json();
             return HttpResponse.json({
-              added: 2,
-              dependencies: [
-                {
-                  job_id: "job_123",
-                  depends_on_job_id: "job_121",
-                  dependency_type: "completion",
-                },
-                {
-                  job_id: "job_123",
-                  depends_on_job_id: "job_122",
-                  dependency_type: "completion",
-                },
-              ],
+              dependencies_added: 2,
+              dependencies_met: true,
             });
           },
         ),
@@ -259,9 +248,80 @@ describe("WorkflowsResource", () => {
         dependsOnJobIds: ["job_121", "job_122"],
       });
 
-      expect(receivedBody.depends_on_job_ids).toEqual(["job_121", "job_122"]);
+      expect(receivedBody.depends_on).toEqual(["job_121", "job_122"]);
       expect(result.added).toBe(2);
-      expect(result.dependencies).toHaveLength(2);
+      expect(result.dependenciesMet).toBe(true);
+    });
+  });
+
+  describe("jobs.list", () => {
+    it("reads jobs from GET /workflows/{id}, not a /jobs subpath", async () => {
+      server.use(
+        http.get(
+          "https://api.spooled.cloud/api/v1/workflows/workflow_123",
+          () => {
+            return HttpResponse.json({
+              id: "workflow_123",
+              name: "My Workflow",
+              status: "running",
+              jobs: [
+                {
+                  id: "job_1",
+                  organization_id: "org_1",
+                  queue: "etl",
+                  payload: { step: "extract" },
+                  status: "completed",
+                  priority: 0,
+                  attempt: 1,
+                  max_retries: 3,
+                  timeout_ms: 30000,
+                  created_at: "2024-01-01T00:00:00Z",
+                  workflow_id: "workflow_123",
+                },
+                {
+                  id: "job_2",
+                  organization_id: "org_1",
+                  queue: "etl",
+                  payload: { step: "transform" },
+                  status: "pending",
+                  priority: 0,
+                  attempt: 0,
+                  max_retries: 3,
+                  timeout_ms: 60000,
+                  created_at: "2024-01-01T00:00:00Z",
+                  workflow_id: "workflow_123",
+                },
+              ],
+              dependencies: [
+                {
+                  parent_job_id: "job_1",
+                  child_job_id: "job_2",
+                  dependency_type: "all",
+                },
+              ],
+              progress: {
+                total: 2,
+                completed: 1,
+                failed: 0,
+                pending: 1,
+                processing: 0,
+              },
+              created_at: "2024-01-01T00:00:00Z",
+            });
+          },
+        ),
+      );
+
+      const client = createClient();
+      const jobs = await client.workflows.jobs.list("workflow_123");
+      expect(jobs).toHaveLength(2);
+      expect(jobs[0].queueName).toBe("etl");
+      expect(jobs[0].timeoutSeconds).toBe(30);
+      expect(jobs[1].dependsOn).toEqual(["job_1"]);
+
+      const one = await client.workflows.jobs.get("workflow_123", "job_2");
+      expect(one.id).toBe("job_2");
+      expect(one.dependsOn).toEqual(["job_1"]);
     });
   });
 });
