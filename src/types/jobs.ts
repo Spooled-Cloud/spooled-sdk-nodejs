@@ -49,6 +49,8 @@ export interface JobSummary {
   maxRetries: number;
   /** From payload.job_type (empty string when absent). */
   jobType?: string;
+  /** From list/DLQ `last_error` (null/absent when none). */
+  lastError?: string | null;
   createdAt: string;
   scheduledAt?: string;
   startedAt?: string;

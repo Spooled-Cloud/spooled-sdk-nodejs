@@ -12,4 +12,4 @@
 - Org webhook token is `GET/POST /organizations/webhook-token` → `{ webhook_token, webhook_url }`, not `{ token }`.
 - Schedule trigger is `POST /schedules/{id}/trigger` → `{ job_id, triggered_at }`, not `{ job_id, scheduled_at }`.
 - Job list/DLQ summaries send `attempt` and `max_retries`, not `retry_count`. Detail `GET /jobs/{id}` still uses `retry_count`.
-- `GET /jobs` summaries include `job_type` from `payload.job_type`. `JobSummary.jobType` maps that field; `jobs.get` copies it from `payload` when the top-level field is absent.
+- `GET /jobs` summaries include `job_type` from `payload.job_type`. `JobSummary.jobType` maps that field; `jobs.get` and `jobs.retry` copy it from `payload` when the top-level field is absent. List/DLQ summaries also send `last_error`.

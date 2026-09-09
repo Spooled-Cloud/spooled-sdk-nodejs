@@ -17,5 +17,7 @@
 | NS-13 | P1  | ~~`JobSummary.retryCount` always undefined; list JSON sends `attempt`~~ **FIXED** | `src/types/jobs.ts` | working tree |
 | NS-14 | P1  | ~~`workflows.get()` left `totalJobs`/`completedJobs`/`failedJobs` undefined~~ **FIXED** | `src/resources/workflows.ts`; GET detail puts counts under `progress` | working tree |
 | NS-15 | P2  | ~~`JobSummary` omitted `jobType` from `GET /jobs`~~ **FIXED** | `src/types/jobs.ts`; `src/resources/jobs.ts` | working tree |
+| NS-16 | P2  | ~~`jobs.retry` left `jobType` undefined; GET maps it from payload~~ **FIXED** | `src/resources/jobs.ts` | working tree |
+| NS-17 | P2  | ~~`JobSummary` omitted `lastError` from list/DLQ~~ **FIXED** | `src/types/jobs.ts` | working tree |
 
 See `findings.jsonl`.

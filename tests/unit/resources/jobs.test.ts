@@ -113,6 +113,7 @@ describe("JobsResource", () => {
               attempt: 0,
               max_retries: 3,
               job_type: "send_email",
+              last_error: "Connection refused",
               created_at: "2024-01-01T00:00:00Z",
             },
             {
@@ -135,6 +136,7 @@ describe("JobsResource", () => {
       expect(jobs[0].id).toBe("job_1");
       expect(jobs[0].attempt).toBe(0);
       expect(jobs[0].jobType).toBe("send_email");
+      expect(jobs[0].lastError).toBe("Connection refused");
       expect(jobs[1].queueName).toBe("q2");
       expect(jobs[1].attempt).toBe(1);
       expect(jobs[1].maxRetries).toBe(3);
@@ -185,7 +187,7 @@ describe("JobsResource", () => {
             queue_name: "my-queue",
             retry_count: 1,
             max_retries: 3,
-            payload: {},
+            payload: { job_type: "send_email" },
             priority: 0,
             timeout_seconds: 300,
             created_at: "2024-01-01T00:00:00Z",
@@ -199,6 +201,7 @@ describe("JobsResource", () => {
 
       expect(job.status).toBe("pending");
       expect(job.retryCount).toBe(1);
+      expect(job.jobType).toBe("send_email");
     });
   });
 

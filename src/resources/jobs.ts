@@ -83,10 +83,7 @@ export class JobsResource {
    */
   async get(id: string): Promise<Job> {
     const job = await this.http.get<Job>(`/jobs/${id}`);
-    return {
-      ...job,
-      jobType: job.jobType ?? jobTypeFromPayload(job) ?? undefined,
-    };
+    return withJobType(job);
   }
 
   /**
@@ -100,7 +97,8 @@ export class JobsResource {
    * Retry a failed or dead-lettered job
    */
   async retry(id: string): Promise<Job> {
-    return this.http.post<Job>(`/jobs/${id}/retry`);
+    const job = await this.http.post<Job>(`/jobs/${id}/retry`);
+    return withJobType(job);
   }
 
   /**
@@ -208,6 +206,15 @@ export class JobsResource {
   private async purgeDlq(params: PurgeDlqParams): Promise<PurgeDlqResponse> {
     return this.http.post<PurgeDlqResponse>("/jobs/dlq/purge", params);
   }
+}
+
+function withJobType<T extends { jobType?: string; payload?: { jobType?: unknown; job_type?: unknown } }>(
+  job: T,
+): T {
+  return {
+    ...job,
+    jobType: job.jobType ?? jobTypeFromPayload(job) ?? undefined,
+  };
 }
 
 function jobTypeFromPayload(row: {
