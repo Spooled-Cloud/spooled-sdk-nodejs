@@ -62,9 +62,17 @@ export class AuthResource {
 
   /**
    * Validate a token
+   *
+   * POST /auth/validate is `{ valid, error?, claims? }`. Claims use `org_id`
+   * (camelCased `orgId`), not `organizationId`. Invalid tokens send `error`,
+   * not `message`.
    */
   async validate(params: ValidateTokenParams): Promise<ValidateTokenResponse> {
-    return this.http.post<ValidateTokenResponse>("/auth/validate", params);
+    const raw = await this.http.post<RawValidateTokenResponse>(
+      "/auth/validate",
+      params,
+    );
+    return mapValidate(raw);
   }
 
   /**
@@ -84,4 +92,38 @@ export class AuthResource {
       params: { email },
     });
   }
+}
+
+interface RawValidateTokenResponse {
+  valid: boolean;
+  message?: string;
+  error?: string;
+  claims?: {
+    organizationId?: string;
+    orgId?: string;
+    apiKeyId?: string;
+    queues?: string[];
+    exp?: number;
+    iat?: number;
+  };
+}
+
+function mapValidate(raw: RawValidateTokenResponse): ValidateTokenResponse {
+  const claims = raw.claims;
+  const organizationId = claims?.organizationId ?? claims?.orgId;
+  return {
+    valid: raw.valid,
+    message: raw.message ?? raw.error,
+    error: raw.error ?? raw.message,
+    claims: claims
+      ? {
+          organizationId: organizationId ?? "",
+          orgId: claims.orgId ?? organizationId,
+          apiKeyId: claims.apiKeyId ?? "",
+          queues: claims.queues ?? [],
+          exp: claims.exp ?? 0,
+          iat: claims.iat ?? 0,
+        }
+      : undefined,
+  };
 }

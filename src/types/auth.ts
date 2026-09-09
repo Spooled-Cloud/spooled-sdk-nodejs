@@ -45,17 +45,22 @@ export interface ValidateTokenParams {
   token: string;
 }
 
-/** Token validation response */
+/** Token validation claims after camelCase. API `org_id` becomes `orgId`. */
+export interface TokenClaims {
+  organizationId: string;
+  orgId?: string;
+  apiKeyId: string;
+  queues: string[];
+  exp: number;
+  iat: number;
+}
+
+/** POST /auth/validate — `{ valid, error?, claims? }`. `message` is mapped from `error`. */
 export interface ValidateTokenResponse {
   valid: boolean;
   message?: string;
-  claims?: {
-    organizationId: string;
-    apiKeyId: string;
-    queues: string[];
-    exp: number;
-    iat: number;
-  };
+  error?: string;
+  claims?: TokenClaims;
 }
 
 /** POST /auth/email/start — backend sends message + email_sent_to, not success */

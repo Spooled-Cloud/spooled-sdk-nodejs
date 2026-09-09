@@ -9,6 +9,7 @@
 - `GET /workflows/{id}` is `WorkflowDetailResponse`: job counts are under `progress` (`total`/`completed`/`failed`), not top-level `total_jobs` like list/cancel/retry. `workflows.get` maps those onto `totalJobs`/`completedJobs`/`failedJobs`/`progressPercent`.
 - `GET /jobs/{id}/dependencies` is `{ jobId, dependencies, dependents, dependenciesMet }` with `{ jobId, queueName, status }` edges, not a parent `status` or per-edge `dependencyType`.
 - Email login start is `POST /auth/email/start` → `{ message, email_sent_to }`, not `{ success, message }`. Email availability is `GET /auth/check-email?email=` → `{ available, exists, signup_enabled }`.
+- `POST /auth/validate` is `{ valid, error?, claims? }`. Claims use `org_id` (camelCased `orgId`), not `organizationId`. Invalid tokens send `error`, not `message`. `auth.validate` maps those onto `claims.organizationId` and `message`.
 - Org webhook token is `GET/POST /organizations/webhook-token` → `{ webhook_token, webhook_url }`, not `{ token }`.
 - Schedule trigger is `POST /schedules/{id}/trigger` → `{ job_id, triggered_at }`, not `{ job_id, scheduled_at }`.
 - Job list/DLQ summaries send `attempt` and `max_retries`, not `retry_count`. Detail `GET /jobs/{id}` still uses `retry_count`.

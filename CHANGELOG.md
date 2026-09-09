@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `auth.validate` now maps `claims.orgId` (`org_id`) onto
+  `claims.organizationId` and `error` onto `message`. POST `/auth/validate`
+  never sends top-level `organizationId` or `message`, so a valid token's org
+  looked undefined and an invalid token's reason was dropped.
 - `auth.startEmailLogin` now reads `message` and `emailSentTo` from
   `POST /auth/email/start`. It previously typed a `success` field the API never
   sends, so a successful send looked like a failure to anyone checking

@@ -19,5 +19,6 @@
 | NS-15 | P2  | ~~`JobSummary` omitted `jobType` from `GET /jobs`~~ **FIXED** | `src/types/jobs.ts`; `src/resources/jobs.ts` | working tree |
 | NS-16 | P2  | ~~`jobs.retry` left `jobType` undefined; GET maps it from payload~~ **FIXED** | `src/resources/jobs.ts` | working tree |
 | NS-17 | P2  | ~~`JobSummary` omitted `lastError` from list/DLQ~~ **FIXED** | `src/types/jobs.ts` | working tree |
+| NS-18 | P1  | ~~`auth.validate` typed `claims.organizationId`/`message`; API sends `org_id`/`error`~~ **FIXED** | `src/resources/auth.ts`; POST `/auth/validate` is `{valid,error,claims}` |
 
 See `findings.jsonl`.

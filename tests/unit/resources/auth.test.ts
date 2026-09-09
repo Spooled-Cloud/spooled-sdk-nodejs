@@ -161,9 +161,9 @@ describe("AuthResource", () => {
           return HttpResponse.json({
             valid: true,
             claims: {
-              organization_id: "org_123",
+              org_id: "org_123",
               api_key_id: "key_123",
-              queues: [],
+              queues: ["emails"],
               exp: 1704067200,
               iat: 1704063600,
             },
@@ -176,6 +176,8 @@ describe("AuthResource", () => {
 
       expect(result.valid).toBe(true);
       expect(result.claims?.organizationId).toBe("org_123");
+      expect(result.claims?.apiKeyId).toBe("key_123");
+      expect(result.claims?.queues).toEqual(["emails"]);
     });
 
     it("should handle invalid token", async () => {
@@ -183,7 +185,7 @@ describe("AuthResource", () => {
         http.post("https://api.spooled.cloud/api/v1/auth/validate", () => {
           return HttpResponse.json({
             valid: false,
-            message: "Token expired",
+            error: "Invalid token",
           });
         }),
       );
@@ -192,7 +194,8 @@ describe("AuthResource", () => {
       const result = await client.auth.validate({ token: "expired_token" });
 
       expect(result.valid).toBe(false);
-      expect(result.message).toBe("Token expired");
+      expect(result.message).toBe("Invalid token");
+      expect(result.error).toBe("Invalid token");
     });
   });
 
