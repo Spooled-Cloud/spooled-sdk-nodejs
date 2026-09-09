@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `result.success`.
 - `auth.checkEmail` now types `available` and `signupEnabled` from
   `GET /auth/check-email`, which the handler always sends.
+- `workflows.jobs.getDependencies` now types `dependents`, `dependenciesMet`,
+  and `queueName` on each edge from `GET /jobs/{id}/dependencies`. It previously
+  typed a parent `status` and per-edge `dependencyType` the API never sends.
 
 ## [1.1.0] - 2026-08-16
 

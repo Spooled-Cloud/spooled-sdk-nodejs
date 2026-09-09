@@ -199,21 +199,21 @@ describe("WorkflowsResource", () => {
           () => {
             return HttpResponse.json({
               job_id: "job_123",
-              status: "pending",
               dependencies: [
                 {
                   job_id: "job_122",
+                  queue_name: "etl",
                   status: "completed",
-                  dependency_type: "completion",
                 },
               ],
               dependents: [
                 {
                   job_id: "job_124",
+                  queue_name: "etl",
                   status: "pending",
-                  dependency_type: "completion",
                 },
               ],
+              dependencies_met: true,
             });
           },
         ),
@@ -223,9 +223,13 @@ describe("WorkflowsResource", () => {
       const deps = await client.workflows.jobs.getDependencies("job_123");
 
       expect(deps.jobId).toBe("job_123");
+      expect(deps.dependenciesMet).toBe(true);
       expect(deps.dependencies).toHaveLength(1);
+      expect(deps.dependencies[0].jobId).toBe("job_122");
+      expect(deps.dependencies[0].queueName).toBe("etl");
       expect(deps.dependencies[0].status).toBe("completed");
       expect(deps.dependents).toHaveLength(1);
+      expect(deps.dependents[0].jobId).toBe("job_124");
     });
 
     it("should add job dependencies", async () => {

@@ -84,20 +84,19 @@ export interface ListWorkflowsParams extends ListParams {
   status?: WorkflowStatus;
 }
 
-/** Job with dependencies */
+/** One edge on GET /jobs/{id}/dependencies */
+export interface DependencyInfo {
+  jobId: string;
+  queueName: string;
+  status: string;
+}
+
+/** GET /jobs/{id}/dependencies */
 export interface JobWithDependencies {
   jobId: string;
-  status: string;
-  dependencies: Array<{
-    jobId: string;
-    status: string;
-    dependencyType: string;
-  }>;
-  dependents: Array<{
-    jobId: string;
-    status: string;
-    dependencyType: string;
-  }>;
+  dependencies: DependencyInfo[];
+  dependents: DependencyInfo[];
+  dependenciesMet: boolean;
 }
 
 /** Parameters for adding dependencies */
