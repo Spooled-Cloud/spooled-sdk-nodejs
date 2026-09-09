@@ -284,7 +284,7 @@ describe("SchedulesResource", () => {
           () => {
             return HttpResponse.json({
               job_id: "job_456",
-              scheduled_at: "2024-01-01T12:00:00Z",
+              triggered_at: "2024-01-01T12:00:00Z",
             });
           },
         ),
@@ -294,7 +294,7 @@ describe("SchedulesResource", () => {
       const result = await client.schedules.trigger("schedule_123");
 
       expect(result.jobId).toBe("job_456");
-      expect(result.scheduledAt).toBe("2024-01-01T12:00:00Z");
+      expect(result.triggeredAt).toBe("2024-01-01T12:00:00Z");
     });
   });
 

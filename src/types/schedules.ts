@@ -91,7 +91,7 @@ export interface ListSchedulesParams extends ListParams {
 /** Response for manual trigger */
 export interface TriggerScheduleResponse {
   jobId: string;
-  scheduledAt: string;
+  triggeredAt: string;
 }
 
 /** Schedule execution run */

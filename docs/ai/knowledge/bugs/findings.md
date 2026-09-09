@@ -13,5 +13,6 @@
 | NS-09 | P1  | ~~`startEmailLogin` typed `success` the API never sends; `checkEmail` dropped `available`/`signupEnabled`~~ **FIXED** | `src/resources/auth.ts` | working tree |
 | NS-10 | P2  | ~~`getDependencies` typed `status`/`dependencyType`; dropped `queueName`/`dependenciesMet`~~ **FIXED** | `src/types/workflows.ts` | working tree |
 | NS-11 | P1  | ~~`getWebhookToken` typed `token`; API sends `webhook_token`/`webhook_url`~~ **FIXED** | `src/types/organizations.ts` | working tree |
+| NS-12 | P1  | ~~`schedules.trigger` typed `scheduledAt`; API sends `triggered_at`~~ **FIXED** | `src/types/schedules.ts` | working tree |
 
 See `findings.jsonl`.

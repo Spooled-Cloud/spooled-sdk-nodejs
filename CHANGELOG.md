@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `webhookToken` and `webhookUrl`. They previously typed a `token` field the
   API never sends (`webhook_token` camelCases to `webhookToken`), so
   `result.token` was always undefined.
+- `schedules.trigger` now types `triggeredAt` from `POST /schedules/{id}/trigger`.
+  It previously typed `scheduledAt`, which the API never sends
+  (`triggered_at` camelCases to `triggeredAt`), so `result.scheduledAt` was
+  always undefined.
 
 ## [1.1.0] - 2026-08-16
 
