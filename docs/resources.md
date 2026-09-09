@@ -610,10 +610,11 @@ await client.auth.logout();
 ```typescript
 // Start email login flow (sends magic link)
 const result = await client.auth.startEmailLogin("user@example.com");
-// { success, message }
+// { message, emailSentTo }
 
-// Check if email exists in system
-const { exists } = await client.auth.checkEmail("user@example.com");
+const { exists, available, signupEnabled } = await client.auth.checkEmail(
+  "user@example.com",
+);
 ```
 
 ---

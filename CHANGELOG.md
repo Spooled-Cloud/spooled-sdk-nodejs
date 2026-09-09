@@ -5,6 +5,17 @@ All notable changes to the Spooled Node.js SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `auth.startEmailLogin` now reads `message` and `emailSentTo` from
+  `POST /auth/email/start`. It previously typed a `success` field the API never
+  sends, so a successful send looked like a failure to anyone checking
+  `result.success`.
+- `auth.checkEmail` now types `available` and `signupEnabled` from
+  `GET /auth/check-email`, which the handler always sends.
+
 ## [1.1.0] - 2026-08-16
 
 ### Added

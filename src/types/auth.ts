@@ -57,3 +57,16 @@ export interface ValidateTokenResponse {
     iat: number;
   };
 }
+
+/** POST /auth/email/start — backend sends message + email_sent_to, not success */
+export interface StartEmailLoginResponse {
+  message: string;
+  emailSentTo: string;
+}
+
+/** GET /auth/check-email */
+export interface CheckEmailResponse {
+  exists: boolean;
+  available: boolean;
+  signupEnabled: boolean;
+}

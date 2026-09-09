@@ -13,6 +13,8 @@ import type {
   CurrentUserResponse,
   ValidateTokenParams,
   ValidateTokenResponse,
+  StartEmailLoginResponse,
+  CheckEmailResponse,
 } from "../types/auth.js";
 
 export class AuthResource {
@@ -66,22 +68,19 @@ export class AuthResource {
   }
 
   /**
-   * Start email-based login flow (sends magic link)
+   * Start email-based login flow (sends a 6-digit code)
    */
-  async startEmailLogin(
-    email: string,
-  ): Promise<{ success: boolean; message: string }> {
-    return this.http.post<{ success: boolean; message: string }>(
-      "/auth/email/start",
-      { email },
-    );
+  async startEmailLogin(email: string): Promise<StartEmailLoginResponse> {
+    return this.http.post<StartEmailLoginResponse>("/auth/email/start", {
+      email,
+    });
   }
 
   /**
-   * Check if an email address exists in the system
+   * Check whether an email is registered (GET /auth/check-email)
    */
-  async checkEmail(email: string): Promise<{ exists: boolean }> {
-    return this.http.get<{ exists: boolean }>("/auth/check-email", {
+  async checkEmail(email: string): Promise<CheckEmailResponse> {
+    return this.http.get<CheckEmailResponse>("/auth/check-email", {
       params: { email },
     });
   }

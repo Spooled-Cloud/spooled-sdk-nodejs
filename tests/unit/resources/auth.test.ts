@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { SpooledClient } from "../../../src/client.js";
+import type { StartEmailLoginResponse } from "../../../src/types/auth.js";
 
 const server = setupServer();
 
@@ -192,6 +193,49 @@ describe("AuthResource", () => {
 
       expect(result.valid).toBe(false);
       expect(result.message).toBe("Token expired");
+    });
+  });
+
+  describe("startEmailLogin", () => {
+    it("maps message and emailSentTo, not a success field the API never sends", async () => {
+      server.use(
+        http.post("https://api.spooled.cloud/api/v1/auth/email/start", () => {
+          return HttpResponse.json({
+            message: "Login code sent to your email",
+            email_sent_to: "n***@example.com",
+          });
+        }),
+      );
+
+      const client = createClient();
+      const result = await client.auth.startEmailLogin("new@example.com");
+
+      expect(result.message).toBe("Login code sent to your email");
+      expect(result.emailSentTo).toBe("n***@example.com");
+      expect(
+        (result as StartEmailLoginResponse & { success?: boolean }).success,
+      ).toBeUndefined();
+    });
+  });
+
+  describe("checkEmail", () => {
+    it("maps available, exists, and signupEnabled from GET /auth/check-email", async () => {
+      server.use(
+        http.get("https://api.spooled.cloud/api/v1/auth/check-email", () => {
+          return HttpResponse.json({
+            available: true,
+            exists: false,
+            signup_enabled: false,
+          });
+        }),
+      );
+
+      const client = createClient();
+      const result = await client.auth.checkEmail("new@example.com");
+
+      expect(result.exists).toBe(false);
+      expect(result.available).toBe(true);
+      expect(result.signupEnabled).toBe(false);
     });
   });
 });

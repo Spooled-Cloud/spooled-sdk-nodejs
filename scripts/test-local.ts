@@ -3603,11 +3603,9 @@ async function testEmailLogin(client: SpooledClient): Promise<void> {
       const testEmail = `test-${Date.now()}@example.com`;
       try {
         const result = await client.auth.startEmailLogin(testEmail);
-        if (result.success) {
-          log("Email login initiated (would send email in production)");
-        } else {
-          log(`Email login: ${result.message || "unknown response"}`);
-        }
+        log(
+          `Email login: ${result.message} (sent to ${result.emailSentTo || "unknown"})`,
+        );
       } catch (e: unknown) {
         if (isSpooledError(e)) {
           if (e.statusCode === 404) {

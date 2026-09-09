@@ -10,5 +10,6 @@
 | NS-06 | P1  | Release identity regex missed double-quoted version literals                              | `.github/workflows/publish.yml`     | fixed in `1.0.40`                 |
 | NS-07 | P2  | gRPC unary calls ignored configured timeout and rejected raw `ServiceError`               | `src/grpc/client.ts`                | fixed in `1.0.40`                 |
 | NS-08 | P2  | Workflow examples used stale response fields                                              | `examples/workflow-dag.ts`          | fixed in `1.0.40`                 |
+| NS-09 | P1  | ~~`startEmailLogin` typed `success` the API never sends; `checkEmail` dropped `available`/`signupEnabled`~~ **FIXED** | `src/resources/auth.ts` | working tree |
 
 See `findings.jsonl`.
