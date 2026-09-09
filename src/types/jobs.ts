@@ -35,6 +35,8 @@ export interface Job {
   workflowId?: string;
   dependencyMode?: string;
   dependenciesMet?: boolean;
+  /** From payload.job_type on GET; list summaries send it top-level. */
+  jobType?: string;
 }
 
 /** Job summary for list responses */
@@ -45,6 +47,8 @@ export interface JobSummary {
   priority: number;
   attempt: number;
   maxRetries: number;
+  /** From payload.job_type (empty string when absent). */
+  jobType?: string;
   createdAt: string;
   scheduledAt?: string;
   startedAt?: string;

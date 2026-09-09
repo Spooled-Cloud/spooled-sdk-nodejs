@@ -69,16 +69,24 @@ export class JobsResource {
    * List jobs with optional filtering
    */
   async list(params?: ListJobsParams): Promise<JobSummary[]> {
-    return this.http.get<JobSummary[]>("/jobs", {
+    const rows = await this.http.get<JobSummary[]>("/jobs", {
       params: params as Record<string, string | number | boolean | undefined>,
     });
+    return rows.map((row) => ({
+      ...row,
+      jobType: row.jobType ?? jobTypeFromPayload(row),
+    }));
   }
 
   /**
    * Get a job by ID
    */
   async get(id: string): Promise<Job> {
-    return this.http.get<Job>(`/jobs/${id}`);
+    const job = await this.http.get<Job>(`/jobs/${id}`);
+    return {
+      ...job,
+      jobType: job.jobType ?? jobTypeFromPayload(job) ?? undefined,
+    };
   }
 
   /**
@@ -184,9 +192,13 @@ export class JobsResource {
   // DLQ operations (private implementations)
 
   private async listDlq(params?: ListDlqParams): Promise<JobSummary[]> {
-    return this.http.get<JobSummary[]>("/jobs/dlq", {
+    const rows = await this.http.get<JobSummary[]>("/jobs/dlq", {
       params: params as Record<string, string | number | boolean | undefined>,
     });
+    return rows.map((row) => ({
+      ...row,
+      jobType: row.jobType ?? jobTypeFromPayload(row),
+    }));
   }
 
   private async retryDlq(params: RetryDlqParams): Promise<RetryDlqResponse> {
@@ -196,4 +208,23 @@ export class JobsResource {
   private async purgeDlq(params: PurgeDlqParams): Promise<PurgeDlqResponse> {
     return this.http.post<PurgeDlqResponse>("/jobs/dlq/purge", params);
   }
+}
+
+function jobTypeFromPayload(row: {
+  jobType?: string;
+  payload?: { jobType?: unknown; job_type?: unknown };
+}): string | undefined {
+  if (typeof row.jobType === "string" && row.jobType !== "") {
+    return row.jobType;
+  }
+  const payload = row.payload;
+  if (!payload || typeof payload !== "object") {
+    return undefined;
+  }
+  for (const value of [payload.jobType, payload.job_type]) {
+    if (typeof value === "string" && value !== "") {
+      return value;
+    }
+  }
+  return undefined;
 }

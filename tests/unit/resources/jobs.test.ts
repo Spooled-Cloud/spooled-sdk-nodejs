@@ -78,7 +78,7 @@ describe("JobsResource", () => {
             id: "job_123",
             queue_name: "my-queue",
             status: "pending",
-            payload: { data: "value" },
+            payload: { data: "value", job_type: "send_email" },
             created_at: "2024-01-01T00:00:00Z",
             retry_count: 0,
             max_retries: 3,
@@ -95,7 +95,8 @@ describe("JobsResource", () => {
       expect(job.id).toBe("job_123");
       expect(job.queueName).toBe("my-queue");
       expect(job.status).toBe("pending");
-      expect(job.payload).toEqual({ data: "value" });
+      expect(job.payload).toEqual({ data: "value", job_type: "send_email" });
+      expect(job.jobType).toBe("send_email");
     });
   });
 
@@ -111,6 +112,7 @@ describe("JobsResource", () => {
               priority: 0,
               attempt: 0,
               max_retries: 3,
+              job_type: "send_email",
               created_at: "2024-01-01T00:00:00Z",
             },
             {
@@ -132,6 +134,7 @@ describe("JobsResource", () => {
       expect(jobs).toHaveLength(2);
       expect(jobs[0].id).toBe("job_1");
       expect(jobs[0].attempt).toBe(0);
+      expect(jobs[0].jobType).toBe("send_email");
       expect(jobs[1].queueName).toBe("q2");
       expect(jobs[1].attempt).toBe(1);
       expect(jobs[1].maxRetries).toBe(3);
