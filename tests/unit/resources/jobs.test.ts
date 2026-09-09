@@ -109,7 +109,8 @@ describe("JobsResource", () => {
               queue_name: "q1",
               status: "pending",
               priority: 0,
-              retry_count: 0,
+              attempt: 0,
+              max_retries: 3,
               created_at: "2024-01-01T00:00:00Z",
             },
             {
@@ -117,7 +118,8 @@ describe("JobsResource", () => {
               queue_name: "q2",
               status: "completed",
               priority: 5,
-              retry_count: 1,
+              attempt: 1,
+              max_retries: 3,
               created_at: "2024-01-01T00:00:00Z",
             },
           ]);
@@ -129,7 +131,10 @@ describe("JobsResource", () => {
 
       expect(jobs).toHaveLength(2);
       expect(jobs[0].id).toBe("job_1");
+      expect(jobs[0].attempt).toBe(0);
       expect(jobs[1].queueName).toBe("q2");
+      expect(jobs[1].attempt).toBe(1);
+      expect(jobs[1].maxRetries).toBe(3);
     });
 
     it("should pass filter parameters", async () => {

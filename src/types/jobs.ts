@@ -43,7 +43,8 @@ export interface JobSummary {
   queueName: string;
   status: JobStatus;
   priority: number;
-  retryCount: number;
+  attempt: number;
+  maxRetries: number;
   createdAt: string;
   scheduledAt?: string;
   startedAt?: string;

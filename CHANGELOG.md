@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   It previously typed `scheduledAt`, which the API never sends
   (`triggered_at` camelCases to `triggeredAt`), so `result.scheduledAt` was
   always undefined.
+- `jobs.list` / `jobs.dlq.list` now type `attempt` and `maxRetries` from
+  `GET /jobs` and `GET /jobs/dlq`. They previously typed `retryCount`, which
+  those list bodies never send (`attempt` is already camelCase), so the count
+  was always undefined.
 
 ## [1.1.0] - 2026-08-16
 
