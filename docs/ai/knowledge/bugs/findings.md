@@ -22,5 +22,6 @@
 | NS-18 | P1  | ~~`auth.validate` typed `claims.organizationId`/`message`; API sends `org_id`/`error`~~ **FIXED** | `src/resources/auth.ts`; POST `/auth/validate` is `{valid,error,claims}` |
 | NS-19 | P1  | ~~`clearWebhookToken` POSTed an empty body (422); API requires `{confirm:true}`~~ **FIXED** | `src/resources/organizations.ts` |
 | NS-20 | P1  | ~~`ingest.custom` returned `void` and dropped `jobId` after backend started sending `WebhookResponse`~~ **FIXED** | `src/resources/webhook-ingestion.ts` |
+| NS-21 | P1  | ~~`Job.payload`/`result` typed `JsonObject`; API JSON can be array/string/bool~~ **FIXED** | `src/types/jobs.ts`; backend payload/result is `serde_json::Value` |
 
 See `findings.jsonl`.

@@ -6,7 +6,7 @@
 
 import type { SpooledClient } from "../client.js";
 import { SDK_VERSION } from "../config.js";
-import type { JsonObject } from "../types/common.js";
+import type { JsonValue } from "../types/common.js";
 import type { ClaimedJob } from "../types/jobs.js";
 import type {
   SpooledWorkerOptions,
@@ -414,7 +414,7 @@ export class SpooledWorker {
 
   private async completeJob(
     job: ClaimedJob,
-    result?: JsonObject,
+    result?: JsonValue,
   ): Promise<void> {
     if (!this.workerId) return;
 

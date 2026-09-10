@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Job `payload` / `result` / `tags` (and claim/complete) are now `JsonValue`.
+  They were typed `JsonObject`, so a string, array, or boolean from
+  `GET /jobs/{id}` did not type-check (backend `serde_json::Value`).
 - `ingest.custom` now maps OpenAPI `WebhookResponse` (`jobId`, `queueName`,
   `status`). It previously returned `void`, so the created job id was dropped.
   An empty 200 still maps to an empty object.

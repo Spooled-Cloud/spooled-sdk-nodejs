@@ -4,7 +4,7 @@
  * Types for job-related operations.
  */
 
-import type { JobStatus, JsonObject, ListParams } from "./common.js";
+import type { JobStatus, JsonValue, ListParams } from "./common.js";
 
 /** Full job model */
 export interface Job {
@@ -12,8 +12,8 @@ export interface Job {
   organizationId: string;
   queueName: string;
   status: JobStatus;
-  payload: JsonObject;
-  result?: JsonObject;
+  payload: JsonValue;
+  result?: JsonValue;
   retryCount: number;
   maxRetries: number;
   lastError?: string;
@@ -23,7 +23,7 @@ export interface Job {
   completedAt?: string;
   expiresAt?: string;
   priority: number;
-  tags?: JsonObject;
+  tags?: JsonValue;
   timeoutSeconds: number;
   parentJobId?: string;
   completionWebhook?: string;
@@ -61,8 +61,8 @@ export interface JobSummary {
 export interface CreateJobParams {
   /** Queue name (1-100 chars, alphanumeric/-/_/.) */
   queueName: string;
-  /** Job payload */
-  payload: JsonObject;
+  /** Job payload (any JSON) */
+  payload: JsonValue;
   /** Priority (-100 to 100, default 0) */
   priority?: number;
   /** Maximum retries (0-100, default 3) */
@@ -75,8 +75,8 @@ export interface CreateJobParams {
   expiresAt?: Date | string;
   /** Idempotency key for deduplication (max 255 chars) */
   idempotencyKey?: string;
-  /** Tags for filtering */
-  tags?: JsonObject;
+  /** Tags for filtering (object or string array) */
+  tags?: JsonValue;
   /** Parent job ID for DAG workflows */
   parentJobId?: string;
   /** Webhook URL for completion notification */
@@ -125,7 +125,7 @@ export interface BatchJobStatus {
 export interface ClaimedJob {
   id: string;
   queueName: string;
-  payload: JsonObject;
+  payload: JsonValue;
   retryCount: number;
   maxRetries: number;
   timeoutSeconds: number;
@@ -160,8 +160,8 @@ export interface ClaimJobsResult {
 export interface CompleteJobParams {
   /** Worker ID that owns the job */
   workerId: string;
-  /** Optional result payload */
-  result?: JsonObject;
+  /** Optional result payload (any JSON) */
+  result?: JsonValue;
   /** Lease fencing token from the claimed job (rejects stale leases when set) */
   leaseId?: string;
 }
@@ -195,7 +195,7 @@ export interface BoostPriorityResponse {
 
 /** Item for bulk enqueue */
 export interface BulkJobItem {
-  payload: JsonObject;
+  payload: JsonValue;
   priority?: number;
   idempotencyKey?: string;
   scheduledAt?: Date | string;

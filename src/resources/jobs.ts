@@ -208,7 +208,7 @@ export class JobsResource {
   }
 }
 
-function withJobType<T extends { jobType?: string; payload?: { jobType?: unknown; job_type?: unknown } }>(
+function withJobType<T extends { jobType?: string; payload?: unknown }>(
   job: T,
 ): T {
   return {
@@ -219,16 +219,17 @@ function withJobType<T extends { jobType?: string; payload?: { jobType?: unknown
 
 function jobTypeFromPayload(row: {
   jobType?: string;
-  payload?: { jobType?: unknown; job_type?: unknown };
+  payload?: unknown;
 }): string | undefined {
   if (typeof row.jobType === "string" && row.jobType !== "") {
     return row.jobType;
   }
   const payload = row.payload;
-  if (!payload || typeof payload !== "object") {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return undefined;
   }
-  for (const value of [payload.jobType, payload.job_type]) {
+  const rec = payload as { jobType?: unknown; job_type?: unknown };
+  for (const value of [rec.jobType, rec.job_type]) {
     if (typeof value === "string" && value !== "") {
       return value;
     }

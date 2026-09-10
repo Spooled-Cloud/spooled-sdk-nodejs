@@ -5,7 +5,7 @@
  */
 
 import type { ClaimedJob } from "../types/jobs.js";
-import type { JsonObject } from "../types/common.js";
+import type { JsonObject, JsonValue } from "../types/common.js";
 
 /** Worker configuration options */
 export interface SpooledWorkerOptions {
@@ -58,8 +58,8 @@ export interface JobContext {
   jobId: string;
   /** Queue name */
   queueName: string;
-  /** Job payload */
-  payload: JsonObject;
+  /** Job payload (any JSON) */
+  payload: JsonValue;
   /** Current retry count */
   retryCount: number;
   /** Maximum retries */
@@ -77,12 +77,12 @@ export interface JobContext {
 }
 
 /** Job handler function */
-export type JobHandler = (context: JobContext) => Promise<JsonObject | void>;
+export type JobHandler = (context: JobContext) => Promise<JsonValue | void>;
 
 /** Job processing result */
 export interface JobResult {
   success: boolean;
-  result?: JsonObject;
+  result?: JsonValue;
   error?: string;
 }
 
@@ -104,7 +104,7 @@ export interface WorkerEventData {
   error: { error: Error };
   "job:claimed": { jobId: string; queueName: string };
   "job:started": { jobId: string; queueName: string };
-  "job:completed": { jobId: string; queueName: string; result?: JsonObject };
+  "job:completed": { jobId: string; queueName: string; result?: JsonValue };
   "job:failed": {
     jobId: string;
     queueName: string;
