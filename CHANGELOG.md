@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Schedule `payloadTemplate` / `tags` / `metadata` are now `JsonValue`.
+  They were typed `JsonObject`, so a string, array, or boolean from
+  create/get did not type-check (backend `serde_json::Value`).
 - Job `payload` / `result` / `tags` (and claim/complete) are now `JsonValue`.
   They were typed `JsonObject`, so a string, array, or boolean from
   `GET /jobs/{id}` did not type-check (backend `serde_json::Value`).

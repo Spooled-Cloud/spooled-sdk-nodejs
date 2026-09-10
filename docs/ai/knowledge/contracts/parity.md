@@ -6,6 +6,7 @@
 - No public webhook signature **validate** helpers (PHP has).
 - Job `maxRetries`/`timeoutSeconds` optional on REST → server defaults when omitted.
 - Job `payload` / `result` / `tags` is `serde_json::Value` (any JSON). Typed `JsonObject` rejected array/string/bool at the type level.
+- Schedule `payload_template` / `tags` / `metadata` is the same `serde_json::Value`. Typed `JsonObject` rejected array/string/bool at the type level.
 - Worker detail types include optional `queueNames` / `updatedAt` (REST public names).
 - Workflow job list/get/status are not their own REST routes. The backend only exposes `GET /workflows/{id}` (jobs + dependencies inline). `client.workflows.jobs.list` reads that document. `POST /jobs/{id}/dependencies` takes `depends_on` + `dependency_mode` and returns `dependencies_added` / `dependencies_met`.
 - `GET /workflows/{id}` is `WorkflowDetailResponse`: job counts are under `progress` (`total`/`completed`/`failed`), not top-level `total_jobs` like list/cancel/retry. `workflows.get` maps those onto `totalJobs`/`completedJobs`/`failedJobs`/`progressPercent`.

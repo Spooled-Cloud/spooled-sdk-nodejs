@@ -82,6 +82,37 @@ describe("SchedulesResource", () => {
       });
       expect(receivedBody.priority).toBe(5);
     });
+
+    it("sends non-object JSON payload_template tags and metadata", async () => {
+      let receivedBody: Record<string, unknown> | undefined;
+      server.use(
+        http.post(
+          "https://api.spooled.cloud/api/v1/schedules",
+          async ({ request }) => {
+            receivedBody = (await request.json()) as Record<string, unknown>;
+            return HttpResponse.json({
+              id: "schedule_123",
+              name: "Ping",
+              cron_expression: "* * * * * *",
+            });
+          },
+        ),
+      );
+
+      const client = createClient();
+      await client.schedules.create({
+        name: "Ping",
+        cronExpression: "* * * * * *",
+        queueName: "queue",
+        payloadTemplate: "ping",
+        tags: ["urgent"],
+        metadata: false,
+      });
+
+      expect(receivedBody?.payload_template).toBe("ping");
+      expect(receivedBody?.tags).toEqual(["urgent"]);
+      expect(receivedBody?.metadata).toBe(false);
+    });
   });
 
   describe("list", () => {

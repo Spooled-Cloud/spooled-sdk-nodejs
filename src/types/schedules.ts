@@ -4,7 +4,7 @@
  * Types for schedule/cron-related operations.
  */
 
-import type { ScheduleRunStatus, JsonObject, ListParams } from "./common.js";
+import type { ScheduleRunStatus, JsonValue, ListParams } from "./common.js";
 
 /** Full schedule model */
 export interface Schedule {
@@ -15,7 +15,7 @@ export interface Schedule {
   cronExpression: string;
   timezone: string;
   queueName: string;
-  payloadTemplate: JsonObject;
+  payloadTemplate: JsonValue;
   priority: number;
   maxRetries: number;
   timeoutSeconds: number;
@@ -23,8 +23,8 @@ export interface Schedule {
   lastRunAt?: string;
   nextRunAt?: string;
   runCount: number;
-  tags?: JsonObject;
-  metadata?: JsonObject;
+  tags?: JsonValue;
+  metadata?: JsonValue;
   createdAt: string;
   updatedAt: string;
 }
@@ -46,7 +46,7 @@ export interface CreateScheduleParams {
    * (HTTP 422), so this is typed as non-optional to surface the omission at
    * compile time rather than as a runtime 422.
    */
-  payloadTemplate: JsonObject;
+  payloadTemplate: JsonValue;
   /** Job priority (-100 to 100) */
   priority?: number;
   /** Max retries for scheduled jobs (0-100) */
@@ -54,9 +54,9 @@ export interface CreateScheduleParams {
   /** Timeout in seconds (1-86400) */
   timeoutSeconds?: number;
   /** Tags for created jobs */
-  tags?: JsonObject;
+  tags?: JsonValue;
   /** Additional metadata */
-  metadata?: JsonObject;
+  metadata?: JsonValue;
 }
 
 /** Response for creating a schedule */
@@ -73,13 +73,13 @@ export interface UpdateScheduleParams {
   description?: string;
   cronExpression?: string;
   timezone?: string;
-  payloadTemplate?: JsonObject;
+  payloadTemplate?: JsonValue;
   priority?: number;
   maxRetries?: number;
   timeoutSeconds?: number;
   isActive?: boolean;
-  tags?: JsonObject;
-  metadata?: JsonObject;
+  tags?: JsonValue;
+  metadata?: JsonValue;
 }
 
 /** Parameters for listing schedules */
