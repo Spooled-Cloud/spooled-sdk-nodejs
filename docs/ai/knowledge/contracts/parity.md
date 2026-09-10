@@ -11,6 +11,7 @@
 - Email login start is `POST /auth/email/start` → `{ message, email_sent_to }`, not `{ success, message }`. Email availability is `GET /auth/check-email?email=` → `{ available, exists, signup_enabled }`.
 - `POST /auth/validate` is `{ valid, error?, claims? }`. Claims use `org_id` (camelCased `orgId`), not `organizationId`. Invalid tokens send `error`, not `message`. `auth.validate` maps those onto `claims.organizationId` and `message`.
 - Org webhook token is `GET/POST /organizations/webhook-token` → `{ webhook_token, webhook_url }`, not `{ token }`.
+- Clear is `POST /organizations/webhook-token/clear` with `{ confirm: true }`. An empty body 422s. The handler currently rejects the operation (use regenerate).
 - Schedule trigger is `POST /schedules/{id}/trigger` → `{ job_id, triggered_at }`, not `{ job_id, scheduled_at }`.
 - Job list/DLQ summaries send `attempt` and `max_retries`, not `retry_count`. Detail `GET /jobs/{id}` still uses `retry_count`.
 - `GET /jobs` summaries include `job_type` from `payload.job_type`. `JobSummary.jobType` maps that field; `jobs.get` and `jobs.retry` copy it from `payload` when the top-level field is absent. List/DLQ summaries also send `last_error`.

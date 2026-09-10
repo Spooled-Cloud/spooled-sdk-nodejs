@@ -329,4 +329,30 @@ describe("OrganizationsResource", () => {
       expect(result.webhookUrl).toContain("/webhooks/org_123/custom");
     });
   });
+
+  describe("clearWebhookToken", () => {
+    it("sends confirm true so the body is not empty", async () => {
+      let posted: unknown;
+      server.use(
+        http.post(
+          "https://api.spooled.cloud/api/v1/organizations/webhook-token/clear",
+          async ({ request }) => {
+            posted = await request.json();
+            return HttpResponse.json(
+              {
+                code: "VALIDATION_ERROR",
+                message:
+                  "Clearing the webhook token is not allowed. Use /organizations/webhook-token/regenerate to rotate it.",
+              },
+              { status: 400 },
+            );
+          },
+        ),
+      );
+
+      const client = createClient();
+      await expect(client.organizations.clearWebhookToken()).rejects.toThrow();
+      expect(posted).toEqual({ confirm: true });
+    });
+  });
 });

@@ -129,8 +129,9 @@ export class OrganizationsResource {
   /**
    * Clear/delete the webhook token for the current organization.
    *
-   * After this, webhook signature verification will fail until a new
-   * token is generated via regenerateWebhookToken().
+   * POST /organizations/webhook-token/clear requires `{ confirm: true }`.
+   * An empty body 422s. The API currently rejects the operation and tells
+   * callers to use regenerateWebhookToken() instead.
    *
    * @example
    * ```typescript
@@ -138,6 +139,8 @@ export class OrganizationsResource {
    * ```
    */
   async clearWebhookToken(): Promise<void> {
-    await this.http.post("/organizations/webhook-token/clear");
+    await this.http.post("/organizations/webhook-token/clear", {
+      confirm: true,
+    });
   }
 }
