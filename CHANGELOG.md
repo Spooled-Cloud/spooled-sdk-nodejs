@@ -5,7 +5,12 @@ All notable changes to the Spooled Node.js SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.0] - 2026-09-10
+
+A contract-parity pass against the backend: every fix below is a place where
+this SDK's route, request shape, or response typing disagreed with what the API
+actually serves. Pair it with backend `0.1.112`, which supplies the response
+fields several of these now read.
 
 ### Fixed
 
@@ -42,7 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `jobs.list` / `jobs.dlq.list` now type `attempt` and `maxRetries` from
   `GET /jobs` and `GET /jobs/dlq`. They previously typed `retryCount`, which
   those list bodies never send (`attempt` is already camelCase), so the count
-  was always undefined.
+  was always undefined. They also read the `jobType` and `lastError` that
+  backend `0.1.112` adds to `JobSummary`.
+- `organizations.update` sends `confirm: true` when clearing the webhook token,
+  which the endpoint requires.
 
 ## [1.1.0] - 2026-08-16
 
