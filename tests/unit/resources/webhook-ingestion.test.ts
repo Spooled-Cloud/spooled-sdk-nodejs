@@ -73,13 +73,17 @@ describe("WebhookIngestionResource", () => {
         async ({ request }) => {
           tokenHeader = request.headers.get("X-Webhook-Token");
           receivedBody = await request.json();
-          return new HttpResponse(null, { status: 200 });
+          return HttpResponse.json({
+            job_id: "job_1",
+            queue_name: "custom_events",
+            status: "pending",
+          });
         },
       ),
     );
 
     const client = createClient();
-    await client.ingest.custom(
+    const result = await client.ingest.custom(
       orgId,
       {
         queueName: "custom_events",
@@ -98,5 +102,8 @@ describe("WebhookIngestionResource", () => {
     expect(receivedBody.priority).toBe(10);
     // payload is preserved (no deep conversion)
     expect(receivedBody.payload).toEqual({ custom_key: "preserved" });
+    expect(result.jobId).toBe("job_1");
+    expect(result.queueName).toBe("custom_events");
+    expect(result.status).toBe("pending");
   });
 });

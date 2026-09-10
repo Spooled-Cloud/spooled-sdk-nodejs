@@ -21,5 +21,6 @@
 | NS-17 | P2  | ~~`JobSummary` omitted `lastError` from list/DLQ~~ **FIXED** | `src/types/jobs.ts` | working tree |
 | NS-18 | P1  | ~~`auth.validate` typed `claims.organizationId`/`message`; API sends `org_id`/`error`~~ **FIXED** | `src/resources/auth.ts`; POST `/auth/validate` is `{valid,error,claims}` |
 | NS-19 | P1  | ~~`clearWebhookToken` POSTed an empty body (422); API requires `{confirm:true}`~~ **FIXED** | `src/resources/organizations.ts` |
+| NS-20 | P1  | ~~`ingest.custom` returned `void` and dropped `jobId` after backend started sending `WebhookResponse`~~ **FIXED** | `src/resources/webhook-ingestion.ts` |
 
 See `findings.jsonl`.

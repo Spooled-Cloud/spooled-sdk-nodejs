@@ -1,6 +1,7 @@
 # Parity notes (Node)
 
 - Full gRPC including StreamJobs/ProcessJobs.
+- `POST /webhooks/{org_id}/custom` returns `{ job_id, queue_name, status }` (OpenAPI `WebhookResponse`). `ingest.custom()` maps those onto `jobId`/`queueName`/`status`; empty 200 leaves them unset. There is no `/webhooks/{org_id}/github` or `/stripe`.
 - Worker `progress` emits local debug output only. The Go SDK exposes a `JobsResource.UpdateProgress` call targeting `POST /api/v1/jobs/{id}/progress`, but the backend does not implement that endpoint (it would 404); no SDK has backend-persisted job progress.
 - No public webhook signature **validate** helpers (PHP has).
 - Job `maxRetries`/`timeoutSeconds` optional on REST → server defaults when omitted.

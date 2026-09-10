@@ -10,6 +10,7 @@ import { Buffer } from "node:buffer";
 import type { HttpClient } from "../utils/http.js";
 import type {
   IngestCustomWebhookParams,
+  IngestCustomWebhookResponse,
   IngestGitHubWebhookOptions,
   IngestStripeWebhookOptions,
 } from "../types/webhook-ingestion.js";
@@ -137,13 +138,14 @@ export class WebhookIngestionResource {
   /**
    * Ingest a custom webhook.
    *
-   * POST /api/v1/webhooks/{org_id}/custom
+   * POST /api/v1/webhooks/{org_id}/custom returns `{ jobId, queueName, status }`.
+   * An older empty 200 maps to an empty object rather than throwing.
    */
   async custom(
     orgId: string,
     params: IngestCustomWebhookParams,
     opts?: { webhookToken?: string; forwardedProto?: string },
-  ): Promise<void> {
+  ): Promise<IngestCustomWebhookResponse> {
     const headers: Record<string, string> = {
       ...(opts?.webhookToken ? { "X-Webhook-Token": opts.webhookToken } : {}),
       ...(opts?.forwardedProto
@@ -151,8 +153,18 @@ export class WebhookIngestionResource {
         : {}),
     };
 
-    await this.http.post<void>(`/webhooks/${orgId}/custom`, params, {
-      headers,
-    });
+    const raw = await this.http.post<IngestCustomWebhookResponse | string>(
+      `/webhooks/${orgId}/custom`,
+      params,
+      { headers },
+    );
+    if (!raw || typeof raw === "string") {
+      return {};
+    }
+    return {
+      jobId: raw.jobId,
+      queueName: raw.queueName,
+      status: raw.status,
+    };
   }
 }

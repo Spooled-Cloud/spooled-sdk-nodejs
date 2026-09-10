@@ -15,6 +15,13 @@ export interface IngestCustomWebhookParams {
   priority?: number;
 }
 
+/** POST /webhooks/{org_id}/custom — OpenAPI WebhookResponse after camelCase. */
+export interface IngestCustomWebhookResponse {
+  jobId?: string;
+  queueName?: string;
+  status?: string;
+}
+
 export interface IngestGitHubWebhookOptions {
   /** Value for X-GitHub-Event header (e.g. "pull_request") */
   githubEvent: string;

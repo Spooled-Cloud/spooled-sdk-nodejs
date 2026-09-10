@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `ingest.custom` now maps OpenAPI `WebhookResponse` (`jobId`, `queueName`,
+  `status`). It previously returned `void`, so the created job id was dropped.
+  An empty 200 still maps to an empty object.
 - `auth.validate` now maps `claims.orgId` (`org_id`) onto
   `claims.organizationId` and `error` onto `message`. POST `/auth/validate`
   never sends top-level `organizationId` or `message`, so a valid token's org
