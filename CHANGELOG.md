@@ -5,6 +5,20 @@ All notable changes to the Spooled Node.js SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-09-26
+
+### Fixed
+
+- **SSE realtime received nothing.** The API names every SSE frame
+  (`event: job.completed`), and an `EventSource` hands named frames only to
+  `addEventListener(name, ...)`; the client listened on `onmessage` alone, so
+  `realtime({ type: 'sse' }).on(...)` never fired. It now listens for every
+  event name the API sends.
+- **`subscribe({ queueName })` over SSE streams job events.** It connected to
+  `/events/queues/{name}`, which only carries `queue.stats`; it now uses
+  `/events?queue={name}`, so `on('job.created')` fires for that queue. Needs
+  API 0.1.114+, where `/api/v1/events` started forwarding job events.
+
 ## [1.2.0] - 2026-09-10
 
 A contract-parity pass against the backend: every fix below is a place where

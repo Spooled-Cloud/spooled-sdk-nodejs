@@ -22,6 +22,26 @@ type EventHandler = (data: any) => void;
 type GenericEventHandler = (event: RealtimeEvent) => void;
 
 /**
+ * Every SSE `event:` name the API sends. The server always names its frames
+ * (`event: job.completed`), and an EventSource delivers named frames only to
+ * `addEventListener(name, ...)` — `onmessage` sees unnamed frames alone — so
+ * without these listeners the client received nothing at all.
+ */
+export const SSE_EVENT_NAMES = [
+  "job.created",
+  "job.status",
+  "job.completed",
+  "job.failed",
+  "queue.stats",
+  "worker.heartbeat",
+  "worker.registered",
+  "worker.deregistered",
+  "system.health",
+  "ping",
+  "error",
+] as const;
+
+/**
  * SSE Realtime Client
  *
  * Connects to the Spooled API SSE endpoint and emits typed events.
@@ -143,6 +163,14 @@ export class SseRealtimeClient {
         this.eventSource.onmessage = (event: any) => {
           this.handleMessage(event.data);
         };
+        for (const name of SSE_EVENT_NAMES) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          this.eventSource.addEventListener(name, (event: any) => {
+            // "error" also fires for connection failures, which carry no data
+            // and are handled by onerror below.
+            if (typeof event?.data === "string") this.handleMessage(event.data);
+          });
+        }
 
         this.eventSource.onerror = () => {
           this.options.debug("SSE error");
@@ -236,16 +264,18 @@ export class SseRealtimeClient {
 
   private buildSseUrl(filter?: SubscriptionFilter): string {
     // Backend SSE endpoints:
-    // - GET /api/v1/events (all events)
-    // - GET /api/v1/events/jobs/{id} (single job polling stream)
-    // - GET /api/v1/events/queues/{name} (queue stats polling stream)
+    // - GET /api/v1/events (every org event; ?queue= narrows it to one queue)
+    // - GET /api/v1/events/jobs/{id} (single job status stream)
+    // - GET /api/v1/events/queues/{name} (queue.stats counters only)
     //
-    // Note: SSE in the backend is unidirectional and subscriptions are effectively set by endpoint.
+    // A queue subscription uses /events?queue=: the per-queue route carries only
+    // queue.stats, so `on('job.created')` after `subscribe({ queueName })` would
+    // never fire there. Requires API 0.1.114+.
     if (filter?.jobId) {
       return `${this.options.baseUrl}/api/v1/events/jobs/${encodeURIComponent(filter.jobId)}`;
     }
     if (filter?.queueName) {
-      return `${this.options.baseUrl}/api/v1/events/queues/${encodeURIComponent(filter.queueName)}`;
+      return `${this.options.baseUrl}/api/v1/events?queue=${encodeURIComponent(filter.queueName)}`;
     }
     return `${this.options.baseUrl}/api/v1/events`;
   }

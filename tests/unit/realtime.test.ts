@@ -406,3 +406,61 @@ describe("SseRealtimeClient", () => {
     expect(received.willRetry).toBe(true);
   });
 });
+
+describe("SseRealtimeClient named events", () => {
+  it("dispatches named SSE frames, which onmessage never receives", async () => {
+    // A minimal EventSource: records listeners and opens immediately.
+    // eslint-disable-next-line no-unused-vars
+    type Listener = (...args: any[]) => void;
+    const sources: any[] = [];
+    class FakeEventSource {
+      url: string;
+      listeners = new Map<string, Listener[]>();
+      onopen: Listener | null = null;
+      onmessage: Listener | null = null;
+      onerror: Listener | null = null;
+      constructor(url: string) {
+        this.url = url;
+        sources.push(this);
+        setTimeout(() => this.onopen?.(), 0);
+      }
+      addEventListener(name: string, fn: Listener) {
+        this.listeners.set(name, [...(this.listeners.get(name) ?? []), fn]);
+      }
+      emit(name: string, data?: string) {
+        for (const fn of this.listeners.get(name) ?? []) fn({ data });
+      }
+      close() {}
+    }
+    const previous = (globalThis as any).EventSource;
+    (globalThis as any).EventSource = FakeEventSource;
+    try {
+      const client = new SseRealtimeClient(baseOptions);
+      const created: any[] = [];
+      client.on("job.created", (data) => created.push(data));
+      await client.connect({ queueName: "orders" });
+
+      // Queue subscriptions use the event stream, not the stats-only route.
+      expect(sources[0].url).toBe(
+        "https://api.spooled.cloud/api/v1/events?queue=orders",
+      );
+
+      sources[0].emit(
+        "job.created",
+        JSON.stringify({
+          type: "JobCreated",
+          data: { job_id: "job_9", queue_name: "orders", priority: 0 },
+        }),
+      );
+      expect(created).toHaveLength(1);
+      expect(created[0].jobId).toBe("job_9");
+
+      // A connection-level "error" event (no data) is ignored here.
+      expect(() => sources[0].emit("error")).not.toThrow();
+      expect(created).toHaveLength(1);
+      client.disconnect();
+    } finally {
+      (globalThis as any).EventSource = previous;
+    }
+  });
+});
