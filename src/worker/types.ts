@@ -39,7 +39,10 @@ export interface SpooledWorkerOptions {
   version?: string;
   /** Additional worker metadata */
   metadata?: JsonObject;
-  /** Graceful shutdown timeout in ms (default: 30000) */
+  /**
+   * Graceful shutdown timeout in ms (default: 30000): how long `stop()` lets
+   * running handlers finish before aborting and failing them.
+   */
   shutdownTimeout?: number;
 }
 
@@ -64,7 +67,12 @@ export interface JobContext {
   retryCount: number;
   /** Maximum retries */
   maxRetries: number;
-  /** Abort signal for graceful shutdown */
+  /**
+   * Abort signal. Aborted when the job exceeds its `timeoutSeconds` or when a
+   * stop outlives `shutdownTimeout`; NOT aborted merely because a stop was
+   * requested (the handler gets the grace period to finish and be acked).
+   * `signal.reason` carries the cause.
+   */
   signal: AbortSignal;
   /** Log local job progress (0-100); backend progress persistence is not yet available. */
   progress: (percent: number, message?: string) => Promise<void>;
@@ -120,5 +128,14 @@ export interface ActiveJob {
   job: ClaimedJob;
   startedAt: Date;
   heartbeatTimer?: ReturnType<typeof setInterval>;
+  /** Fires when the job exceeds its `timeoutSeconds` */
+  timeoutTimer?: ReturnType<typeof setTimeout>;
   abortController: AbortController;
+  /**
+   * The outcome of this execution is decided (acked, or about to be): nothing
+   * else may ack it. Set when the handler settles or the shutdown fails it.
+   */
+  settled?: boolean;
+  /** The complete/fail request for this execution, once started. */
+  ack?: Promise<void>;
 }

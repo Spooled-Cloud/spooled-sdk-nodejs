@@ -38,6 +38,7 @@ import {
   SpooledClient,
   SpooledWorker,
   SpooledGrpcClient,
+  UnsupportedOperationError,
   isSpooledError,
 } from "../src/index.js";
 
@@ -3414,17 +3415,16 @@ async function testOrganizationWebhookToken(
   );
 
   await runTest(
-    "POST /api/v1/organizations/webhook-token/clear - Clear token",
+    "organizations.clearWebhookToken - unsupported (API always rejects it)",
     async () => {
+      // The API refuses to clear the token, so the SDK method throws locally
+      // instead of POSTing to /organizations/webhook-token/clear.
       try {
         await client.organizations.clearWebhookToken();
-        log("Webhook token cleared successfully");
+        throw new Error("clearWebhookToken should be unsupported");
       } catch (e: unknown) {
-        if (
-          isSpooledError(e) &&
-          (e.statusCode === 404 || e.statusCode === 400)
-        ) {
-          log("Clear webhook token endpoint not available or nothing to clear");
+        if (e instanceof UnsupportedOperationError) {
+          log("clearWebhookToken is unsupported, as expected");
         } else {
           throw e;
         }
@@ -3475,7 +3475,7 @@ async function testWorkflowJobs(client: SpooledClient): Promise<void> {
         if (jobs.length !== 3) {
           throw new Error(`Expected 3 jobs, got ${jobs.length}`);
         }
-        log(`Listed ${jobs.length} jobs: ${jobs.map((j) => j.key).join(", ")}`);
+        log(`Listed ${jobs.length} jobs: ${jobs.map((j) => j.id).join(", ")}`);
       } catch (e: unknown) {
         if (isSpooledError(e) && e.statusCode === 404) {
           log("Workflow jobs list endpoint not available");

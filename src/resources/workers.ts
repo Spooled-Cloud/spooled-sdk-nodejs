@@ -41,9 +41,13 @@ export class WorkersResource {
 
   /**
    * Send worker heartbeat
+   *
+   * Idempotent on the server, so network errors, timeouts and 5xx are retried.
    */
   async heartbeat(id: string, params: WorkerHeartbeatParams): Promise<void> {
-    await this.http.post(`/workers/${id}/heartbeat`, params);
+    await this.http.post(`/workers/${id}/heartbeat`, params, {
+      idempotent: true,
+    });
   }
 
   /**

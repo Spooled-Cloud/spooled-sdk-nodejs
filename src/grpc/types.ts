@@ -149,8 +149,11 @@ export interface GrpcCompleteRequest {
   workerId: string;
   /** Result as object (will be converted to google.protobuf.Struct) */
   result?: Record<string, unknown>;
-  /** Lease fencing token from the dequeued job (proto `lease_id`) */
-  leaseId?: string;
+  /**
+   * Lease fencing token from the dequeued job (proto `lease_id`). Required: the
+   * server rejects a settlement without it with INVALID_ARGUMENT.
+   */
+  leaseId: string;
 }
 
 /** Complete response */
@@ -163,9 +166,18 @@ export interface GrpcFailRequest {
   jobId: string;
   workerId: string;
   error: string;
+  /**
+   * Retry the job (until its `maxRetries` run out) instead of dead-lettering it
+   * at once. Defaults to `true` here; the wire default would be `false`, which
+   * dead-letters the job on its first failure whatever `maxRetries` says. Pass
+   * `false` explicitly to dead-letter.
+   */
   retry?: boolean;
-  /** Lease fencing token from the dequeued job (proto `lease_id`) */
-  leaseId?: string;
+  /**
+   * Lease fencing token from the dequeued job (proto `lease_id`). Required: the
+   * server rejects a settlement without it with INVALID_ARGUMENT.
+   */
+  leaseId: string;
 }
 
 /** Fail response */
@@ -180,8 +192,11 @@ export interface GrpcRenewLeaseRequest {
   jobId: string;
   workerId: string;
   extensionSecs: number;
-  /** Lease fencing token from the dequeued job (proto `lease_id`) */
-  leaseId?: string;
+  /**
+   * Lease fencing token from the dequeued job (proto `lease_id`). Required: the
+   * server rejects a renewal without it with INVALID_ARGUMENT.
+   */
+  leaseId: string;
 }
 
 /** Renew lease response */

@@ -111,12 +111,12 @@ export const DEFAULT_CONFIG = {
     successThreshold: 3,
     timeout: 30000,
   } satisfies CircuitBreakerConfig,
-  userAgent: "@spooled/sdk-nodejs/1.2.1",
+  userAgent: "@spooled/sdk-nodejs/1.3.0",
   autoRefreshToken: true,
 } as const;
 
 /** SDK version */
-export const SDK_VERSION = "1.2.1";
+export const SDK_VERSION = "1.3.0";
 
 /** API version prefix */
 export const API_VERSION = "v1";
@@ -212,10 +212,12 @@ export function resolveConfig(options: SpooledClientConfig): ResolvedConfig {
  * @throws Error if configuration is invalid
  */
 export function validateConfig(config: ResolvedConfig): void {
-  // Must have at least one auth method
-  if (!config.apiKey && !config.accessToken) {
+  // Must have at least one auth method. An admin key alone is enough: the
+  // /admin/* endpoints authenticate with X-Admin-Key only, so an admin-only
+  // client (`client.admin.*`) is legitimate.
+  if (!config.apiKey && !config.accessToken && !config.adminKey) {
     throw new Error(
-      "SpooledClient requires either apiKey or accessToken for authentication",
+      "SpooledClient requires either apiKey or accessToken for authentication (or adminKey for admin-only use)",
     );
   }
 

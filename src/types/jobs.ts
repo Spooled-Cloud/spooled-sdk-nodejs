@@ -81,6 +81,8 @@ export interface CreateJobParams {
   parentJobId?: string;
   /** Webhook URL for completion notification */
   completionWebhook?: string;
+  /** HMAC secret used to sign the `completionWebhook` request (never returned by the API) */
+  completionWebhookSecret?: string;
 }
 
 /** Result of creating a job */

@@ -1054,11 +1054,11 @@ Each organization gets a unique webhook URL for receiving events from external s
 A webhook token is automatically generated when your organization is created.
 Use these endpoints to manage it:
 
-| Method | Path                                             | Description                    |
-| ------ | ------------------------------------------------ | ------------------------------ |
-| GET    | `/api/v1/organizations/webhook-token`            | Get current token and URL      |
-| POST   | `/api/v1/organizations/webhook-token/regenerate` | Generate new token             |
-| POST   | `/api/v1/organizations/webhook-token/clear`      | Remove token (not recommended) |
+| Method | Path                                             | Description                         |
+| ------ | ------------------------------------------------ | ----------------------------------- |
+| GET    | `/api/v1/organizations/webhook-token`            | Get current token and URL           |
+| POST   | `/api/v1/organizations/webhook-token/regenerate` | Generate new token                  |
+| POST   | `/api/v1/organizations/webhook-token/clear`      | Always rejected (SDK method throws) |
 
 ```typescript
 // Get your webhook token and URL
@@ -1197,6 +1197,7 @@ All API errors return JSON:
 | Status | Error Class          |
 | ------ | -------------------- |
 | 400    | ValidationError      |
+| 422    | ValidationError      |
 | 401    | AuthenticationError  |
 | 403    | AuthorizationError   |
 | 404    | NotFoundError        |
@@ -1213,6 +1214,10 @@ When rate limited (429), the response may include:
 - `X-RateLimit-Limit: <number>`
 - `X-RateLimit-Remaining: <number>`
 - `X-RateLimit-Reset: <unix-timestamp>`
+
+A 429 with code `QUOTA_EXCEEDED` is a plan limit, not rate limiting:
+`RateLimitError.isQuota` is `true`, and the SDK neither retries it nor counts it
+toward the circuit breaker.
 
 ---
 

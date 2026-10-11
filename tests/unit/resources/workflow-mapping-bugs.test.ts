@@ -107,9 +107,8 @@ describe("mapWorkflowDetailJobs runtime", () => {
 
   function stubDetail() {
     server.use(
-      http.get(
-        "https://api.spooled.cloud/api/v1/workflows/workflow_123",
-        () => HttpResponse.json(DETAIL),
+      http.get("https://api.spooled.cloud/api/v1/workflows/workflow_123", () =>
+        HttpResponse.json(DETAIL),
       ),
     );
   }
@@ -149,5 +148,38 @@ describe("mapWorkflowDetailJobs runtime", () => {
     const jobs = await createClient().workflows.jobs.list("workflow_123");
     expect(jobs[0].timeoutSeconds).toBe(30);
     expect(jobs[2].timeoutSeconds).toBeUndefined();
+  });
+
+  it("does not invent an empty key: the API does not return one (SDKNP-18)", async () => {
+    stubDetail();
+    const client = createClient();
+    const jobs = await client.workflows.jobs.list("workflow_123");
+    for (const job of jobs) {
+      expect(job.key).toBeUndefined();
+      expect("key" in job).toBe(false);
+    }
+
+    const statuses = await client.workflows.jobs.getStatus("workflow_123");
+    expect(statuses.map((s) => s.jobId)).toEqual(["job_1", "job_2", "job_3"]);
+    for (const status of statuses) {
+      expect(status.key).toBeUndefined();
+      expect("key" in status).toBe(false);
+    }
+  });
+
+  it("passes a key through if a future API version returns one", async () => {
+    server.use(
+      http.get("https://api.spooled.cloud/api/v1/workflows/workflow_123", () =>
+        HttpResponse.json({
+          ...DETAIL,
+          jobs: [{ ...DETAIL.jobs[1], key: "extract" }],
+        }),
+      ),
+    );
+    const client = createClient();
+    const jobs = await client.workflows.jobs.list("workflow_123");
+    expect(jobs[0].key).toBe("extract");
+    const statuses = await client.workflows.jobs.getStatus("workflow_123");
+    expect(statuses[0].key).toBe("extract");
   });
 });

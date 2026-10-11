@@ -5,6 +5,7 @@
  */
 
 import type { HttpClient } from "../utils/http.js";
+import { coerceFailureMessage } from "../utils/failure.js";
 import type {
   Job,
   JobSummary,
@@ -54,7 +55,11 @@ export class JobsResource {
    * Create a new job
    */
   async create(params: CreateJobParams): Promise<CreateJobResult> {
-    return this.http.post<CreateJobResult>("/jobs", params);
+    // With an idempotency key the server returns the existing job for a replay
+    // (`created: false`), so a network error or 5xx can be retried safely.
+    return this.http.post<CreateJobResult>("/jobs", params, {
+      idempotent: params.idempotencyKey ? true : undefined,
+    });
   }
 
   /**
@@ -153,16 +158,28 @@ export class JobsResource {
 
   /**
    * Complete a job (worker ack)
+   *
+   * Lease-fenced and idempotent on the server, so a network error, timeout or
+   * 5xx is retried: a lost ack would otherwise re-run a finished job.
    */
   async complete(
     id: string,
     params: CompleteJobParams,
   ): Promise<{ success: boolean }> {
-    return this.http.post<{ success: boolean }>(`/jobs/${id}/complete`, params);
+    return this.http.post<{ success: boolean }>(
+      `/jobs/${id}/complete`,
+      params,
+      { idempotent: true },
+    );
   }
 
   /**
    * Fail a job (worker nack)
+   *
+   * `params.error` is made acceptable first: empty text becomes "Job failed"
+   * and text over 2048 characters is truncated, because the API rejects both
+   * with a 400 that would leave the job processing until its lease expires.
+   * Retried like {@link JobsResource.complete}.
    */
   async fail(
     id: string,
@@ -170,12 +187,16 @@ export class JobsResource {
   ): Promise<{ success: boolean; error?: string }> {
     return this.http.post<{ success: boolean; error?: string }>(
       `/jobs/${id}/fail`,
-      params,
+      { ...params, error: coerceFailureMessage(params.error) },
+      { idempotent: true },
     );
   }
 
   /**
    * Extend job lease (heartbeat)
+   *
+   * Retried like {@link JobsResource.complete}: with the default 30 s lease and
+   * 15 s heartbeat, one lost heartbeat leaves no slack.
    */
   async heartbeat(
     id: string,
@@ -184,6 +205,7 @@ export class JobsResource {
     return this.http.post<{ success: boolean }>(
       `/jobs/${id}/heartbeat`,
       params,
+      { idempotent: true },
     );
   }
 

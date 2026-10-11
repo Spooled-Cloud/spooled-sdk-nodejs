@@ -329,6 +329,9 @@ function failJob(
         workerId,
         ...(leaseId != null && { leaseId }),
         error: errorMessage,
+        // proto3 false means "do not retry": omit it and the job is
+        // dead-lettered on its first failure. Send true to honour maxRetries.
+        retry: true,
       },
       metadata,
       (error, response) => {
@@ -544,7 +547,12 @@ async function main() {
       const result = await processEmail(payload);
 
       client.Complete(
-        { jobId: job.id, result: JSON.stringify(result) },
+        {
+          jobId: job.id,
+          workerId: "worker-1",
+          leaseId: job.leaseId, // required by the server
+          result: JSON.stringify(result),
+        },
         metadata,
         (err) => {
           if (err) console.error(`Complete failed for ${job.id}:`, err);
@@ -552,10 +560,20 @@ async function main() {
         },
       );
     } catch (error: any) {
-      client.Fail({ jobId: job.id, error: error.message }, metadata, (err) => {
-        if (err) console.error(`Fail failed for ${job.id}:`, err);
-        else console.log(`Failed: ${job.id}`);
-      });
+      client.Fail(
+        {
+          jobId: job.id,
+          workerId: "worker-1",
+          leaseId: job.leaseId, // required by the server
+          error: error.message,
+          retry: true, // proto3 false would dead-letter on the first failure
+        },
+        metadata,
+        (err) => {
+          if (err) console.error(`Fail failed for ${job.id}:`, err);
+          else console.log(`Failed: ${job.id}`);
+        },
+      );
     } finally {
       clearInterval(activeJobs.get(job.id));
       activeJobs.delete(job.id);

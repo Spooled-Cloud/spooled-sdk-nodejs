@@ -1,12 +1,11 @@
 /**
  * Webhook Ingestion Resource
  *
- * These endpoints are intended for webhook providers (GitHub/Stripe/custom) to enqueue jobs.
- * They are authenticated via signatures (not API keys).
+ * The Spooled API ingests webhooks on one route:
+ * `POST /api/v1/webhooks/{org_id}/custom`, authenticated by the org's webhook
+ * token. The GitHub and Stripe routes were removed from the API.
  */
 
-import { createHmac } from "node:crypto";
-import { Buffer } from "node:buffer";
 import type { HttpClient } from "../utils/http.js";
 import type {
   IngestCustomWebhookParams,
@@ -14,35 +13,7 @@ import type {
   IngestGitHubWebhookOptions,
   IngestStripeWebhookOptions,
 } from "../types/webhook-ingestion.js";
-import { ValidationError } from "../errors.js";
-
-function toBytes(body: string | Uint8Array | ArrayBuffer): Uint8Array {
-  if (typeof body === "string") {
-    return Buffer.from(body, "utf8");
-  }
-  if (body instanceof Uint8Array) {
-    return body;
-  }
-  return new Uint8Array(body);
-}
-
-function githubSignature(secret: string, body: Uint8Array): string {
-  const hex = createHmac("sha256", secret).update(body).digest("hex");
-  return `sha256=${hex}`;
-}
-
-function stripeSignature(
-  secret: string,
-  body: Uint8Array,
-  timestamp: number,
-): string {
-  // Stripe signs: `${timestamp}.${rawBodyUtf8}`
-  const payload = `${timestamp}.${Buffer.from(body).toString("utf8")}`;
-  const hex = createHmac("sha256", secret)
-    .update(payload, "utf8")
-    .digest("hex");
-  return `t=${timestamp},v1=${hex}`;
-}
+import { UnsupportedOperationError } from "../errors.js";
 
 export class WebhookIngestionResource {
   constructor(private readonly http: HttpClient) {}
@@ -50,89 +21,41 @@ export class WebhookIngestionResource {
   /**
    * Ingest a GitHub webhook.
    *
-   * POST /api/v1/webhooks/{org_id}/github
+   * @deprecated The API has no `/webhooks/{org_id}/github` route (it always
+   * answered 404). This method now throws {@link UnsupportedOperationError}
+   * without a network call; point the GitHub webhook at `ingest.custom` /
+   * `POST /api/v1/webhooks/{org_id}/custom` instead. It will be removed in the
+   * next major release.
    */
   async github(
-    orgId: string,
-    body: string | Uint8Array | ArrayBuffer,
-    options: IngestGitHubWebhookOptions,
+    _orgId: string,
+    _body: string | Uint8Array | ArrayBuffer,
+    _options: IngestGitHubWebhookOptions,
   ): Promise<void> {
-    const bytes = toBytes(body);
-
-    const signature =
-      options.signature ??
-      (options.secret ? githubSignature(options.secret, bytes) : undefined);
-    if (!signature) {
-      throw new ValidationError(
-        "GitHub webhook signature is required (provide `signature` or `secret`)",
-      );
-    }
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      "X-GitHub-Event": options.githubEvent,
-      "X-Hub-Signature-256": signature,
-    };
-
-    if (options.webhookToken) {
-      headers["X-Webhook-Token"] = options.webhookToken;
-    }
-    if (options.forwardedProto) {
-      headers["X-Forwarded-Proto"] = options.forwardedProto;
-    }
-
-    await this.http.request<void>(`/webhooks/${orgId}/github`, {
-      method: "POST",
-      rawBody: bytes,
-      headers,
-      skipRequestConversion: true,
-      skipResponseConversion: true,
-    });
+    throw new UnsupportedOperationError(
+      "ingest.github",
+      "the API has no GitHub webhook route; use ingest.custom (POST /webhooks/{org_id}/custom)",
+    );
   }
 
   /**
    * Ingest a Stripe webhook.
    *
-   * POST /api/v1/webhooks/{org_id}/stripe
+   * @deprecated The API has no `/webhooks/{org_id}/stripe` route (it always
+   * answered 404). This method now throws {@link UnsupportedOperationError}
+   * without a network call; point the Stripe webhook at `ingest.custom` /
+   * `POST /api/v1/webhooks/{org_id}/custom` instead. It will be removed in the
+   * next major release.
    */
   async stripe(
-    orgId: string,
-    body: string | Uint8Array | ArrayBuffer,
-    options: IngestStripeWebhookOptions = {},
+    _orgId: string,
+    _body: string | Uint8Array | ArrayBuffer,
+    _options: IngestStripeWebhookOptions = {},
   ): Promise<void> {
-    const bytes = toBytes(body);
-    const timestamp = options.timestamp ?? Math.floor(Date.now() / 1000);
-
-    const signature =
-      options.signature ??
-      (options.secret
-        ? stripeSignature(options.secret, bytes, timestamp)
-        : undefined);
-    if (!signature) {
-      throw new ValidationError(
-        "Stripe webhook signature is required (provide `signature` or `secret`)",
-      );
-    }
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      "Stripe-Signature": signature,
-    };
-
-    if (options.webhookToken) {
-      headers["X-Webhook-Token"] = options.webhookToken;
-    }
-    if (options.forwardedProto) {
-      headers["X-Forwarded-Proto"] = options.forwardedProto;
-    }
-
-    await this.http.request<void>(`/webhooks/${orgId}/stripe`, {
-      method: "POST",
-      rawBody: bytes,
-      headers,
-      skipRequestConversion: true,
-      skipResponseConversion: true,
-    });
+    throw new UnsupportedOperationError(
+      "ingest.stripe",
+      "the API has no Stripe webhook route; use ingest.custom (POST /webhooks/{org_id}/custom)",
+    );
   }
 
   /**

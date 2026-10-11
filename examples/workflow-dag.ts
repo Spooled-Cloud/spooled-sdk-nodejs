@@ -251,7 +251,7 @@ async function main() {
   console.log(`   ETL Workflow Status: ${status.status}`);
   console.log("   Jobs:");
   for (const job of jobs) {
-    console.log(`     - ${job.key}: ${job.status}`);
+    console.log(`     - ${job.id}: ${job.status}`);
   }
   console.log();
 

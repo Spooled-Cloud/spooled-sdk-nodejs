@@ -136,6 +136,20 @@ await worker.start();
 process.on("SIGTERM", () => worker.stop());
 ```
 
+`stop()` drains. The worker stops claiming, then lets running handlers finish for up to
+`shutdownTimeout` (default 30 s). A handler that returns is completed and one that throws is
+failed, even though the stop was requested meanwhile; `ctx.signal` is not aborted during that
+grace period. Handlers still running when it ends are aborted and failed with "Worker shutdown
+timeout". The worker deregisters last.
+
+If a job has `timeoutSeconds`, the worker aborts the handler (`ctx.signal`) when it runs longer,
+emits `job:timeout`, and fails the job with "Job timeout exceeded". The error text sent with a
+failure is always made acceptable to the API: empty becomes "Job failed", and text over 2048
+characters is truncated.
+
+`complete`, `fail` and both heartbeats are retried on network errors, timeouts and 5xx, because
+the server makes them idempotent. If an ack still fails after the retries the worker emits `error`.
+
 Give any worker that restarts a stable `workerId` (1-128 chars, `[A-Za-z0-9._-]`). Registration then
 upserts a single row instead of minting a new UUID each start, which otherwise leaves the previous
 registration counting against your plan's worker limit until the stale-worker reaper clears it
@@ -203,9 +217,9 @@ Manage your organization and track usage:
 // Get current usage and limits
 const usage = await client.organizations.getUsage();
 console.log(
-  `Active jobs: ${usage.active_jobs.current}/${usage.active_jobs.limit}`,
+  `Active jobs: ${usage.usage.activeJobs.current}/${usage.usage.activeJobs.limit}`,
 );
-console.log(`Plan: ${usage.plan.tier}`);
+console.log(`Plan: ${usage.plan}`); // e.g. "free"
 
 // Generate a unique slug for a new organization
 const { slug } = await client.organizations.generateSlug("My Company");
@@ -377,6 +391,9 @@ try {
 
 (Per-second rate limiting also returns `429`, as a `RateLimitError` with the default `RATE_LIMIT_EXCEEDED` code.)
 
+A plan quota does not clear for hours, so `error.isQuota` is `true` for it and the SDK never retries it and
+never counts it toward the circuit breaker (rate-limit 429s are retried after `Retry-After`).
+
 ## Error Handling
 
 All errors extend `SpooledError` with specific subclasses:
@@ -398,8 +415,9 @@ try {
   } else if (error instanceof AuthorizationError) {
     console.log(`Forbidden: ${error.message}`);
   } else if (error instanceof RateLimitError) {
-    // 429: either a plan quota (code "QUOTA_EXCEEDED") or per-second rate limiting
-    console.log(`Retry after ${error.getRetryAfter()} seconds`);
+    // 429: either a plan quota (error.isQuota, code "QUOTA_EXCEEDED") or per-second rate limiting
+    if (!error.isQuota)
+      console.log(`Retry after ${error.getRetryAfter()} seconds`);
   } else if (isSpooledError(error)) {
     console.log(`API error: ${error.code} - ${error.message}`);
   }
@@ -444,15 +462,27 @@ const { jobs } = await grpcClient.queue.dequeue({
   leaseDurationSecs: 300,
 });
 
-// Process and complete. Echo leaseId when present so current servers can fence stale executions; legacy servers may omit it and then use worker-ID-only fencing.
+// Process and settle. leaseId is required: the server rejects a complete/fail/renew
+// without the lease token that dequeue returned. fail() retries by default (until the
+// job's maxRetries run out); pass retry: false to dead-letter on purpose.
 for (const job of jobs) {
-  await processJob(job);
-  await grpcClient.queue.complete({
-    jobId: job.id,
-    workerId,
-    leaseId: job.leaseId ?? undefined,
-    result: { success: true },
-  });
+  const leaseId = job.leaseId as string;
+  try {
+    await processJob(job);
+    await grpcClient.queue.complete({
+      jobId: job.id,
+      workerId,
+      leaseId,
+      result: { success: true },
+    });
+  } catch (error) {
+    await grpcClient.queue.fail({
+      jobId: job.id,
+      workerId,
+      leaseId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 ```
 

@@ -256,5 +256,44 @@ describe("QueuesResource", () => {
       const client = createClient();
       await expect(client.queues.delete("my-queue")).resolves.toBeUndefined();
     });
+
+    it("sends no delete_jobs by default (config-only delete of an idle queue)", async () => {
+      let url: URL | undefined;
+      server.use(
+        http.delete(
+          "https://api.spooled.cloud/api/v1/queues/my-queue",
+          ({ request }) => {
+            url = new URL(request.url);
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      const client = createClient();
+      await client.queues.delete("my-queue");
+      await client.queues.delete("my-queue", { deleteJobs: false });
+
+      expect(url?.search).toBe("");
+    });
+
+    it("sends delete_jobs=true with { deleteJobs: true } (SDKNP-09)", async () => {
+      // A queue created by posting jobs has no config row: the API answers 409
+      // unless delete_jobs=true is passed.
+      let url: URL | undefined;
+      server.use(
+        http.delete(
+          "https://api.spooled.cloud/api/v1/queues/tmp-queue",
+          ({ request }) => {
+            url = new URL(request.url);
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      const client = createClient();
+      await client.queues.delete("tmp-queue", { deleteJobs: true });
+
+      expect(url?.searchParams.get("delete_jobs")).toBe("true");
+    });
   });
 });

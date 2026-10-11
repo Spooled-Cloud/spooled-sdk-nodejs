@@ -65,6 +65,7 @@ export {
   NetworkError,
   TimeoutError,
   CircuitBreakerOpenError,
+  UnsupportedOperationError,
   isSpooledError,
   isRetryableError,
   parseRateLimitHeaders,

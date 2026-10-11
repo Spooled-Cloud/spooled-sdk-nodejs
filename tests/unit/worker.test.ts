@@ -146,7 +146,7 @@ describe("SpooledWorker lease fencing", () => {
 
     expect(worker.getActiveJobCount()).toBe(2);
     expect(executions).toHaveLength(2);
-    expect(vi.getTimerCount()).toBe(2);
+    expect(vi.getTimerCount()).toBe(4); // 2 heartbeats + 2 job-timeout timers
 
     await vi.advanceTimersByTimeAsync(1000);
     expect(heartbeat.mock.calls).toEqual(
@@ -169,7 +169,7 @@ describe("SpooledWorker lease fencing", () => {
     expect(fail).not.toHaveBeenCalled();
     expect(worker.getActiveJobCount()).toBe(1);
     expect(executions[1].signal.aborted).toBe(false);
-    expect(vi.getTimerCount()).toBe(1);
+    expect(vi.getTimerCount()).toBe(2); // 1 heartbeat + 1 job-timeout timer
 
     heartbeat.mockClear();
     await vi.advanceTimersByTimeAsync(1000);
@@ -246,7 +246,7 @@ describe("SpooledWorker lease fencing", () => {
 
     expect(worker.getActiveJobCount()).toBe(2);
     expect(executions).toHaveLength(2);
-    expect(vi.getTimerCount()).toBe(2);
+    expect(vi.getTimerCount()).toBe(4); // 2 heartbeats + 2 job-timeout timers
 
     await vi.advanceTimersByTimeAsync(1000);
     expect(heartbeat).toHaveBeenCalledTimes(2);
@@ -265,7 +265,7 @@ describe("SpooledWorker lease fencing", () => {
     expect(fail).not.toHaveBeenCalled();
     expect(worker.getActiveJobCount()).toBe(1);
     expect(executions[1].signal.aborted).toBe(false);
-    expect(vi.getTimerCount()).toBe(1);
+    expect(vi.getTimerCount()).toBe(2); // 1 heartbeat + 1 job-timeout timer
 
     heartbeat.mockClear();
     await vi.advanceTimersByTimeAsync(1000);

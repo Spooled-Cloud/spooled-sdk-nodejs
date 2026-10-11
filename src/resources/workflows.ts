@@ -28,7 +28,7 @@ export interface WorkflowJobOperations {
    * @example
    * ```typescript
    * const jobs = await client.workflows.jobs.list('wf_123');
-   * console.log('Jobs:', jobs.map(j => j.key));
+   * console.log('Jobs:', jobs.map(j => j.id));
    * ```
    */
   list(workflowId: string): Promise<WorkflowJob[]>;
@@ -49,14 +49,16 @@ export interface WorkflowJobOperations {
   /**
    * Get the status of all jobs in a workflow.
    *
-   * Returns a summary of each job's status and progress.
+   * Returns a summary of each job's status. The API does not store or return
+   * the `key` a job was created with, so `key` is undefined; map keys to job
+   * IDs from the `jobIds` array that `workflows.create()` returns.
    *
    * @param workflowId - The workflow ID
    * @example
    * ```typescript
    * const statuses = await client.workflows.jobs.getStatus('wf_123');
    * for (const s of statuses) {
-   *   console.log(`${s.key}: ${s.status}`);
+   *   console.log(`${s.jobId}: ${s.status}`);
    * }
    * ```
    */
@@ -179,7 +181,7 @@ export class WorkflowsResource {
     const jobs = await this.listWorkflowJobs(workflowId);
     return jobs.map((job) => ({
       jobId: job.id,
-      key: job.key,
+      ...(job.key !== undefined && { key: job.key }),
       status: job.status,
     }));
   }
@@ -250,7 +252,9 @@ export interface WorkflowGetPayload {
  * GET /workflows/{id} is WorkflowDetailResponse: counts live under
  * `progress`, not top-level total_jobs like list/cancel/retry.
  */
-export function mapWorkflowGetResponse(raw: WorkflowGetPayload): WorkflowResponse {
+export function mapWorkflowGetResponse(
+  raw: WorkflowGetPayload,
+): WorkflowResponse {
   const totalJobs = raw.totalJobs ?? raw.progress?.total ?? 0;
   const completedJobs = raw.completedJobs ?? raw.progress?.completed ?? 0;
   const failedJobs = raw.failedJobs ?? raw.progress?.failed ?? 0;
@@ -291,7 +295,10 @@ function mapWorkflowDetailJobs(detail: WorkflowDetailPayload): WorkflowJob[] {
     return {
       id,
       workflowId: String(job.workflowId ?? workflowId),
-      key: String(job.key ?? ""),
+      // The API does not return the creation-time key (jobs store only a
+      // workflow step), so there is nothing to put here unless a future
+      // version sends one. Never fabricate "".
+      ...(typeof job.key === "string" && job.key !== "" && { key: job.key }),
       queueName: String(job.queueName ?? job.queue ?? ""),
       status: job.status as WorkflowJob["status"],
       payload: (job.payload as JsonObject) ?? {},

@@ -5,6 +5,7 @@
  */
 
 import type { HttpClient } from "../utils/http.js";
+import { UnsupportedOperationError } from "../errors.js";
 import type {
   Organization,
   OrganizationSummary,
@@ -129,18 +130,17 @@ export class OrganizationsResource {
   /**
    * Clear/delete the webhook token for the current organization.
    *
-   * POST /organizations/webhook-token/clear requires `{ confirm: true }`.
-   * An empty body 422s. The API currently rejects the operation and tells
-   * callers to use regenerateWebhookToken() instead.
-   *
-   * @example
-   * ```typescript
-   * await client.organizations.clearWebhookToken();
-   * ```
+   * @deprecated The API refuses this operation on purpose (an org without a
+   * webhook token would have an open public ingestion endpoint) and always
+   * answers with an error. This method now throws
+   * {@link UnsupportedOperationError} without a network call; rotate the token
+   * with {@link OrganizationsResource.regenerateWebhookToken} instead. It will
+   * be removed in the next major release.
    */
   async clearWebhookToken(): Promise<void> {
-    await this.http.post("/organizations/webhook-token/clear", {
-      confirm: true,
-    });
+    throw new UnsupportedOperationError(
+      "organizations.clearWebhookToken",
+      "clearing the webhook token is not allowed; use organizations.regenerateWebhookToken() to rotate it",
+    );
   }
 }

@@ -5,6 +5,7 @@
  */
 
 import type * as grpc from "@grpc/grpc-js";
+import { encodeFailRequest } from "./encode.js";
 import type {
   GrpcJob,
   GrpcProcessRequest,
@@ -147,7 +148,11 @@ export function createProcessJobsStream(
 
   return {
     send(request: GrpcProcessRequest): void {
-      call.write(request);
+      call.write(
+        request.fail
+          ? { ...request, fail: encodeFailRequest(request.fail) }
+          : request,
+      );
     },
 
     receive(): AsyncIterable<GrpcProcessResponse> {

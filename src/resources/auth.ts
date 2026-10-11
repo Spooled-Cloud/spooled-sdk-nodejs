@@ -28,14 +28,20 @@ export class AuthResource {
    * Exchange API key for JWT tokens
    */
   async login(params: LoginParams): Promise<LoginResponse> {
-    return this.http.post<LoginResponse>("/auth/login", params);
+    return this.http.post<LoginResponse>("/auth/login", params, {
+      skipAuthRefresh: true,
+    });
   }
 
   /**
    * Refresh access token using refresh token
    */
   async refresh(params: RefreshTokenParams): Promise<RefreshTokenResponse> {
-    return this.http.post<RefreshTokenResponse>("/auth/refresh", params);
+    // The refresh call is what a 401 triggers; a 401 on it must surface, not
+    // wait on (or start) another refresh.
+    return this.http.post<RefreshTokenResponse>("/auth/refresh", params, {
+      skipAuthRefresh: true,
+    });
   }
 
   /**

@@ -127,8 +127,12 @@ export interface WorkflowJob {
   id: string;
   /** Workflow ID this job belongs to */
   workflowId: string;
-  /** Job key within the workflow */
-  key: string;
+  /**
+   * Job key within the workflow. The API does not return it (a job stores only
+   * its workflow step), so this is undefined today; take the key to job ID
+   * mapping from the `jobIds` of `workflows.create()`.
+   */
+  key?: string;
   /** Queue name */
   queueName: string;
   /** Current job status */
@@ -168,8 +172,8 @@ export interface WorkflowJob {
 export interface WorkflowJobStatus {
   /** Job ID */
   jobId: string;
-  /** Job key within the workflow */
-  key: string;
+  /** Job key within the workflow; undefined, see {@link WorkflowJob.key} */
+  key?: string;
   /** Current status */
   status: string;
   /** Progress percentage (0-100) */

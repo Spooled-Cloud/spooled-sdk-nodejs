@@ -42,13 +42,13 @@ const worker = new SpooledWorker(client, {
 
   // Lifecycle
   autoStart: false, // Auto-start on construction (default: false)
-  shutdownTimeout: 30000, // Max wait for graceful shutdown (default: 30000)
+  shutdownTimeout: 30000, // How long stop() lets running handlers finish (default: 30000)
 
   // Identification
   workerId: "emails-worker-01", // Stable id (default: server-minted UUID)
   hostname: "worker-01", // Worker hostname (default: os.hostname())
   workerType: "nodejs", // Worker type identifier
-  version: "my-worker/2.3.0", // Optional application version (defaults to SDK 1.1.0)
+  version: "my-worker/2.3.0", // Optional application version (defaults to the SDK version)
   metadata: {
     // Custom metadata
     env: "production",
@@ -209,16 +209,55 @@ await worker.start();
 
 ### Shutdown Behavior
 
-1. Worker stops polling for new jobs
-2. Worker heartbeat stops
-3. In-progress jobs receive abort signal
-4. Wait for jobs to complete (up to `shutdownTimeout`)
-5. Force-fail any remaining jobs after timeout
-6. Deregister worker from API
+`stop()` drains the worker:
+
+1. The worker stops polling for new jobs. A claim already on the wire is waited
+   for, and its jobs are drained like the rest.
+2. Running handlers are left alone for up to `shutdownTimeout`. Their
+   `ctx.signal` is **not** aborted merely because a stop was requested.
+3. A handler that returns is completed, and one that throws is failed, even
+   though the stop was requested meanwhile. A finished handler is never dropped.
+4. Handlers still running when `shutdownTimeout` ends are aborted
+   (`ctx.signal.reason` is "Worker shutdown timeout") and their jobs are failed
+   with "Worker shutdown timeout". A result they produce later is discarded.
+5. The worker heartbeat and each job's lease heartbeat keep running during the
+   drain, so neither the worker nor a lease expires while handlers finish.
+6. Acks already in flight are awaited, then the worker deregisters last.
+   Deregistering returns every job the worker still holds to the queue, so it
+   must come after the acks.
+
+## Job Timeouts
+
+If a job has `timeoutSeconds` (the default is 300 on the server), the worker
+aborts the handler after that long: `ctx.signal` is aborted with the reason
+"Job timeout exceeded", the worker emits `job:timeout`, and the job is failed
+with "Job timeout exceeded" (retried or dead-lettered per its `maxRetries`). The
+lease is no longer extended and the concurrency slot is freed, even if the
+handler ignores the signal and never returns; a result it produces later is
+discarded.
+
+```typescript
+worker.on("job:timeout", ({ jobId, queueName }) => {
+  console.warn(`Job ${jobId} on ${queueName} timed out`);
+});
+```
+
+## Delivery of Results
+
+`complete`, `fail` and both heartbeats are idempotent on the server (lease
+fenced), so the SDK retries them on network errors, timeouts, 5xx and 408 within
+the client's retry budget (`retry.maxRetries`). If an ack still fails after the
+retries, the worker emits `error` with the final error and the job runs again
+after its lease expires, so keep handlers idempotent.
+
+The error text sent with a failure is always made acceptable to the API: an empty
+message becomes "Job failed" and a message over 2048 characters is truncated.
 
 ## Abort-Aware Processing
 
-Jobs receive an `AbortSignal` for cooperative cancellation:
+Jobs receive an `AbortSignal` for cooperative cancellation. It is aborted when
+the job exceeds its `timeoutSeconds` and when a stop outlives `shutdownTimeout`
+(see above), not when a stop is merely requested:
 
 ```typescript
 worker.process(async (ctx) => {

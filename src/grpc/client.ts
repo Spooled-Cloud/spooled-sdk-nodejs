@@ -7,6 +7,7 @@
 
 import * as grpc from "@grpc/grpc-js";
 import { loadProtoDefinition } from "./loader.js";
+import { encodeFailRequest } from "./encode.js";
 import {
   createJobStream,
   createProcessJobsStream,
@@ -284,6 +285,16 @@ function mapGrpcError(error: grpc.ServiceError, timeoutMs?: number): Error {
   }
 }
 
+/** Host part of a `host:port` address, including bracketed IPv6 (`[::1]:50051`). */
+function grpcHost(address: string): string {
+  if (address.startsWith("[")) {
+    const end = address.indexOf("]");
+    return end === -1 ? address : address.slice(1, end);
+  }
+  // A bare IPv6 literal has several colons and no port to strip.
+  return address.split(":").length > 2 ? address : address.split(":")[0];
+}
+
 /**
  * Determine if TLS should be used based on address
  */
@@ -292,10 +303,8 @@ function shouldUseTls(address: string, explicitTls?: boolean): boolean {
     return explicitTls;
   }
   // Default to insecure for localhost/127.0.0.1
-  const host = address.split(":")[0].toLowerCase();
-  return (
-    host !== "localhost" && host !== "127.0.0.1" && !host.startsWith("[::1]")
-  );
+  const host = grpcHost(address).toLowerCase();
+  return host !== "localhost" && host !== "127.0.0.1" && host !== "::1";
 }
 
 /**
@@ -355,7 +364,7 @@ export class GrpcQueueOperations {
     return promisify(
       this.client,
       this.client.Fail,
-      params,
+      encodeFailRequest(params),
       this.metadata,
       this.timeoutMs,
     );

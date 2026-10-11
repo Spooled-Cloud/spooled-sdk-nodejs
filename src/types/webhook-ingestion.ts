@@ -1,8 +1,9 @@
 /**
  * Webhook Ingestion Types
  *
- * These endpoints are primarily intended to be called by external webhook providers (GitHub/Stripe)
- * and are authenticated via signatures (not API keys).
+ * The custom endpoint is called by external webhook providers and is
+ * authenticated by the org webhook token (not an API key). The GitHub and
+ * Stripe option types are kept only so existing code still compiles.
  */
 
 import type { JsonValue } from "./common.js";
@@ -22,6 +23,7 @@ export interface IngestCustomWebhookResponse {
   status?: string;
 }
 
+/** @deprecated The API has no GitHub webhook route; `ingest.github` throws. */
 export interface IngestGitHubWebhookOptions {
   /** Value for X-GitHub-Event header (e.g. "pull_request") */
   githubEvent: string;
@@ -35,6 +37,7 @@ export interface IngestGitHubWebhookOptions {
   secret?: string;
 }
 
+/** @deprecated The API has no Stripe webhook route; `ingest.stripe` throws. */
 export interface IngestStripeWebhookOptions {
   /** Optional org-scoped webhook token (X-Webhook-Token) */
   webhookToken?: string;

@@ -14,6 +14,7 @@ import * as grpc from "@grpc/grpc-js";
 import {
   SpooledGrpcClient,
   GrpcJobStatus,
+  createProcessJobsStream,
   timestampToDate,
   dateToTimestamp,
 } from "../../src/grpc/index.js";
@@ -336,5 +337,132 @@ describe("GrpcJobStatus", () => {
     expect(GrpcJobStatus.JOB_STATUS_PROCESSING).toBe("JOB_STATUS_PROCESSING");
     expect(GrpcJobStatus.JOB_STATUS_COMPLETED).toBe("JOB_STATUS_COMPLETED");
     expect(GrpcJobStatus.JOB_STATUS_FAILED).toBe("JOB_STATUS_FAILED");
+  });
+});
+
+describe("gRPC fail retry default (SDKNP-17)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // eslint-disable-next-line no-unused-vars
+  function failRequestSentBy(call: (client: SpooledGrpcClient) => unknown) {
+    const client = new SpooledGrpcClient({
+      address: "localhost:50051",
+      apiKey: "sk_test_123",
+    });
+    const pending = call(client);
+    const fail = (client as any).queueClient.Fail as ReturnType<typeof vi.fn>;
+    const request = fail.mock.calls[0][0];
+    client.close();
+    return { request, pending };
+  }
+
+  it("sends retry: true when the caller does not say", async () => {
+    // proto3 `retry` is false when unset, and the server dead-letters a job on
+    // the first failure when retry is false.
+    const { request, pending } = failRequestSentBy((client) =>
+      client.queue.fail({
+        jobId: "job_1",
+        workerId: "w1",
+        error: "boom",
+        leaseId: "lease_1",
+      }),
+    );
+    await pending;
+    expect(request.retry).toBe(true);
+    expect(request.leaseId).toBe("lease_1");
+  });
+
+  it("honours an explicit retry: false (dead-letter on purpose)", async () => {
+    const { request, pending } = failRequestSentBy((client) =>
+      client.queue.fail({
+        jobId: "job_1",
+        workerId: "w1",
+        error: "boom",
+        retry: false,
+        leaseId: "lease_1",
+      }),
+    );
+    await pending;
+    expect(request.retry).toBe(false);
+  });
+
+  it("applies the same default to a fail sent on the ProcessJobs stream", () => {
+    const write = vi.fn();
+    const stream = createProcessJobsStream({ write } as any);
+    stream.send({
+      fail: { jobId: "job_1", workerId: "w1", error: "x", leaseId: "l" },
+    });
+    stream.send({
+      fail: {
+        jobId: "job_2",
+        workerId: "w1",
+        error: "x",
+        retry: false,
+        leaseId: "l",
+      },
+    });
+    stream.send({ dequeue: { queueName: "q", workerId: "w1" } });
+
+    expect(write.mock.calls[0][0].fail.retry).toBe(true);
+    expect(write.mock.calls[1][0].fail.retry).toBe(false);
+    expect(write.mock.calls[2][0]).toEqual({
+      dequeue: { queueName: "q", workerId: "w1" },
+    });
+  });
+
+  it("serializes the defaulted retry as true on the wire", async () => {
+    const protoLoader =
+      await vi.importActual<typeof import("@grpc/proto-loader")>(
+        "@grpc/proto-loader",
+      );
+    const { resolve } = await import("node:path");
+    const { PROTO_LOADER_OPTIONS } = await vi.importActual<
+      typeof import("../../src/grpc/loader.js")
+    >("../../src/grpc/loader.js");
+    const { encodeFailRequest } = await import("../../src/grpc/encode.js");
+    const definition = protoLoader.loadSync(
+      resolve("proto/spooled.proto"),
+      PROTO_LOADER_OPTIONS,
+    );
+    const type = definition["spooled.v1.FailRequest"] as any;
+
+    const omitted = type.deserialize(
+      type.serialize(
+        encodeFailRequest({
+          jobId: "j",
+          workerId: "w",
+          error: "e",
+          leaseId: "l",
+        }),
+      ),
+    );
+    expect(omitted.retry).toBe(true);
+  });
+});
+
+describe("gRPC TLS detection (SDKNP-24)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it.each([
+    ["localhost:50051", false],
+    ["127.0.0.1:50051", false],
+    ["[::1]:50051", false],
+    ["[::1]", false],
+    ["::1", false],
+    ["grpc.spooled.cloud:443", true],
+    ["[2001:db8::1]:443", true],
+  ])("address %s uses TLS: %s", (address, tls) => {
+    const client = new SpooledGrpcClient({ address, apiKey: "sk_test_123" });
+    expect(vi.mocked(grpc.credentials.createSsl).mock.calls.length).toBe(
+      tls ? 1 : 0,
+    );
+    expect(vi.mocked(grpc.credentials.createInsecure).mock.calls.length).toBe(
+      tls ? 0 : 1,
+    );
+    client.close();
   });
 });

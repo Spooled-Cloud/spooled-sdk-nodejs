@@ -288,6 +288,13 @@ export class SpooledClient {
   /**
    * Exchange the API key for a JWT via /auth/login and cache the result.
    *
+   * The JWT belongs to the realtime transport only. It must NOT replace the
+   * REST bearer: an API-key client has no refresh token wired into its HTTP
+   * layer, so after the JWT's 24 h lifetime every REST call (claim, complete,
+   * heartbeat, create) would have failed with 401 for good. REST keeps using
+   * the API key; realtime re-mints its own JWT near expiry (see
+   * `getJwtToken`).
+   *
    * Concurrent callers share a single in-flight login so a burst of reconnects
    * (e.g. WebSocket and SSE at once) issues just one request.
    */
@@ -299,10 +306,7 @@ export class SpooledClient {
     this.jwtLoginPromise = (async () => {
       const response = await this.auth.login({ apiKey: this.config.apiKey! });
 
-      // Update internal state and cache the token for future (re)connects.
-      this.http.setAuthToken(response.accessToken);
-      this.tokenExpiresAt = Date.now() + response.expiresIn * 1000;
-      (this.config as ResolvedConfig).refreshToken = response.refreshToken;
+      // Cache the token for future (re)connects; leave `http` auth alone.
       this.cachedJwt = response.accessToken;
 
       return response.accessToken;

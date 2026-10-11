@@ -18,3 +18,17 @@
 {"id":"NS-20","sev":"P1","summary":"ingest custom returned void and dropped jobId after backend started sending WebhookResponse","path":"src/resources/webhook-ingestion.ts","status":"fixed","note":"Maps jobId queueName status; empty 200 leaves fields unset"}
 {"id":"NS-21","sev":"P1","summary":"Job.payload/result/tags typed JsonObject so non-object JSON from GET/claim/complete did not type-check","path":"src/types/jobs.ts","status":"fixed","note":"Backend payload/result/tags is serde_json::Value"}
 {"id":"NS-22","sev":"P1","summary":"Schedule payloadTemplate/tags/metadata typed JsonObject so non-object JSON did not type-check","path":"src/types/schedules.ts","status":"fixed","note":"Backend payload_template/tags/metadata is serde_json::Value"}
+{"id": "SDKNP-01", "sev": "P1", "summary": "Graceful stop dropped in-flight results, then deregister re-queued them", "path": "src/worker/worker.ts", "status": "fixed", "note": "1.3.0"}
+{"id": "SDKNP-02", "sev": "P1", "summary": "`client.realtime()` replaced the REST API key with a 24 h JWT", "path": "src/client.ts", "status": "fixed", "note": "1.3.0"}
+{"id": "SDKNP-05", "sev": "P2", "summary": "complete/fail/heartbeat acks never retried", "path": "src/resources/jobs.ts, src/utils/http.ts", "status": "fixed", "note": "1.3.0"}
+{"id": "SDKNP-06", "sev": "P2", "summary": "429 QUOTA_EXCEEDED retried with long sleeps and tripped the circuit breaker", "path": "src/errors.ts, src/utils/http.ts", "status": "fixed", "note": "1.3.0"}
+{"id": "SDKNP-07", "sev": "P2", "summary": "Concurrent 401s: only one request recovered through the refresh", "path": "src/utils/http.ts", "status": "fixed", "note": "1.3.0"}
+{"id": "SDKNP-08", "sev": "P2", "summary": "`queues.pause` without a reason sent JSON content-type with an empty body (400)", "path": "src/utils/http.ts", "status": "fixed", "note": "1.3.0"}
+{"id": "SDKNP-09", "sev": "P2", "summary": "`queues.delete` had no `deleteJobs`", "path": "src/resources/queues.ts", "status": "fixed", "note": "1.3.0"}
+{"id": "SDKNP-10", "sev": "P2", "summary": "`ingest.github/stripe` called removed routes (404)", "path": "src/resources/webhook-ingestion.ts", "status": "fixed", "note": "1.3.0"}
+{"id": "SDKNP-14", "sev": "P2", "summary": "422 not mapped to ValidationError", "path": "src/errors.ts", "status": "fixed", "note": "1.3.0"}
+{"id": "SDKNP-15", "sev": "P2", "summary": "SSE reconnected forever after a terminal job stream", "path": "src/realtime/sse.ts", "status": "fixed", "note": "1.3.0"}
+{"id": "SDKNP-16", "sev": "P2", "summary": "`timeoutSeconds` not enforced; `job:timeout` never emitted", "path": "src/worker/worker.ts", "status": "fixed", "note": "1.3.0"}
+{"id": "SDKNP-17", "sev": "P2", "summary": "gRPC `lease_id` optional in types; `fail` without `retry` dead-lettered", "path": "src/grpc/*", "status": "fixed", "note": "1.3.0"}
+{"id": "SDKNP-18", "sev": "P2", "summary": "`workflows.jobs.*` fabricated `key: \"\"`", "path": "src/resources/workflows.ts", "status": "fixed", "note": "1.3.0"}
+{"id": "SDKNP-19..28", "sev": "P3", "summary": "stop timer, stopped workerId, autoStart rejection, idempotencyKey retry, SSE force refresh, `[::1]` TLS, completionWebhookSecret, clearWebhookToken, README usage, admin-only client", "path": "see CHANGELOG 1.3.0", "status": "fixed", "note": "1.3.0"}

@@ -71,3 +71,12 @@ export interface ResumeQueueResponse {
   resumed: boolean;
   pausedDurationSecs: number;
 }
+
+/** Options for deleting a queue */
+export interface DeleteQueueOptions {
+  /**
+   * Also delete every job (and dead-letter row) of the queue. Required to
+   * delete a queue with pending/processing jobs or one without a stored config.
+   */
+  deleteJobs?: boolean;
+}

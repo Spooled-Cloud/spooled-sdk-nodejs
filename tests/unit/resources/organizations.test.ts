@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { SpooledClient } from "../../../src/client.js";
+import { UnsupportedOperationError } from "../../../src/errors.js";
 
 const server = setupServer();
 
@@ -331,19 +332,17 @@ describe("OrganizationsResource", () => {
   });
 
   describe("clearWebhookToken", () => {
-    it("sends confirm true so the body is not empty", async () => {
-      let posted: unknown;
+    it("throws UnsupportedOperationError without any network call", async () => {
+      // The API refuses to clear the token on purpose (the endpoint always
+      // answers 400); the method must say so instead of POSTing and failing.
+      let posted = false;
       server.use(
         http.post(
           "https://api.spooled.cloud/api/v1/organizations/webhook-token/clear",
-          async ({ request }) => {
-            posted = await request.json();
+          () => {
+            posted = true;
             return HttpResponse.json(
-              {
-                code: "VALIDATION_ERROR",
-                message:
-                  "Clearing the webhook token is not allowed. Use /organizations/webhook-token/regenerate to rotate it.",
-              },
+              { code: "VALIDATION_ERROR", message: "not allowed" },
               { status: 400 },
             );
           },
@@ -351,8 +350,14 @@ describe("OrganizationsResource", () => {
       );
 
       const client = createClient();
-      await expect(client.organizations.clearWebhookToken()).rejects.toThrow();
-      expect(posted).toEqual({ confirm: true });
+      const call = client.organizations.clearWebhookToken();
+      await expect(call).rejects.toBeInstanceOf(UnsupportedOperationError);
+      await expect(call).rejects.toMatchObject({
+        code: "UNSUPPORTED_OPERATION",
+        operation: "organizations.clearWebhookToken",
+      });
+      await expect(call).rejects.toThrow(/regenerateWebhookToken/);
+      expect(posted).toBe(false);
     });
   });
 });

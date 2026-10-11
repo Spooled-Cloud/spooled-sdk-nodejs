@@ -42,6 +42,24 @@ export const SSE_EVENT_NAMES = [
 ] as const;
 
 /**
+ * Job statuses after which the API closes a job stream
+ * (`/events/jobs/{id}` ends once the job reaches one of these).
+ */
+const TERMINAL_JOB_STATUSES = new Set([
+  "completed",
+  "failed",
+  "deadletter",
+  "cancelled",
+]);
+
+/**
+ * How long a connection must stay open before it counts as healthy and gives
+ * the next reconnect a fresh attempt budget. A stream the server closes right
+ * after opening is not healthy, however "successfully" it opened.
+ */
+const STABLE_CONNECTION_MS = 30_000;
+
+/**
  * SSE Realtime Client
  *
  * Connects to the Spooled API SSE endpoint and emits typed events.
@@ -55,6 +73,12 @@ export class SseRealtimeClient {
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private filter: SubscriptionFilter | null = null;
+  /** When the current connection opened (for the stable-connection check). */
+  private connectedAt: number | null = null;
+  /** The server finished this stream on purpose (terminal job); do not reconnect. */
+  private streamEnded = false;
+  /** The server rejected our token; mint a fresh one for the next connect. */
+  private forceTokenRefresh = false;
 
   // Event handlers
   private eventHandlers: Map<RealtimeEventType, Set<EventHandler>> = new Map();
@@ -102,6 +126,7 @@ export class SseRealtimeClient {
     }
 
     this.filter = filter || null;
+    this.streamEnded = false;
 
     this.setState("connecting");
 
@@ -127,10 +152,14 @@ export class SseRealtimeClient {
       }
     }
 
-    // Mint a fresh token on every (re)connect so a stale token never blocks recovery.
+    // Ask the provider on every (re)connect so a stale token never blocks
+    // recovery. It caches the JWT itself, so only force a new login after the
+    // server actually rejected the token (a 401/403), not on every retry.
     let token: string;
     try {
-      token = await this.options.tokenProvider(this.reconnectAttempts > 0);
+      const force = this.forceTokenRefresh;
+      this.forceTokenRefresh = false;
+      token = await this.options.tokenProvider(force);
     } catch (error) {
       this.setState("disconnected");
       throw new Error(`Failed to acquire realtime token: ${error}`);
@@ -155,7 +184,11 @@ export class SseRealtimeClient {
         this.eventSource.onopen = () => {
           this.options.debug("SSE connected");
           this.setState("connected");
-          this.reconnectAttempts = 0;
+          // The attempt counter is NOT reset here: an open that the server
+          // closes at once (a finished job's stream) would otherwise refill the
+          // budget on every cycle and reconnect forever. It resets once the
+          // connection has proved stable (see handleDisconnect).
+          this.connectedAt = Date.now();
           resolve();
         };
 
@@ -172,8 +205,15 @@ export class SseRealtimeClient {
           });
         }
 
-        this.eventSource.onerror = () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        this.eventSource.onerror = (event: any) => {
           this.options.debug("SSE error");
+
+          // The `eventsource` package reports the HTTP status of a rejected
+          // connection as `code`.
+          if (event?.code === 401 || event?.code === 403) {
+            this.forceTokenRefresh = true;
+          }
 
           if (this.state === "connecting") {
             this.setState("disconnected");
@@ -212,6 +252,8 @@ export class SseRealtimeClient {
 
     this.setState("disconnected");
     this.filter = null;
+    this.connectedAt = null;
+    this.streamEnded = false;
   }
 
   /**
@@ -302,6 +344,12 @@ export class SseRealtimeClient {
       const event = parsed as RealtimeEvent;
       this.options.debug(`Received SSE event: ${eventType}`, event);
 
+      // A job stream ends once the job is terminal; remember it so the close
+      // that follows is not treated as a dropped connection.
+      if (this.filter?.jobId && isStreamEndingEvent(eventType, parsed.data)) {
+        this.streamEnded = true;
+      }
+
       // Emit to specific handlers
       const handlers = this.eventHandlers.get(eventType as RealtimeEventType);
       if (handlers) {
@@ -334,6 +382,25 @@ export class SseRealtimeClient {
       this.eventSource.close();
       this.eventSource = null;
     }
+
+    // The server ended this stream deliberately (a terminal job): reconnecting
+    // would only replay the terminal event again and again.
+    if (this.streamEnded) {
+      this.connectedAt = null;
+      this.setState("disconnected");
+      return;
+    }
+
+    // A connection that stayed up long enough was healthy (e.g. the server's
+    // 30 minute cap closed it): give the reconnect a fresh budget. One that
+    // closed right after opening keeps counting toward maxReconnectAttempts.
+    if (
+      this.connectedAt !== null &&
+      Date.now() - this.connectedAt >= STABLE_CONNECTION_MS
+    ) {
+      this.reconnectAttempts = 0;
+    }
+    this.connectedAt = null;
 
     if (
       this.options.autoReconnect &&
@@ -377,4 +444,26 @@ export class SseRealtimeClient {
       }
     }, delay);
   }
+}
+
+/**
+ * Whether an inbound event means the API is about to close this job stream:
+ * the job reached a terminal status, or the server sent its own `error` (e.g.
+ * "Job not found"), which it follows by closing the stream.
+ */
+function isStreamEndingEvent(eventType: string, data: unknown): boolean {
+  if (eventType === "error" || eventType === "job.completed") {
+    return true;
+  }
+  const record = (data ?? {}) as { newStatus?: unknown; willRetry?: unknown };
+  if (eventType === "job.failed") {
+    return record.willRetry === false;
+  }
+  if (eventType === "job.status_changed" || eventType === "job.status") {
+    return (
+      typeof record.newStatus === "string" &&
+      TERMINAL_JOB_STATUSES.has(record.newStatus)
+    );
+  }
+  return false;
 }

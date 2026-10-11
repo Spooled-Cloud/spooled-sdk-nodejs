@@ -59,6 +59,27 @@ describe("AdminResource", () => {
     expect(res.total).toBe(0);
   });
 
+  it("works on an admin-only client built with just adminKey (SDKNP-28)", async () => {
+    let adminHeader: string | null = null;
+    let authHeader: string | null = "unset";
+    server.use(
+      http.get(
+        "https://api.spooled.cloud/api/v1/admin/stats",
+        ({ request }) => {
+          adminHeader = request.headers.get("X-Admin-Key");
+          authHeader = request.headers.get("Authorization");
+          return HttpResponse.json({});
+        },
+      ),
+    );
+
+    const client = new SpooledClient({ adminKey: "admin_secret" });
+    await client.admin.getStats();
+
+    expect(adminHeader).toBe("admin_secret");
+    expect(authHeader).toBeNull();
+  });
+
   it("should create organization via admin endpoint", async () => {
     let adminHeader: string | null = null;
 

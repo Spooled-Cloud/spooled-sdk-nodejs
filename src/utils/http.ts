@@ -70,6 +70,20 @@ export interface HttpRequestOptions {
   skipResponseConversion?: boolean;
   /** Whether to skip retry logic */
   skipRetry?: boolean;
+  /**
+   * The request is safe to replay even though it is a POST/PATCH, so network
+   * errors, timeouts, 5xx and 408 are retried like they are for a GET.
+   *
+   * Use it only for calls the server makes idempotent: lease-fenced job and
+   * worker acks (complete/fail/heartbeat answer a replay with 409) and job
+   * creation with an idempotency key (the server returns the existing job).
+   */
+  idempotent?: boolean;
+  /**
+   * Never try to refresh the access token when this request gets a 401.
+   * Set on the auth calls that the refresh itself makes.
+   */
+  skipAuthRefresh?: boolean;
   /** Optional abort signal */
   signal?: AbortSignal;
 }
@@ -100,8 +114,12 @@ export class HttpClient {
   /** Optional function to mint a fresh access token (set when auto-refresh is enabled) */
   private refreshTokenFn: (() => Promise<string>) | null = null;
 
-  /** Guard to prevent a refresh request from recursively triggering another refresh */
-  private isRefreshing = false;
+  /**
+   * The refresh currently in flight, shared by every request that gets a 401
+   * meanwhile. A boolean guard here made the second concurrent 401 skip the
+   * refresh and fail even though the token was about to be replaced.
+   */
+  private refreshInFlight: Promise<boolean> | null = null;
 
   constructor(config: ResolvedConfig, circuitBreaker: CircuitBreaker) {
     this.config = config;
@@ -127,6 +145,32 @@ export class HttpClient {
    */
   setRefreshTokenFn(fn: () => Promise<string>): void {
     this.refreshTokenFn = fn;
+  }
+
+  /**
+   * Refresh the access token once for all callers.
+   *
+   * Resolves true when a new token is installed, false when the refresh failed
+   * (the caller then surfaces its original 401).
+   */
+  private refreshAuthToken(): Promise<boolean> {
+    if (!this.refreshInFlight) {
+      const refresh = this.refreshTokenFn!;
+      this.refreshInFlight = (async () => {
+        try {
+          this.setAuthToken(await refresh());
+          return true;
+        } catch (refreshError) {
+          const message =
+            refreshError instanceof Error ? refreshError.message : "unknown";
+          this.debug?.("Token refresh failed", { error: message });
+          return false;
+        } finally {
+          this.refreshInFlight = null;
+        }
+      })();
+    }
+    return this.refreshInFlight;
   }
 
   /**
@@ -242,6 +286,9 @@ export class HttpClient {
     hasRefreshed = false,
   ): Promise<HttpResponse<T>> {
     const method = options.method ?? "GET";
+    // The token this attempt is sent with; a 401 for an older token than the
+    // current one only needs a replay, not another refresh.
+    const tokenUsed = this.authToken;
     const headers = this.buildHeaders(options.headers);
     const timeout = options.timeout ?? this.config.timeout;
 
@@ -261,6 +308,13 @@ export class HttpClient {
           : convertRequest(options.body);
         init.body = JSON.stringify(body);
       }
+    }
+
+    // The default `Content-Type: application/json` is only true when there is a
+    // body. An empty body that claims to be JSON makes the API's optional-body
+    // extractors (e.g. POST /queues/{name}/pause) fail with "EOF while parsing".
+    if (init.body === undefined) {
+      headers.delete("Content-Type");
     }
 
     this.debug?.(`${method} ${url}`, { timeout, hasBody: !!options.body });
@@ -289,30 +343,18 @@ export class HttpClient {
 
     // Handle non-OK responses
     if (!response.ok) {
-      // On an expired-token 401, try refreshing the access token once and
-      // retry the original request. Guarded so the refresh request itself
-      // (or a genuinely invalid credential) can't loop.
+      // On an expired-token 401, refresh the access token (once, shared by
+      // every concurrent request) and replay the original request. Replays are
+      // limited to one per request, and the auth calls the refresh itself makes
+      // are exempt, so a genuinely invalid credential can't loop.
       if (
         response.status === 401 &&
         this.refreshTokenFn &&
         !hasRefreshed &&
-        !this.isRefreshing
+        !options.skipAuthRefresh
       ) {
-        let refreshed = false;
-        this.isRefreshing = true;
-        try {
-          const newToken = await this.refreshTokenFn();
-          this.setAuthToken(newToken);
-          refreshed = true;
-        } catch (refreshError) {
-          const message =
-            refreshError instanceof Error ? refreshError.message : "unknown";
-          this.debug?.("Token refresh failed", { error: message });
-        } finally {
-          this.isRefreshing = false;
-        }
-
-        if (refreshed) {
+        const alreadyRefreshed = this.authToken !== tokenUsed;
+        if (alreadyRefreshed || (await this.refreshAuthToken())) {
           return this.executeRequest<T>(url, options, true);
         }
       }
@@ -393,12 +435,13 @@ export class HttpClient {
   /**
    * Resolve the retry configuration for a request.
    *
-   * Idempotent methods (GET/PUT/DELETE) and any request carrying an
-   * idempotency key retry normally. Non-idempotent methods (POST/PATCH)
-   * without an idempotency key must NOT be retried on ambiguous failures
+   * Idempotent methods (GET/PUT/DELETE), any request carrying an idempotency
+   * key and any request marked `idempotent` retry normally. Non-idempotent
+   * methods (POST/PATCH) otherwise must NOT be retried on ambiguous failures
    * (network/timeout/5xx) — doing so risks duplicate jobs, double claims,
-   * etc. They are still retried on 429, which is rejected before the
-   * server processes the request and is therefore side-effect-free.
+   * etc. They are still retried on a rate-limit 429, which is rejected before
+   * the server processes the request and is therefore side-effect-free. A
+   * quota 429 is never retried: it does not clear for hours.
    */
   private resolveRetryConfig(
     method: HttpMethod,
@@ -406,7 +449,11 @@ export class HttpClient {
   ): RetryConfig {
     const base = this.config.retry;
 
-    if (IDEMPOTENT_METHODS.has(method) || this.hasIdempotencyKey(options)) {
+    if (
+      options.idempotent ||
+      IDEMPOTENT_METHODS.has(method) ||
+      this.hasIdempotencyKey(options)
+    ) {
       return base;
     }
 
@@ -414,6 +461,9 @@ export class HttpClient {
       ...base,
       retryOn: (error, attempt) => {
         if (error instanceof RateLimitError) {
+          if (error.isQuota) {
+            return false;
+          }
           return base.retryOn ? base.retryOn(error, attempt) : true;
         }
         return false;

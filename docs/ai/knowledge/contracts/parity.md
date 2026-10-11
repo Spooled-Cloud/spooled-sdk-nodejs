@@ -1,7 +1,7 @@
 # Parity notes (Node)
 
 - Full gRPC including StreamJobs/ProcessJobs.
-- `POST /webhooks/{org_id}/custom` returns `{ job_id, queue_name, status }` (OpenAPI `WebhookResponse`). `ingest.custom()` maps those onto `jobId`/`queueName`/`status`; empty 200 leaves them unset. There is no `/webhooks/{org_id}/github` or `/stripe`.
+- `POST /webhooks/{org_id}/custom` returns `{ job_id, queue_name, status }` (OpenAPI `WebhookResponse`). `ingest.custom()` maps those onto `jobId`/`queueName`/`status`; empty 200 leaves them unset. There is no `/webhooks/{org_id}/github` or `/stripe`: `ingest.github()` / `ingest.stripe()` are deprecated and throw `UnsupportedOperationError` without a network call (1.3.0, SDKNP-10).
 - Worker `progress` emits local debug output only. The Go SDK exposes a `JobsResource.UpdateProgress` call targeting `POST /api/v1/jobs/{id}/progress`, but the backend does not implement that endpoint (it would 404); no SDK has backend-persisted job progress.
 - No public webhook signature **validate** helpers (PHP has).
 - Job `maxRetries`/`timeoutSeconds` optional on REST → server defaults when omitted.
@@ -14,7 +14,13 @@
 - Email login start is `POST /auth/email/start` → `{ message, email_sent_to }`, not `{ success, message }`. Email availability is `GET /auth/check-email?email=` → `{ available, exists, signup_enabled }`.
 - `POST /auth/validate` is `{ valid, error?, claims? }`. Claims use `org_id` (camelCased `orgId`), not `organizationId`. Invalid tokens send `error`, not `message`. `auth.validate` maps those onto `claims.organizationId` and `message`.
 - Org webhook token is `GET/POST /organizations/webhook-token` → `{ webhook_token, webhook_url }`, not `{ token }`.
-- Clear is `POST /organizations/webhook-token/clear` with `{ confirm: true }`. An empty body 422s. The handler currently rejects the operation (use regenerate).
+- Clear is `POST /organizations/webhook-token/clear` with `{ confirm: true }`; the handler always rejects it (use regenerate). `organizations.clearWebhookToken()` is deprecated and throws `UnsupportedOperationError` without a network call (1.3.0, SDKNP-26).
 - Schedule trigger is `POST /schedules/{id}/trigger` → `{ job_id, triggered_at }`, not `{ job_id, scheduled_at }`.
 - Job list/DLQ summaries send `attempt` and `max_retries`, not `retry_count`. Detail `GET /jobs/{id}` still uses `retry_count`.
 - `GET /jobs` summaries include `job_type` from `payload.job_type`. `JobSummary.jobType` maps that field; `jobs.get` and `jobs.retry` copy it from `payload` when the top-level field is absent. List/DLQ summaries also send `last_error`.
+- The API does not return a workflow job's creation-time `key` (jobs store only `workflow_step`). `WorkflowJob.key` / `WorkflowJobStatus.key` are optional and undefined; the key to job ID mapping is only in the `workflows.create()` response (1.3.0, SDKNP-18).
+- `DELETE /queues/{name}?delete_jobs=true` is `queues.delete(name, { deleteJobs: true })`; required for queues with no stored config or with pending/processing jobs (1.3.0, SDKNP-09).
+- HTTP 400 and 422 both map to `ValidationError` (`statusCode` keeps which). A 429 `QUOTA_EXCEEDED` is `RateLimitError.isQuota`: never retried, never counted by the circuit breaker (1.3.0, SDKNP-14/06).
+- gRPC: `lease_id` is required by the server on Complete/Fail/RenewLease (typed required here). Proto3 `retry` defaults to false on the wire, so Node defaults `fail.retry` to `true` (unary and ProcessJobs) (1.3.0, SDKNP-17).
+- `POST /jobs/{id}/fail` accepts 1-2048 characters of `error`; the SDK coerces (empty -> "Job failed", longer -> truncated by code point).
+- Realtime SSE event names: the wire frame is `job.status` but the SDK dispatches `job.status_changed` (SDKNP-31, not changed).

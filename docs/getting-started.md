@@ -198,7 +198,9 @@ try {
     /* ... */
   });
 } catch (error) {
-  if (error instanceof RateLimitError && error.code === "QUOTA_EXCEEDED") {
+  // error.isQuota is true for code "QUOTA_EXCEEDED": a plan limit that the SDK
+  // does not retry (and that does not trip the circuit breaker).
+  if (error instanceof RateLimitError && error.isQuota) {
     console.log(`Plan quota exceeded: ${error.message}`);
     console.log(`Request ID: ${error.requestId ?? "not provided"}`);
     // Only server metadata nested under `details` is preserved here.

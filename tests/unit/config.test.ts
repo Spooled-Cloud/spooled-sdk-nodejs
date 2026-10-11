@@ -81,6 +81,11 @@ describe("Config", () => {
       );
     });
 
+    it("accepts an admin key alone (admin-only client)", () => {
+      const config = resolveConfig({ adminKey: "sk_admin_secret" });
+      expect(() => validateConfig(config)).not.toThrow();
+    });
+
     it("should throw for invalid API key format", () => {
       const config = resolveConfig({
         apiKey: "invalid_key",

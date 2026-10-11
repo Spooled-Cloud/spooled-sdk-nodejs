@@ -5,6 +5,98 @@ All notable changes to the Spooled Node.js SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-10-10
+
+A reliability pass on the worker and the HTTP layer, from the 2026-10-10 deep
+bug hunt (findings SDKNP-01 to SDKNP-28). It changes shutdown, ack and timeout
+behaviour, hence the minor bump.
+
+### Changed (behaviour)
+
+- **`worker.stop()` drains.** It stops claiming, then lets running handlers
+  finish for up to `shutdownTimeout`. A handler that returns is completed and
+  one that throws is failed, even though a stop was requested meanwhile; before,
+  every in-flight result was dropped and the deregister re-queued the job, so it
+  ran twice. `ctx.signal` is no longer aborted merely because a stop was
+  requested: it is aborted only for handlers still running when
+  `shutdownTimeout` ends, and those are failed with "Worker shutdown timeout".
+  The worker heartbeat keeps running while it drains, a claim already on the
+  wire is drained too, and the worker deregisters last. (SDKNP-01)
+- **`timeoutSeconds` is enforced.** A handler that runs longer than the job's
+  `timeoutSeconds` is aborted, the worker emits `job:timeout` (declared but never
+  emitted before) and fails the job with "Job timeout exceeded" instead of
+  extending its lease forever. (SDKNP-16)
+- **Acks are retried.** `jobs.complete`, `jobs.fail`, `jobs.heartbeat` and
+  `workers.heartbeat` now retry network errors, timeouts, 5xx and 408 within the
+  configured retry budget; the server answers a replay with 409, so it is safe.
+  An ack that still fails after the retries emits the worker `error` event.
+  `jobs.create` with an `idempotencyKey` is retried the same way. (SDKNP-05,
+  SDKNP-22)
+- **Failure text is always accepted.** `jobs.fail` (and so the worker) sends
+  "Job failed" for empty text and truncates text over 2048 characters (by
+  character, never mid-surrogate); the API rejects both with a 400 that left the
+  job processing until its lease expired.
+- **Plan quotas are not retried.** A 429 with code `QUOTA_EXCEEDED` (or the
+  older plain-text "... limit reached" without `Retry-After`) is a quota:
+  `RateLimitError.isQuota` is `true`, it is never retried and no longer counts
+  toward the circuit breaker, so an enqueue over the daily cap can no longer
+  block every other call on the client. (SDKNP-06)
+- **gRPC `fail` retries by default.** `retry` now defaults to `true` (unary
+  `fail` and `ProcessJobs`); omitting it sent proto3 `false`, which dead-lettered
+  the job on its first failure whatever `maxRetries` said. Pass `retry: false`
+  to dead-letter on purpose. (SDKNP-17)
+- Realtime SSE: a stream the server ends after a terminal job status (or an
+  `error` frame) is no longer reconnected, so the terminal event is no longer
+  replayed forever. A connection must stay up for 30 s before it refills the
+  reconnect budget, so `maxReconnectAttempts` is reachable; a new token is minted
+  only after a 401/403, not on every retry. (SDKNP-15, SDKNP-23)
+
+### Fixed
+
+- `client.realtime()` no longer replaces the REST bearer. The realtime JWT used
+  to be installed as the HTTP client's token, so an API-key client started
+  failing every REST call with 401 once that JWT expired (24 h). The realtime
+  layer keeps its own cached JWT and re-mints it near expiry. (SDKNP-02)
+- Concurrent 401s with a refresh token all recover through one shared refresh;
+  before, only one request did and the rest threw `AuthenticationError`.
+  (SDKNP-07)
+- `queues.pause(name)` without a reason no longer sends `Content-Type:
+application/json` with an empty body (the API answered 400). Requests without
+  a body now send no `Content-Type`. (SDKNP-08)
+- HTTP 422 is mapped to `ValidationError` (its `statusCode` stays 422). (SDKNP-14)
+- `queues.delete(name, { deleteJobs: true })` sends `delete_jobs=true`, which the
+  API requires for a queue without a stored config or with pending jobs. (SDKNP-09)
+- `workflows.jobs.list/get/getStatus` no longer fabricate `key: ""`. The API does
+  not return a job's key, so `key` is now optional and `undefined`; take the
+  key to job ID mapping from `workflows.create()`. (SDKNP-18)
+- gRPC `leaseId` is required in `GrpcCompleteRequest`, `GrpcFailRequest` and
+  `GrpcRenewLeaseRequest` (the server rejects a settlement without it).
+  (SDKNP-17)
+- A clean `worker.stop()` leaves no 30 s timer holding the process open, the
+  `stopped` event carries the real `workerId`, and a failed `autoStart` is an
+  `error` event instead of an unhandled rejection. (SDKNP-19, SDKNP-20, SDKNP-21)
+- gRPC TLS detection treats `[::1]:port` and `::1` as local. (SDKNP-24)
+- Admin-only clients (`new SpooledClient({ adminKey })`) can be constructed.
+  (SDKNP-28)
+- `CreateJobParams.completionWebhookSecret` is supported. (SDKNP-25)
+- README: the organization usage example matches the real response shape.
+  (SDKNP-27)
+
+### Deprecated
+
+- `ingest.github()`, `ingest.stripe()` and `organizations.clearWebhookToken()`
+  call routes the API removed or always rejects. They now throw the new
+  `UnsupportedOperationError` (code `UNSUPPORTED_OPERATION`) without a network
+  call, with a message that names the replacement (`ingest.custom`,
+  `organizations.regenerateWebhookToken`). They are marked `@deprecated` and
+  will be removed in the next major release. (SDKNP-10, SDKNP-26)
+
+### Added
+
+- `UnsupportedOperationError`, `RateLimitError.isQuota`, `DeleteQueueOptions`,
+  `CreateJobParams.completionWebhookSecret`, and the `idempotent` /
+  `skipAuthRefresh` options on `HttpClient` requests.
+
 ## [1.2.1] - 2026-09-26
 
 ### Fixed

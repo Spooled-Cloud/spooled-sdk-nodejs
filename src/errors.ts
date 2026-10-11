@@ -60,9 +60,15 @@ export class SpooledError extends Error {
     }
   }
 
-  /** Whether this error is retryable */
+  /**
+   * Whether this error is retryable.
+   *
+   * Only 408 (Request Timeout) is retryable among the plain 4xx statuses: the
+   * server gave up waiting for the request, so it never ran. Subclasses
+   * override this (5xx, network, timeout, rate limit).
+   */
   isRetryable(): boolean {
-    return false;
+    return this.statusCode === 408;
   }
 
   /** Convert to plain object for logging */
@@ -143,8 +149,12 @@ export class ConflictError extends SpooledError {
 }
 
 /**
- * Validation error (400)
- * Thrown when request validation fails
+ * Validation error (400 or 422)
+ * Thrown when request validation fails.
+ *
+ * The API answers a field-rule failure (length, range) with 400 but a missing
+ * or mistyped JSON field with 422; both are the caller's request being invalid,
+ * so both surface as this class. `statusCode` tells them apart.
  */
 export class ValidationError extends SpooledError {
   constructor(
@@ -152,8 +162,9 @@ export class ValidationError extends SpooledError {
     code: string = "VALIDATION_ERROR",
     details?: Record<string, unknown>,
     requestId?: string,
+    statusCode: 400 | 422 = 400,
   ) {
-    super(message, 400, code, details, requestId);
+    super(message, statusCode, code, details, requestId);
     this.name = "ValidationError";
   }
 }
@@ -174,9 +185,12 @@ export class PayloadTooLargeError extends SpooledError {
   }
 }
 
+/** Plan-limit wording the API uses ("Daily job limit reached", "queues limit reached (5/5)"). */
+const QUOTA_MESSAGE = /\blimit reached\b/i;
+
 /**
  * Rate limit error (429)
- * Thrown when rate limit is exceeded
+ * Thrown when rate limit is exceeded, or a plan quota is (see `isQuota`)
  */
 export class RateLimitError extends SpooledError {
   /** Rate limit information */
@@ -194,8 +208,31 @@ export class RateLimitError extends SpooledError {
     this.rateLimitInfo = rateLimitInfo;
   }
 
+  /**
+   * True when this 429 is a plan quota or limit (daily job cap, active jobs,
+   * queue/worker/webhook caps) rather than per-second rate limiting.
+   *
+   * A quota does not clear for minutes or hours, so retrying it only blocks the
+   * caller for the whole backoff and, via the circuit breaker, takes every
+   * other call on the client down with it. It is never retried and never
+   * counted as a circuit breaker failure.
+   *
+   * Detection: the `QUOTA_EXCEEDED` code, or, for older plan-limit paths that
+   * answer with plain text wrapped as `RATE_LIMIT_EXCEEDED`, a "... limit
+   * reached" message that carries no `Retry-After`.
+   */
+  get isQuota(): boolean {
+    if (this.code === "QUOTA_EXCEEDED") {
+      return true;
+    }
+    return (
+      this.rateLimitInfo.retryAfter === undefined &&
+      QUOTA_MESSAGE.test(this.message)
+    );
+  }
+
   override isRetryable(): boolean {
-    return true;
+    return !this.isQuota;
   }
 
   /** Get the number of seconds to wait before retrying */
@@ -286,6 +323,28 @@ export class CircuitBreakerOpenError extends SpooledError {
 
   override isRetryable(): boolean {
     return false; // Should wait for circuit to close
+  }
+}
+
+/**
+ * Unsupported operation error
+ * Thrown by SDK methods whose route the Spooled API does not provide (or
+ * always rejects). It is raised before any network call, so code that still
+ * calls such a method fails loudly with an explanation instead of a 404.
+ */
+export class UnsupportedOperationError extends SpooledError {
+  /** The SDK method that is not supported, e.g. `ingest.github` */
+  readonly operation: string;
+
+  constructor(operation: string, reason: string) {
+    super(
+      `${operation} is not supported by the Spooled API: ${reason}`,
+      0,
+      "UNSUPPORTED_OPERATION",
+      { operation },
+    );
+    this.name = "UnsupportedOperationError";
+    this.operation = operation;
   }
 }
 
@@ -407,6 +466,11 @@ export async function createErrorFromResponse(
   switch (response.status) {
     case 400:
       return new ValidationError(message, code, details, requestId);
+
+    // A missing or mistyped JSON field is a 422 from the API's extractor; it is
+    // the same class of caller error as a 400 field-rule failure.
+    case 422:
+      return new ValidationError(message, code, details, requestId, 422);
 
     case 401:
       return new AuthenticationError(message, code, details, requestId);

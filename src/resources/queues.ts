@@ -12,6 +12,7 @@ import type {
   UpdateQueueConfigParams,
   PauseQueueResponse,
   ResumeQueueResponse,
+  DeleteQueueOptions,
 } from "../types/queues.js";
 
 export class QueuesResource {
@@ -74,8 +75,16 @@ export class QueuesResource {
 
   /**
    * Delete a queue configuration
+   *
+   * Without `deleteJobs` the API only deletes an explicit queue config of an
+   * idle queue, and answers 409 otherwise: a queue that exists only because
+   * jobs were posted to it has no config to delete, and a queue with pending
+   * or processing jobs is not idle. Pass `{ deleteJobs: true }` to delete the
+   * queue's jobs (and DLQ rows) along with it.
    */
-  async delete(name: string): Promise<void> {
-    await this.http.delete(`/queues/${encodeURIComponent(name)}`);
+  async delete(name: string, options?: DeleteQueueOptions): Promise<void> {
+    await this.http.delete(`/queues/${encodeURIComponent(name)}`, {
+      params: options?.deleteJobs ? { deleteJobs: true } : undefined,
+    });
   }
 }

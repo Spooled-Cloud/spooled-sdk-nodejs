@@ -68,6 +68,29 @@ describe("JobsResource", () => {
       expect(receivedBody.timeout_seconds).toBe(300);
       expect(receivedBody.tags).toEqual({ env: "test" });
     });
+
+    it("sends completionWebhookSecret as completion_webhook_secret (SDKNP-25)", async () => {
+      let receivedBody: any;
+      server.use(
+        http.post(
+          "https://api.spooled.cloud/api/v1/jobs",
+          async ({ request }) => {
+            receivedBody = await request.json();
+            return HttpResponse.json({ id: "job_123", created: true });
+          },
+        ),
+      );
+
+      await createClient().jobs.create({
+        queueName: "my-queue",
+        payload: {},
+        completionWebhook: "https://example.com/hook",
+        completionWebhookSecret: "whsec_1",
+      });
+
+      expect(receivedBody.completion_webhook).toBe("https://example.com/hook");
+      expect(receivedBody.completion_webhook_secret).toBe("whsec_1");
+    });
   });
 
   describe("get", () => {

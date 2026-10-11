@@ -223,7 +223,9 @@ console.log("Workflow status:", status.status);
 
 console.log("Jobs:");
 for (const job of jobs) {
-  console.log(`  ${job.key}: ${job.status}`);
+  // The API does not return a job's creation-time `key`; use the job ID, or
+  // map keys to IDs from the `jobIds` that workflows.create() returned.
+  console.log(`  ${job.id}: ${job.status}`);
 }
 ```
 

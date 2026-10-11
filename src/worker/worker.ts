@@ -8,6 +8,7 @@ import type { SpooledClient } from "../client.js";
 import { SDK_VERSION } from "../config.js";
 import type { JsonValue } from "../types/common.js";
 import type { ClaimedJob } from "../types/jobs.js";
+import { coerceFailureMessage } from "../utils/failure.js";
 import type {
   SpooledWorkerOptions,
   WorkerState,
@@ -31,6 +32,21 @@ const DEFAULT_OPTIONS = {
 
 /** Event handler type */
 type EventHandler<E extends WorkerEvent> = (data: WorkerEventData[E]) => void;
+
+/** Failure text sent when a handler outlives the job's `timeoutSeconds`. */
+const JOB_TIMEOUT_MESSAGE = "Job timeout exceeded";
+
+/** Failure text sent for a handler still running when the shutdown grace ends. */
+const SHUTDOWN_TIMEOUT_MESSAGE = "Worker shutdown timeout";
+
+/** Longest delay `setTimeout` accepts (a larger one fires immediately). */
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
+/** How a handler run ended. Decided once per execution. */
+type HandlerOutcome =
+  | { kind: "returned"; value: JsonValue | void }
+  | { kind: "threw"; error: unknown }
+  | { kind: "timeout" };
 
 /**
  * Spooled Worker
@@ -72,6 +88,10 @@ export class SpooledWorker {
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private workerHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private shutdownPromise: Promise<void> | null = null;
+  /** The claim request currently on the wire, so a stop can wait for its jobs. */
+  private pollInFlight: Promise<void> | null = null;
+  /** Wakes the shutdown drain when the last active job has been acked. */
+  private drainWaiter: (() => void) | null = null;
 
   // Event handlers
   private eventHandlers: Map<WorkerEvent, Set<EventHandler<WorkerEvent>>> =
@@ -94,8 +114,14 @@ export class SpooledWorker {
     this.debug = config.debug ?? (() => {});
 
     if (this.options.autoStart) {
-      // Defer to next tick to allow process() to be called
-      setImmediate(() => this.start());
+      // Defer to next tick to allow process() to be called. start() already
+      // reports a failed registration through the "error" event; the catch only
+      // keeps it from becoming an unhandled rejection that crashes the process.
+      setImmediate(() => {
+        this.start().catch((error) => {
+          this.debug("Auto-start failed", error);
+        });
+      });
     }
   }
 
@@ -181,7 +207,15 @@ export class SpooledWorker {
   }
 
   /**
-   * Stop the worker gracefully
+   * Stop the worker gracefully.
+   *
+   * Drains: the worker stops claiming, then lets running handlers finish for
+   * up to `shutdownTimeout`. A handler that returns completes its job and one
+   * that throws fails it, even though a stop was requested meanwhile; its
+   * `signal` is NOT aborted during the grace period. Only handlers still
+   * running when the timeout ends are aborted and failed with "Worker shutdown
+   * timeout". The worker deregisters last, because deregistering returns every
+   * job the worker still holds to the queue.
    */
   async stop(): Promise<void> {
     if (this.state !== "running") {
@@ -198,6 +232,7 @@ export class SpooledWorker {
   }
 
   private async doStop(): Promise<void> {
+    const deadline = Date.now() + this.options.shutdownTimeout;
     this.state = "stopping";
     this.debug("Stopping worker...");
 
@@ -207,46 +242,48 @@ export class SpooledWorker {
       this.pollTimer = null;
     }
 
+    // A claim already on the wire still returns jobs this worker now holds
+    // leases for. Let it land first so they join the drain below instead of
+    // starting after the worker has deregistered.
+    if (this.pollInFlight) {
+      await this.pollInFlight;
+    }
+
+    // Drain: the worker heartbeat and every job heartbeat keep running while
+    // handlers finish, so neither the worker nor a lease expires mid-drain.
+    if (this.activeJobs.size > 0) {
+      this.debug(
+        `Waiting for ${this.activeJobs.size} active jobs to complete...`,
+      );
+
+      await this.waitForDrain(Math.max(0, deadline - Date.now()));
+
+      // Whatever is still running outlived the grace period: abort and fail it.
+      // A job whose handler returned just before the deadline is already
+      // settled (its ack is in flight) and is awaited below, not failed.
+      const stragglers = Array.from(this.activeJobs.values()).filter(
+        (active) => !active.settled,
+      );
+      await Promise.all(stragglers.map((active) => this.abandonJob(active)));
+
+      // Acks already on the wire must land before the worker deregisters,
+      // otherwise deregistering re-queues a job that was just finished.
+      await Promise.all(
+        Array.from(this.activeJobs.values()).map((active) => active.ack),
+      );
+    }
+
     // Stop worker heartbeat
     if (this.workerHeartbeatTimer) {
       clearInterval(this.workerHeartbeatTimer);
       this.workerHeartbeatTimer = null;
     }
 
-    // Signal all active jobs to stop
-    for (const active of this.activeJobs.values()) {
-      active.abortController.abort();
-    }
-
-    // Wait for active jobs to complete (with timeout)
-    if (this.activeJobs.size > 0) {
-      this.debug(
-        `Waiting for ${this.activeJobs.size} active jobs to complete...`,
-      );
-
-      await Promise.race([
-        this.waitForActiveJobs(),
-        this.sleep(this.options.shutdownTimeout),
-      ]);
-
-      // Force-fail any remaining jobs. Snapshot the entries first because
-      // cleanupJob() mutates the activeJobs map as we go.
-      const remaining = Array.from(this.activeJobs.values());
-      for (const active of remaining) {
-        this.debug(
-          `Force-failing job ${active.job.id} due to shutdown timeout`,
-        );
-        await this.failJob(active.job, "Worker shutdown timeout");
-        // The handler's finally may never run if user code ignores the abort
-        // signal, so explicitly clear this exact execution's timer.
-        this.cleanupJob(active);
-      }
-    }
-
     // Deregister worker
-    if (this.workerId) {
+    const workerId = this.workerId;
+    if (workerId) {
       try {
-        await this.client.workers.deregister(this.workerId);
+        await this.client.workers.deregister(workerId);
         this.debug("Worker deregistered");
       } catch (error) {
         this.debug("Failed to deregister worker", error);
@@ -255,7 +292,7 @@ export class SpooledWorker {
 
     this.state = "stopped";
     this.workerId = null;
-    this.emit("stopped", { workerId: this.workerId ?? "", reason: "graceful" });
+    this.emit("stopped", { workerId: workerId ?? "", reason: "graceful" });
     this.shutdownPromise = null;
   }
 
@@ -303,7 +340,17 @@ export class SpooledWorker {
       return;
     }
 
-    this.pollTimer = setTimeout(() => this.poll(), this.options.pollInterval);
+    this.pollTimer = setTimeout(() => {
+      this.pollTimer = null;
+      const run = this.poll();
+      this.pollInFlight = run;
+      const done = () => {
+        if (this.pollInFlight === run) {
+          this.pollInFlight = null;
+        }
+      };
+      run.then(done, done);
+    }, this.options.pollInterval);
   }
 
   private async poll(): Promise<void> {
@@ -349,6 +396,7 @@ export class SpooledWorker {
       job,
       startedAt: new Date(),
       abortController,
+      settled: false,
     };
 
     this.activeJobs.set(activeJob.executionId, activeJob);
@@ -387,29 +435,94 @@ export class SpooledWorker {
     };
 
     try {
-      const result = await this.handler!(context);
+      const outcome = await this.runHandler(activeJob, context);
 
-      // Check if aborted
-      if (signal.aborted) {
-        this.debug(`Job ${job.id} was aborted`);
+      // The shutdown drain already failed this job while its handler was still
+      // running; the lease is gone, so a late result must not be sent.
+      if (activeJob.settled) {
+        this.debug(`Job ${job.id} was already settled; dropping late result`);
         return;
       }
+      activeJob.settled = true;
 
-      // Complete the job
-      await this.completeJob(job, result ?? undefined);
-    } catch (error) {
-      // Check if aborted
-      if (signal.aborted) {
-        this.debug(`Job ${job.id} was aborted`);
-        return;
+      // The abort signal is only a hint to the handler. Whatever the handler
+      // did decides the ack: a result that arrives after a stop was requested
+      // is still sent, never silently dropped.
+      switch (outcome.kind) {
+        case "returned":
+          activeJob.ack = this.completeJob(job, outcome.value ?? undefined);
+          break;
+        case "threw":
+          activeJob.ack = this.failJob(
+            job,
+            outcome.error instanceof Error
+              ? outcome.error.message
+              : String(outcome.error),
+          );
+          break;
+        case "timeout":
+          // Stop the handler if it listens, then fail the job: extending the
+          // lease of a hung handler forever would keep the job and its
+          // concurrency slot stuck.
+          abortController.abort(new Error(JOB_TIMEOUT_MESSAGE));
+          this.emit("job:timeout", {
+            jobId: job.id,
+            queueName: job.queueName,
+          });
+          activeJob.ack = this.failJob(job, JOB_TIMEOUT_MESSAGE);
+          break;
       }
-
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      await this.failJob(job, errorMessage);
+      await activeJob.ack;
     } finally {
       this.cleanupJob(activeJob);
     }
+  }
+
+  /**
+   * Run the handler, racing it against the job's `timeoutSeconds`.
+   * Never rejects: a throw (sync or async) is reported as an outcome.
+   */
+  private runHandler(
+    activeJob: ActiveJob,
+    context: JobContext,
+  ): Promise<HandlerOutcome> {
+    const run = (async (): Promise<HandlerOutcome> => {
+      try {
+        return { kind: "returned", value: await this.handler!(context) };
+      } catch (error) {
+        return { kind: "threw", error };
+      }
+    })();
+
+    const { timeoutSeconds } = activeJob.job;
+    if (typeof timeoutSeconds !== "number" || !(timeoutSeconds > 0)) {
+      return run;
+    }
+
+    return new Promise<HandlerOutcome>((resolve) => {
+      activeJob.timeoutTimer = setTimeout(
+        () => resolve({ kind: "timeout" }),
+        Math.min(timeoutSeconds * 1000, MAX_TIMER_MS),
+      );
+      run.then((outcome) => {
+        this.clearTimeoutTimer(activeJob);
+        resolve(outcome);
+      });
+    });
+  }
+
+  /** Abort a handler that outlived the shutdown grace period and fail its job. */
+  private async abandonJob(activeJob: ActiveJob): Promise<void> {
+    this.debug(`Force-failing job ${activeJob.job.id} due to shutdown timeout`);
+    // Mark first: the handler may react to the abort, or finish later, and its
+    // outcome must not be acked on top of this failure.
+    activeJob.settled = true;
+    activeJob.abortController.abort(new Error(SHUTDOWN_TIMEOUT_MESSAGE));
+    activeJob.ack = this.failJob(activeJob.job, SHUTDOWN_TIMEOUT_MESSAGE);
+    await activeJob.ack;
+    // The handler's finally may never run if user code ignores the abort
+    // signal, so explicitly clear this exact execution's timers.
+    this.cleanupJob(activeJob);
   }
 
   private async completeJob(
@@ -431,7 +544,10 @@ export class SpooledWorker {
         result,
       });
     } catch (error) {
+      // The ack was already retried by the HTTP layer; what is left is a job
+      // that finished but could not be reported.
       this.debug(`Failed to complete job ${job.id}`, error);
+      this.emit("error", { error: error as Error });
     }
   }
 
@@ -439,22 +555,33 @@ export class SpooledWorker {
     if (!this.workerId) return;
 
     const willRetry = job.retryCount < job.maxRetries;
+    // The API rejects empty or over-long failure text with a 400, which would
+    // leave the job processing until its lease expired.
+    const message = coerceFailureMessage(errorMessage);
 
     try {
       await this.client.jobs.fail(job.id, {
         workerId: this.workerId,
-        error: errorMessage,
+        error: message,
         ...(job.leaseId != null && { leaseId: job.leaseId }),
       });
 
       this.emit("job:failed", {
         jobId: job.id,
         queueName: job.queueName,
-        error: errorMessage,
+        error: message,
         willRetry,
       });
     } catch (error) {
       this.debug(`Failed to fail job ${job.id}`, error);
+      this.emit("error", { error: error as Error });
+    }
+  }
+
+  private clearTimeoutTimer(activeJob: ActiveJob): void {
+    if (activeJob.timeoutTimer) {
+      clearTimeout(activeJob.timeoutTimer);
+      activeJob.timeoutTimer = undefined;
     }
   }
 
@@ -463,9 +590,13 @@ export class SpooledWorker {
       clearInterval(activeJob.heartbeatTimer);
       activeJob.heartbeatTimer = undefined;
     }
+    this.clearTimeoutTimer(activeJob);
 
     if (this.activeJobs.get(activeJob.executionId) === activeJob) {
       this.activeJobs.delete(activeJob.executionId);
+      if (this.activeJobs.size === 0) {
+        this.drainWaiter?.();
+      }
     }
   }
 
@@ -486,7 +617,14 @@ export class SpooledWorker {
   }
 
   private async sendWorkerHeartbeat(): Promise<void> {
-    if (!this.workerId || this.state !== "running") return;
+    // Keep beating through the shutdown drain: a long `shutdownTimeout` would
+    // otherwise let the stale-worker reaper take the worker (and its jobs).
+    if (
+      !this.workerId ||
+      (this.state !== "running" && this.state !== "stopping")
+    ) {
+      return;
+    }
 
     try {
       await this.client.workers.heartbeat(this.workerId, {
@@ -498,13 +636,24 @@ export class SpooledWorker {
     }
   }
 
-  private async waitForActiveJobs(): Promise<void> {
-    while (this.activeJobs.size > 0) {
-      await this.sleep(100);
+  /**
+   * Resolve once no job is active, or after `timeoutMs`. The timer is always
+   * cleared, so a clean stop leaves nothing that keeps the process alive.
+   */
+  private waitForDrain(timeoutMs: number): Promise<void> {
+    if (this.activeJobs.size === 0) {
+      return Promise.resolve();
     }
-  }
-
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        this.drainWaiter = null;
+        resolve();
+      }, timeoutMs);
+      this.drainWaiter = () => {
+        clearTimeout(timer);
+        this.drainWaiter = null;
+        resolve();
+      };
+    });
   }
 }

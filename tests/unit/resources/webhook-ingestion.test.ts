@@ -5,8 +5,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
-import { createHmac } from "node:crypto";
 import { SpooledClient } from "../../../src/client.js";
+import { UnsupportedOperationError } from "../../../src/errors.js";
 
 const server = setupServer();
 
@@ -22,44 +22,44 @@ afterEach(() => {
 describe("WebhookIngestionResource", () => {
   const createClient = () => new SpooledClient({ apiKey: "sk_test_123" });
 
-  it("should send raw body and computed GitHub signature", async () => {
-    const orgId = "org_123";
-    const secret = "github_secret";
-    const payload = JSON.stringify({
-      action: "opened",
-      pull_request: { id: 1 },
-    });
+  it.each([
+    [
+      "github",
+      (client: SpooledClient) =>
+        client.ingest.github("org_123", "{}", {
+          githubEvent: "push",
+          secret: "s",
+        }),
+    ],
+    [
+      "stripe",
+      (client: SpooledClient) =>
+        client.ingest.stripe("org_123", "{}", { secret: "s" }),
+    ],
+  ])(
+    "%s throws UnsupportedOperationError without a network call (the API has no such route)",
+    async (name, call) => {
+      let requests = 0;
+      server.use(
+        http.post(
+          `https://api.spooled.cloud/api/v1/webhooks/org_123/${name}`,
+          () => {
+            requests++;
+            return new HttpResponse(null, { status: 404 });
+          },
+        ),
+      );
 
-    let receivedBody = "";
-    let signatureHeader: string | null = null;
-    let eventHeader: string | null = null;
-
-    server.use(
-      http.post(
-        `https://api.spooled.cloud/api/v1/webhooks/${orgId}/github`,
-        async ({ request }) => {
-          receivedBody = await request.text();
-          signatureHeader = request.headers.get("X-Hub-Signature-256");
-          eventHeader = request.headers.get("X-GitHub-Event");
-          return new HttpResponse(null, { status: 200 });
-        },
-      ),
-    );
-
-    const expectedHex = createHmac("sha256", secret)
-      .update(payload, "utf8")
-      .digest("hex");
-
-    const client = createClient();
-    await client.ingest.github(orgId, payload, {
-      githubEvent: "pull_request",
-      secret,
-    });
-
-    expect(receivedBody).toBe(payload);
-    expect(eventHeader).toBe("pull_request");
-    expect(signatureHeader).toBe(`sha256=${expectedHex}`);
-  });
+      const result = call(createClient());
+      await expect(result).rejects.toBeInstanceOf(UnsupportedOperationError);
+      await expect(result).rejects.toMatchObject({
+        code: "UNSUPPORTED_OPERATION",
+        operation: `ingest.${name}`,
+      });
+      await expect(result).rejects.toThrow(/ingest\.custom/);
+      expect(requests).toBe(0);
+    },
+  );
 
   it("should send custom webhook JSON with case conversion and preserve payload", async () => {
     const orgId = "org_123";

@@ -203,6 +203,17 @@ await client.queues.pause("my-queue", "Maintenance window");
 await client.queues.resume("my-queue");
 ```
 
+### Delete Queue
+
+```typescript
+// Config only; the API answers 409 for a queue with pending/processing jobs
+// or one that has no stored config (it exists only because jobs were posted).
+await client.queues.delete("my-queue");
+
+// Also delete the queue's jobs and dead-letter rows
+await client.queues.delete("my-queue", { deleteJobs: true });
+```
+
 ---
 
 ## Schedules
@@ -291,7 +302,9 @@ const workflow = await client.workflows.create({
 const status = await client.workflows.get("workflow_id");
 const jobs = await client.workflows.jobs.list("workflow_id");
 // status: { id, name, status, ... }
-// jobs: [{ id, workflowId, key, status, ... }]
+// jobs: [{ id, workflowId, status, ... }]
+// The API does not return the `key` a job was created with, so `key` is
+// undefined; map keys to job IDs from `workflows.create()` (`jobIds`).
 ```
 
 ### Cancel Workflow
@@ -612,9 +625,8 @@ await client.auth.logout();
 const result = await client.auth.startEmailLogin("user@example.com");
 // { message, emailSentTo }
 
-const { exists, available, signupEnabled } = await client.auth.checkEmail(
-  "user@example.com",
-);
+const { exists, available, signupEnabled } =
+  await client.auth.checkEmail("user@example.com");
 ```
 
 ---
@@ -657,7 +669,8 @@ const metrics = await client.metrics.get();
 
 ## Admin API
 
-Requires `adminKey` in client config.
+Requires `adminKey` in client config. A client built with only `adminKey`
+(`new SpooledClient({ adminKey })`) is enough for `client.admin.*`.
 
 ### List Organizations
 
@@ -702,7 +715,11 @@ const { id, key } = await client.admin.createApiKey({
 
 ## Webhook Ingestion
 
-For receiving webhooks from external services. These are signature-based, not API-key-based.
+For receiving webhooks from external services. These are authenticated by the organization webhook token, not an API key.
+
+`ingest.github()` and `ingest.stripe()` are deprecated: the API has no GitHub or
+Stripe webhook route, so they throw `UnsupportedOperationError` without a
+network call. Point those providers at the custom endpoint instead.
 
 ### Custom Webhook
 
