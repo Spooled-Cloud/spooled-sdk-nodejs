@@ -5,9 +5,11 @@
  * Safe defaults:
  * - Uses Spooled Cloud endpoints
  * - Skips stress/load tests unless --full is provided (to avoid noisy prod runs)
+ * - Skips unauthenticated organization sign-up and email login start unless
+ *   RUN_UNSAFE=1 is set
  *
  * Usage:
- *   API_KEY=sk_live_... npx tsx scripts/test-production.ts
+ *   API_KEY=sp_live_... npx tsx scripts/test-production.ts
  *
  * Options:
  *   --full     Run stress/load tests too (NOT recommended for prod)
@@ -29,7 +31,7 @@ const apiKey = process.env.API_KEY;
 if (!apiKey) {
   console.error("❌ API_KEY is required");
   console.error(
-    "   Example: API_KEY=sk_live_... npx tsx scripts/test-production.ts",
+    "   Example: API_KEY=sp_live_... npx tsx scripts/test-production.ts",
   );
   process.exit(1);
 }
@@ -42,10 +44,13 @@ const skipGrpc = process.env.SKIP_GRPC ?? "0";
 // Default to skipping stress tests in production (can be overridden or --full)
 const skipStress = isFull ? "0" : (process.env.SKIP_STRESS ?? "1");
 
-// Run test-local.ts from the scripts directory
+// Run test-local.ts from the scripts directory. On Windows `npx` is a .cmd
+// shim, which Node only starts through a shell (spawn("npx") is ENOENT there);
+// the arguments are fixed strings, so the shell sees nothing from outside.
 const child = spawn("npx", ["tsx", "scripts/test-local.ts"], {
   stdio: "inherit",
   cwd: process.cwd().includes("scripts") ? ".." : ".",
+  shell: process.platform === "win32",
   env: {
     ...process.env,
     API_KEY: apiKey,
@@ -53,6 +58,7 @@ const child = spawn("npx", ["tsx", "scripts/test-local.ts"], {
     GRPC_ADDRESS: grpcAddress,
     SKIP_GRPC: skipGrpc,
     SKIP_STRESS: skipStress,
+    RUN_UNSAFE: process.env.RUN_UNSAFE ?? "0",
     VERBOSE: isVerbose ? "1" : (process.env.VERBOSE ?? "0"),
   },
 });

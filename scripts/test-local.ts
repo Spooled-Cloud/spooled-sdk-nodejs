@@ -17,13 +17,18 @@
  * - gRPC (enqueue, dequeue, complete, fail, streaming)
  *
  * Usage:
- *   API_KEY=sk_test_... BASE_URL=http://localhost:8080 npx tsx scripts/test-local.ts
+ *   API_KEY=sp_test_... BASE_URL=http://localhost:8080 npx tsx scripts/test-local.ts
  *
  * Options:
  *   GRPC_ADDRESS=localhost:50051  - gRPC server address (local/self-hosted)
  *   GRPC_ADDRESS=grpc.spooled.cloud:443 - Spooled Cloud gRPC endpoint (TLS)
  *   SKIP_GRPC=1                   - Skip gRPC tests
  *   SKIP_STRESS=1                 - Skip stress/load tests (recommended for production)
+ *   RUN_UNSAFE=1                  - Also run steps that are unsafe on a shared server:
+ *                                   unauthenticated organization sign-up and email login
+ *                                   start (default: on for a localhost BASE_URL only)
+ *   METRICS_TOKEN=...             - Bearer token for GET /metrics (without it a
+ *                                   protected /metrics must answer 401)
  *   VERBOSE=1                     - Enable debug logging
  *   WEBHOOK_PORT=3001             - Custom webhook server port
  */
@@ -39,6 +44,8 @@ import {
   SpooledWorker,
   SpooledGrpcClient,
   UnsupportedOperationError,
+  NotFoundError,
+  ValidationError,
   isSpooledError,
 } from "../src/index.js";
 
@@ -60,13 +67,35 @@ const SKIP_STRESS =
 // Auto-detect TLS for gRPC: use TLS for production (port 443 or grpc.spooled domain)
 const GRPC_USE_TLS =
   GRPC_ADDRESS.includes(":443") || GRPC_ADDRESS.includes("grpc.spooled");
+// Steps that are unsafe against a shared or production server (they create
+// organizations without authentication or send email) run only when asked
+// for, or by default against a local backend.
+const IS_LOCAL_BASE_URL =
+  /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/i.test(BASE_URL);
+const RUN_UNSAFE =
+  process.env.RUN_UNSAFE === "1" ||
+  process.env.RUN_UNSAFE === "true" ||
+  (IS_LOCAL_BASE_URL &&
+    process.env.RUN_UNSAFE !== "0" &&
+    process.env.RUN_UNSAFE !== "false");
+const UNSAFE_SKIP_REASON =
+  "unsafe on a shared server; set RUN_UNSAFE=1 to run it";
+const METRICS_TOKEN = process.env.METRICS_TOKEN;
 
 if (!API_KEY) {
   console.error("❌ API_KEY environment variable is required");
   console.error(
-    "   Usage: API_KEY=sk_test_... BASE_URL=http://localhost:8080 npx tsx scripts/test-local.ts",
+    "   Usage: API_KEY=sp_test_... BASE_URL=http://localhost:8080 npx tsx scripts/test-local.ts",
   );
   process.exit(1);
+}
+
+/** The lease token of a claimed or dequeued job, which settlement requires. */
+function leaseOf(job: { leaseId?: string | null } | undefined): string {
+  if (!job?.leaseId) {
+    throw new Error("claimed job has no leaseId");
+  }
+  return job.leaseId;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -452,6 +481,7 @@ async function testJobLifecycle(client: SpooledClient): Promise<void> {
   const queueName = `${testPrefix}-jobs-lifecycle`;
   let jobId = "";
   let workerId = "";
+  let leaseId = "";
 
   await runTest("Create job for lifecycle test", async () => {
     const result = await client.jobs.create({
@@ -480,6 +510,7 @@ async function testJobLifecycle(client: SpooledClient): Promise<void> {
     });
     assertEqual(result.jobs.length, 1, "should claim 1 job");
     assertEqual(result.jobs[0].id, jobId, "should be our job");
+    leaseId = leaseOf(result.jobs[0]);
   });
 
   await runTest("Job status is processing after claim", async () => {
@@ -489,7 +520,11 @@ async function testJobLifecycle(client: SpooledClient): Promise<void> {
   });
 
   await runTest("POST /api/v1/jobs/{id}/heartbeat - Extend lease", async () => {
-    await client.jobs.heartbeat(jobId, { workerId, leaseDurationSecs: 60 });
+    await client.jobs.heartbeat(jobId, {
+      workerId,
+      leaseId,
+      leaseDurationSecs: 60,
+    });
     const job = await client.jobs.get(jobId);
     assertDefined(job.leaseExpiresAt, "lease should be extended");
   });
@@ -497,12 +532,48 @@ async function testJobLifecycle(client: SpooledClient): Promise<void> {
   await runTest("POST /api/v1/jobs/{id}/complete - Complete job", async () => {
     await client.jobs.complete(jobId, {
       workerId,
+      leaseId,
       result: { processed: true, timestamp: new Date().toISOString() },
     });
     const job = await client.jobs.get(jobId);
     assertEqual(job.status, "completed", "status");
     assertDefined(job.completedAt, "completed_at");
     assertDefined(job.result, "result");
+  });
+
+  await runTest(
+    "POST /api/v1/jobs/{id}/complete without lease_id is rejected",
+    async () => {
+      try {
+        await client.jobs.complete(jobId, { workerId });
+        throw new Error("Should have thrown");
+      } catch (error) {
+        assert(
+          error instanceof ValidationError,
+          `expected ValidationError (422), got: ${error}`,
+        );
+      }
+    },
+  );
+
+  await runTest("GET /api/v1/jobs/{id}/history - Job history", async () => {
+    const events = await client.jobs.history(jobId);
+    const types = events.map((e) => e.eventType);
+    assert(types.includes("processing"), `history: ${types.join(",")}`);
+    assert(types.includes("completed"), `history: ${types.join(",")}`);
+    const page = await client.jobs.historyPage(jobId, {
+      order: "desc",
+      limit: 1,
+    });
+    assertEqual(page.data.length, 1, "one event per page");
+    assertEqual(page.data[0].eventType, "completed", "newest first");
+    assertEqual(page.hasMore, true, "X-Has-More");
+  });
+
+  await runTest("Worker counters (jobsProcessed/jobsFailed)", async () => {
+    const worker = await client.workers.get(workerId);
+    assertEqual(worker.jobsProcessed, 1, "jobsProcessed");
+    assertEqual(worker.jobsFailed, 0, "jobsFailed");
   });
 
   await runTest("POST /api/v1/workers/{id}/deregister", async () => {
@@ -517,6 +588,7 @@ async function testJobFailureAndRetry(client: SpooledClient): Promise<void> {
   const queueName = `${testPrefix}-jobs-failure`;
   let jobId = "";
   let workerId = "";
+  let leaseId = "";
 
   await runTest("Create job for failure test", async () => {
     const result = await client.jobs.create({
@@ -534,12 +606,14 @@ async function testJobFailureAndRetry(client: SpooledClient): Promise<void> {
       maxConcurrency: 1,
     });
     workerId = reg.id;
-    await client.jobs.claim({ queueName, workerId, limit: 1 });
+    const claimed = await client.jobs.claim({ queueName, workerId, limit: 1 });
+    leaseId = leaseOf(claimed.jobs[0]);
   });
 
   await runTest("POST /api/v1/jobs/{id}/fail - Fail job", async () => {
     await client.jobs.fail(jobId, {
       workerId,
+      leaseId,
       error: "Intentional test failure",
     });
     const job = await client.jobs.get(jobId);
@@ -564,6 +638,138 @@ async function testJobFailureAndRetry(client: SpooledClient): Promise<void> {
     await client.jobs.cancel(jobId);
   } catch {
     /* ignore */
+  }
+}
+
+async function testApi0122Surface(client: SpooledClient): Promise<void> {
+  console.log(
+    "\n🆕 API 0.1.122 surface (filters, pages, webhooks, rate limits)",
+  );
+  console.log("─".repeat(60));
+
+  const queueName = `${testPrefix}-search`;
+  const jobType = `${testPrefix}-type`;
+  const startedAt = new Date(Date.now() - 60_000);
+  const jobIds: string[] = [];
+
+  await runTest("Create jobs for list filters", async () => {
+    for (let i = 0; i < 3; i++) {
+      const { id } = await client.jobs.create({
+        queueName,
+        payload: { job_type: i < 2 ? jobType : "other", i },
+      });
+      jobIds.push(id);
+    }
+  });
+
+  await runTest(
+    "GET /api/v1/jobs - job_type, q, status list, created_after",
+    async () => {
+      const byType = await client.jobs.list({ queueName, jobType });
+      assertEqual(byType.length, 2, "job_type matches 2 jobs");
+      const byQ = await client.jobs.list({ q: jobType });
+      assertEqual(byQ.length, 2, "q matches the job type");
+      const byStatus = await client.jobs.list({
+        queueName,
+        status: ["pending", "scheduled"],
+        createdAfter: startedAt,
+        createdBefore: new Date(Date.now() + 60_000),
+      });
+      assertEqual(byStatus.length, 3, "status list + created window");
+    },
+  );
+
+  await runTest("GET /api/v1/jobs - X-Has-More pages", async () => {
+    const first = await client.jobs.listPage({ queueName, limit: 2 });
+    assertEqual(first.data.length, 2, "first page");
+    assertEqual(first.hasMore, true, "more after the first page");
+    const last = await client.jobs.listPage({ queueName, limit: 2, offset: 2 });
+    assertEqual(last.data.length, 1, "last page");
+    assertEqual(last.hasMore, false, "no more after the last page");
+  });
+
+  await runTest(
+    "GET /api/v1/jobs - invalid created_after is a 400",
+    async () => {
+      try {
+        await client.jobs.list({ createdAfter: "yesterday" });
+        throw new Error("Should have thrown");
+      } catch (error) {
+        assert(
+          error instanceof ValidationError,
+          `expected ValidationError, got: ${error}`,
+        );
+      }
+    },
+  );
+
+  await runTest("GET /api/v1/jobs/dlq - filters and X-Has-More", async () => {
+    const page = await client.jobs.dlq.listPage({ jobType, limit: 1 });
+    assert(Array.isArray(page.data), "data is an array");
+    assertEqual(typeof page.hasMore, "boolean", "hasMore");
+  });
+
+  await runTest("Rate-limit headers on a successful response", async () => {
+    await client.jobs.getStats();
+    const info = client.getRateLimitInfo();
+    assertDefined(info, "X-RateLimit-* headers");
+    assertDefined(info?.limit, "limit");
+    assertDefined(info?.remaining, "remaining");
+    assert(
+      info?.scope === "organization" || info?.scope === "api_key",
+      `scope: ${info?.scope}`,
+    );
+    // Reset is Unix seconds: it must land near now, not in 1970.
+    const drift = Math.abs((info?.reset?.getTime() ?? 0) - Date.now());
+    assert(drift < 120_000, `reset ${info?.reset?.toISOString()} near now`);
+  });
+
+  await runTest("Outgoing webhook format and new events", async () => {
+    const webhook = await client.webhooks.create({
+      name: `${testPrefix}-chat`,
+      url: "https://example.com/spooled-sdk-test",
+      events: [
+        "job.deadlettered",
+        "job.retried",
+        "workflow.completed",
+        "workflow.failed",
+      ],
+      format: "slack",
+    });
+    try {
+      assertEqual(webhook.format, "slack", "format on create");
+      assertEqual(webhook.events.length, 4, "new events accepted");
+      const updated = await client.webhooks.update(webhook.id, {
+        format: "teams",
+      });
+      assertEqual(updated.format, "teams", "format on update");
+      const got = await client.webhooks.get(webhook.id);
+      assertEqual(got.format, "teams", "format on get");
+    } finally {
+      await client.webhooks.delete(webhook.id).catch(() => {});
+    }
+  });
+
+  await runTest("GET /api/v1/webhooks/deliveries - inbound log", async () => {
+    const rows = await client.ingest.listDeliveries({
+      status: "created",
+      since: new Date(Date.now() - 86_400_000),
+      limit: 5,
+    });
+    assert(Array.isArray(rows), "rows is an array");
+    try {
+      await client.ingest.listDeliveries({ since: "not-a-time" });
+      throw new Error("Should have thrown");
+    } catch (error) {
+      assert(
+        error instanceof ValidationError,
+        `expected ValidationError, got: ${error}`,
+      );
+    }
+  });
+
+  for (const id of jobIds) {
+    await client.jobs.cancel(id).catch(() => {});
   }
 }
 
@@ -729,8 +935,7 @@ async function testWebhooks(client: SpooledClient): Promise<void> {
       assertEqual(webhook.id, webhookId, "webhook id");
       assertEqual(webhook.url, webhookUrl, "url");
     },
-    ssrfBlocked,
-    skipReason,
+    { skip: ssrfBlocked, skipReason },
   );
 
   await runTest(
@@ -749,8 +954,7 @@ async function testWebhooks(client: SpooledClient): Promise<void> {
         "should have job.started event",
       );
     },
-    ssrfBlocked,
-    skipReason,
+    { skip: ssrfBlocked, skipReason },
   );
 
   await runTest(
@@ -769,8 +973,7 @@ async function testWebhooks(client: SpooledClient): Promise<void> {
       const received = await waitForWebhook("webhook.test", 2000);
       assertDefined(received, "should receive test webhook");
     },
-    ssrfBlocked,
-    skipReason,
+    { skip: ssrfBlocked, skipReason },
   );
 
   await runTest(
@@ -784,8 +987,7 @@ async function testWebhooks(client: SpooledClient): Promise<void> {
       assert(Array.isArray(deliveries), "deliveries should be array");
       log(`Webhook has ${deliveries.length} deliveries`);
     },
-    ssrfBlocked,
-    skipReason,
+    { skip: ssrfBlocked, skipReason },
   );
 
   // Cleanup
@@ -798,8 +1000,7 @@ async function testWebhooks(client: SpooledClient): Promise<void> {
       }
       await client.webhooks.delete(webhookId);
     },
-    ssrfBlocked,
-    skipReason,
+    { skip: ssrfBlocked, skipReason },
   );
 }
 
@@ -1140,6 +1341,7 @@ async function testGrpc(client: SpooledClient): Promise<void> {
   const queueName = `${testPrefix}-grpc`;
   let workerId = "";
   let grpcConnected = false;
+  let dequeuedJob: { id: string; leaseId?: string | null } | undefined;
 
   await runTest("Connect to gRPC server", async () => {
     grpcClient = new SpooledGrpcClient({
@@ -1220,6 +1422,7 @@ async function testGrpc(client: SpooledClient): Promise<void> {
       });
       assertEqual(result.jobs.length, 1, "should dequeue 1 job");
       assertDefined(result.jobs[0].id, "job id");
+      dequeuedJob = result.jobs[0];
       log(`Dequeued job: ${result.jobs[0].id}`);
     });
 
@@ -1238,24 +1441,15 @@ async function testGrpc(client: SpooledClient): Promise<void> {
     await runTest("gRPC: Complete job", async () => {
       if (!grpcClient) throw new Error("gRPC client not initialized");
 
-      // First get the job that's being processed
-      const dequeued = await grpcClient.queue.dequeue({
-        queueName,
+      // Complete the job the dequeue test holds, with its lease
+      if (!dequeuedJob) throw new Error("no dequeued job to complete");
+      const result = await grpcClient.queue.complete({
+        jobId: dequeuedJob.id,
         workerId,
-        batchSize: 1,
+        leaseId: leaseOf(dequeuedJob),
+        result: { processed: true },
       });
-
-      if (dequeued.jobs.length > 0) {
-        const result = await grpcClient.queue.complete({
-          jobId: dequeued.jobs[0].id,
-          workerId,
-          result: { processed: true },
-        });
-        assertEqual(result.success, true, "complete success");
-      } else {
-        // Complete the job we already have
-        log("No more jobs to dequeue");
-      }
+      assertEqual(result.success, true, "complete success");
     });
 
     await runTest("gRPC: Heartbeat", async () => {
@@ -1301,11 +1495,13 @@ async function testGrpc(client: SpooledClient): Promise<void> {
       });
       assertEqual(deqResult.jobs.length, 1, "should dequeue job");
       assertEqual(deqResult.jobs[0].id, jobId, "job id");
+      const leaseId = leaseOf(deqResult.jobs[0]);
 
       // Renew lease
       const renewResult = await grpcClient.queue.renewLease({
         jobId,
         workerId: wId,
+        leaseId,
         extensionSecs: 120,
       });
       assertEqual(renewResult.success, true, "renew success");
@@ -1314,6 +1510,7 @@ async function testGrpc(client: SpooledClient): Promise<void> {
       const compResult = await grpcClient.queue.complete({
         jobId,
         workerId: wId,
+        leaseId,
         result: { completed: true },
       });
       assertEqual(compResult.success, true, "complete success");
@@ -1346,22 +1543,29 @@ async function testGrpc(client: SpooledClient): Promise<void> {
       const jobId = enqResult.jobId;
 
       // Dequeue
-      await grpcClient.queue.dequeue({
+      const deq = await grpcClient.queue.dequeue({
         queueName: `${queueName}-fail`,
         workerId: wId,
         batchSize: 1,
       });
 
-      // Fail
+      // Fail without `retry`: the SDK sends retry=true, so the job retries
       const failResult = await grpcClient.queue.fail({
         jobId,
         workerId: wId,
+        leaseId: leaseOf(deq.jobs[0]),
         error: "Test failure",
-        retry: true,
       });
       assertEqual(failResult.success, true, "fail success");
-      // willRetry depends on retry count
+      assertEqual(failResult.willRetry, true, "maxRetries 2 left: retry");
+      const after = await grpcClient.queue.getJob(jobId);
+      assert(
+        after.job?.status === "JOB_STATUS_PENDING" ||
+          after.job?.status === "JOB_STATUS_SCHEDULED",
+        `job should wait for its retry, got ${after.job?.status}`,
+      );
       log(`Fail result: willRetry=${failResult.willRetry}`);
+      await client.jobs.cancel(jobId).catch(() => {});
 
       // Cleanup
       await grpcClient.workers.deregister(wId);
@@ -1463,10 +1667,17 @@ async function testGrpcAdvanced(client: SpooledClient): Promise<void> {
     await runTest("gRPC: GetJob - non-existent job", async () => {
       if (!grpcClient) throw new Error("gRPC client not initialized");
 
-      const getResult = await grpcClient.queue.getJob("non-existent-job-id");
-      // Should return null/undefined job, not throw
-      assertEqual(getResult.job, null, "job should be null");
-      log("GetJob correctly returned null for non-existent job");
+      // Current servers answer NOT_FOUND; older ones returned no job.
+      try {
+        const getResult = await grpcClient.queue.getJob("non-existent-job-id");
+        assertEqual(getResult.job ?? null, null, "job should be null");
+      } catch (error) {
+        assert(
+          error instanceof NotFoundError,
+          `expected NotFoundError, got: ${error}`,
+        );
+      }
+      log("GetJob correctly reported a non-existent job");
     });
 
     // ─────────────────────────────────────────────────────────────
@@ -1548,6 +1759,7 @@ async function testGrpcAdvanced(client: SpooledClient): Promise<void> {
         await grpcClient.queue.complete({
           jobId: job.id,
           workerId: wId,
+          leaseId: leaseOf(job),
           result: { batchCompleted: true },
         });
       }
@@ -1578,17 +1790,19 @@ async function testGrpcAdvanced(client: SpooledClient): Promise<void> {
       });
 
       // Dequeue
-      await grpcClient.queue.dequeue({
+      const deq = await grpcClient.queue.dequeue({
         queueName: renewQueue,
         workerId: wId,
         batchSize: 1,
         leaseDurationSecs: 30,
       });
+      const leaseId = leaseOf(deq.jobs[0]);
 
       // Renew with different durations
       const renewResult1 = await grpcClient.queue.renewLease({
         jobId: enqResult.jobId,
         workerId: wId,
+        leaseId,
         extensionSecs: 60,
       });
       assertEqual(renewResult1.success, true, "first renew success");
@@ -1599,6 +1813,7 @@ async function testGrpcAdvanced(client: SpooledClient): Promise<void> {
       const renewResult2 = await grpcClient.queue.renewLease({
         jobId: enqResult.jobId,
         workerId: wId,
+        leaseId,
         extensionSecs: 300,
       });
       assertEqual(renewResult2.success, true, "second renew success");
@@ -1607,6 +1822,7 @@ async function testGrpcAdvanced(client: SpooledClient): Promise<void> {
       await grpcClient.queue.complete({
         jobId: enqResult.jobId,
         workerId: wId,
+        leaseId,
       });
       await grpcClient.workers.deregister(wId);
     });
@@ -1636,29 +1852,34 @@ async function testGrpcAdvanced(client: SpooledClient): Promise<void> {
         payload: { test: "renew-fail" },
       });
 
-      await grpcClient.queue.dequeue({
+      const deq = await grpcClient.queue.dequeue({
         queueName: renewQueue,
         workerId: wId1,
         batchSize: 1,
       });
+      const leaseId = leaseOf(deq.jobs[0]);
 
-      // Try to renew with wrong worker
-      const renewResult = await grpcClient.queue.renewLease({
-        jobId: enqResult.jobId,
-        workerId: wId2, // Wrong worker!
-        extensionSecs: 60,
-      });
-      assertEqual(
-        renewResult.success,
-        false,
-        "renew should fail with wrong worker",
-      );
+      // Try to renew with wrong worker (right lease token)
+      let rejected = false;
+      try {
+        const renewResult = await grpcClient.queue.renewLease({
+          jobId: enqResult.jobId,
+          workerId: wId2, // Wrong worker!
+          leaseId,
+          extensionSecs: 60,
+        });
+        rejected = renewResult.success === false;
+      } catch (error) {
+        rejected = isSpooledError(error);
+      }
+      assert(rejected, "renew should fail with wrong worker");
       log("Renew correctly failed with wrong worker ID");
 
       // Cleanup
       await grpcClient.queue.complete({
         jobId: enqResult.jobId,
         workerId: wId1,
+        leaseId,
       });
       await grpcClient.workers.deregister(wId1);
       await grpcClient.workers.deregister(wId2);
@@ -1680,15 +1901,17 @@ async function testGrpcAdvanced(client: SpooledClient): Promise<void> {
       });
       const wId = regResult.workerId;
 
-      // Enqueue with no retries
+      // Retries left: only an explicit retry=false (proto field 4 with
+      // presence) can send this job to the dead-letter queue on its first
+      // failure.
       const enqResult = await grpcClient.queue.enqueue({
         queueName: failQueue,
         payload: { test: "fail-dlq" },
-        maxRetries: 0,
+        maxRetries: 3,
       });
 
       // Dequeue
-      await grpcClient.queue.dequeue({
+      const deq = await grpcClient.queue.dequeue({
         queueName: failQueue,
         workerId: wId,
         batchSize: 1,
@@ -1698,6 +1921,7 @@ async function testGrpcAdvanced(client: SpooledClient): Promise<void> {
       const failResult = await grpcClient.queue.fail({
         jobId: enqResult.jobId,
         workerId: wId,
+        leaseId: leaseOf(deq.jobs[0]),
         error: "Intentional failure to DLQ",
         retry: false,
       });
@@ -1707,10 +1931,10 @@ async function testGrpcAdvanced(client: SpooledClient): Promise<void> {
 
       // Verify job status
       const getResult = await grpcClient.queue.getJob(enqResult.jobId);
-      assert(
-        getResult.job?.status === "JOB_STATUS_DEADLETTER" ||
-          getResult.job?.status === "JOB_STATUS_FAILED",
-        "job should be deadletter or failed",
+      assertEqual(
+        getResult.job?.status,
+        "JOB_STATUS_DEADLETTER",
+        "retry=false dead-letters despite maxRetries 3",
       );
 
       // Cleanup
@@ -1737,7 +1961,7 @@ async function testGrpcAdvanced(client: SpooledClient): Promise<void> {
       });
 
       // Dequeue
-      await grpcClient.queue.dequeue({
+      const deq = await grpcClient.queue.dequeue({
         queueName: failQueue,
         workerId: wId,
         batchSize: 1,
@@ -1748,6 +1972,7 @@ async function testGrpcAdvanced(client: SpooledClient): Promise<void> {
       const failResult = await grpcClient.queue.fail({
         jobId: enqResult.jobId,
         workerId: wId,
+        leaseId: leaseOf(deq.jobs[0]),
         error: longError,
         retry: false,
       });
@@ -1761,6 +1986,28 @@ async function testGrpcAdvanced(client: SpooledClient): Promise<void> {
     // ─────────────────────────────────────────────────────────────
     // Worker Tests
     // ─────────────────────────────────────────────────────────────
+
+    await runTest(
+      "gRPC: Register with a stable workerId (field 7)",
+      async () => {
+        if (!grpcClient) throw new Error("gRPC client not initialized");
+
+        const stableId = `${testPrefix}-grpc-stable`.slice(0, 120);
+        const first = await grpcClient.workers.register({
+          queueName: `${queueName}-stable`,
+          hostname: "grpc-stable-worker",
+          workerId: stableId,
+        });
+        assertEqual(first.workerId, stableId, "server kept the worker id");
+        const again = await grpcClient.workers.register({
+          queueName: `${queueName}-stable`,
+          hostname: "grpc-stable-worker",
+          workerId: stableId,
+        });
+        assertEqual(again.workerId, stableId, "re-register updates it");
+        await grpcClient.workers.deregister(stableId);
+      },
+    );
 
     await runTest("gRPC: Worker with metadata", async () => {
       if (!grpcClient) throw new Error("gRPC client not initialized");
@@ -1879,6 +2126,7 @@ async function testGrpcAdvanced(client: SpooledClient): Promise<void> {
           await grpcClient.queue.complete({
             jobId: deq1.jobs[0].id,
             workerId: wId,
+            leaseId: leaseOf(deq1.jobs[0]),
           });
         }
 
@@ -1948,6 +2196,7 @@ async function testGrpcAdvanced(client: SpooledClient): Promise<void> {
       await grpcClient.queue.complete({
         jobId: deq1.jobs[0].id,
         workerId: wId,
+        leaseId: leaseOf(deq1.jobs[0]),
       });
 
       const deq2 = await grpcClient.queue.dequeue({
@@ -1963,6 +2212,7 @@ async function testGrpcAdvanced(client: SpooledClient): Promise<void> {
       await grpcClient.queue.complete({
         jobId: deq2.jobs[0].id,
         workerId: wId,
+        leaseId: leaseOf(deq2.jobs[0]),
       });
 
       const deq3 = await grpcClient.queue.dequeue({
@@ -1978,6 +2228,7 @@ async function testGrpcAdvanced(client: SpooledClient): Promise<void> {
       await grpcClient.queue.complete({
         jobId: deq3.jobs[0].id,
         workerId: wId,
+        leaseId: leaseOf(deq3.jobs[0]),
       });
 
       log("Priority order verified: high → medium → low");
@@ -2094,7 +2345,7 @@ async function testGrpcAdvanced(client: SpooledClient): Promise<void> {
         payload: { test: "result" },
       });
 
-      await grpcClient.queue.dequeue({
+      const deq = await grpcClient.queue.dequeue({
         queueName: resultQueue,
         workerId: wId,
         batchSize: 1,
@@ -2117,12 +2368,18 @@ async function testGrpcAdvanced(client: SpooledClient): Promise<void> {
       await grpcClient.queue.complete({
         jobId: enqResult.jobId,
         workerId: wId,
+        leaseId: leaseOf(deq.jobs[0]),
         result: complexResult,
       });
 
       // Verify result was saved
       const getResult = await grpcClient.queue.getJob(enqResult.jobId);
       assertDefined(getResult.job?.result, "result should be saved");
+      assertEqual(
+        (getResult.job?.result as Record<string, unknown>)?.success,
+        true,
+        "result decoded from Struct",
+      );
       log("Complex result saved successfully");
 
       // Cleanup
@@ -2264,15 +2521,34 @@ async function testGrpcErrorHandling(client: SpooledClient): Promise<void> {
         await grpcClient.queue.complete({
           jobId: "non-existent-job-id",
           workerId: "some-worker",
+          leaseId: "non-existent-lease",
         });
         throw new Error("Should have thrown");
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         assert(
-          errorMsg.includes("NOT_FOUND") || errorMsg.includes("not found"),
+          error instanceof NotFoundError || /not found|lease/i.test(errorMsg),
           `expected not found error, got: ${errorMsg}`,
         );
         log("Complete non-existent job correctly rejected");
+      }
+    });
+
+    await runTest("gRPC Error: Complete without lease_id", async () => {
+      if (!grpcClient) throw new Error("gRPC client not initialized");
+
+      try {
+        await grpcClient.queue.complete({
+          jobId: "non-existent-job-id",
+          workerId: "some-worker",
+          leaseId: "",
+        });
+        throw new Error("Should have thrown");
+      } catch (error) {
+        assert(
+          error instanceof ValidationError,
+          `expected INVALID_ARGUMENT, got: ${error}`,
+        );
       }
     });
 
@@ -2367,7 +2643,11 @@ async function testApiKeys(client: SpooledClient): Promise<void> {
     newKey = result.key;
     assertDefined(result.id, "key id");
     assertDefined(result.key, "key value");
-    assert(result.key.startsWith("sk_"), "key should start with sk_");
+    // sp_live_/sp_test_ today; sk_ is the legacy prefix
+    assert(
+      /^(sp|sk)_(live|test)_/.test(result.key),
+      "key should start with sp_live_/sp_test_ (or legacy sk_)",
+    );
   });
 
   await runTest("GET /api/v1/api-keys/{id} - Get API key", async () => {
@@ -2600,6 +2880,15 @@ async function testRegistration(): Promise<void> {
   console.log("\n🆕 Registration (Open Mode)");
   console.log("─".repeat(60));
 
+  if (!RUN_UNSAFE) {
+    await runTest(
+      "POST /api/v1/organizations - Create new organization",
+      async () => {},
+      { skip: true, skipReason: UNSAFE_SKIP_REASON },
+    );
+    return;
+  }
+
   const timestamp = Date.now();
   const testOrgName = `Test Org ${timestamp}`;
   const testSlug = `test-org-${timestamp}`;
@@ -2632,7 +2921,7 @@ async function testRegistration(): Promise<void> {
 
         // If API key is returned, log it
         if (data.api_key?.key) {
-          log(`Got initial API key: ${data.api_key.key.substring(0, 16)}...`);
+          log("Got an initial API key");
         }
       } else if (res.status === 409) {
         log("Organization already exists (expected if test ran before)");
@@ -3228,10 +3517,27 @@ async function testMetrics(): Promise<void> {
   console.log("─".repeat(60));
 
   await runTest("GET /metrics - Prometheus metrics", async () => {
+    // /metrics is protected by the operator's METRICS_TOKEN when it is set
+    // (Spooled Cloud sets it): an API key, or no token, must get a 401.
+    if (!METRICS_TOKEN) {
+      const res = await fetch(`${BASE_URL}/metrics`, {
+        headers: { Authorization: `Bearer ${API_KEY}` },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (res.status === 401 || res.status === 403) {
+        log(`Metrics is token-protected (${res.status}), as expected`);
+        return;
+      }
+      if (!IS_LOCAL_BASE_URL) {
+        throw new Error(
+          `/metrics answered ${res.status} to an API key; expected 401`,
+        );
+      }
+    }
     // Try main API /metrics endpoint first (works through Cloudflare)
     try {
       const res = await fetch(`${BASE_URL}/metrics`, {
-        headers: { Authorization: `Bearer ${API_KEY}` },
+        headers: { Authorization: `Bearer ${METRICS_TOKEN ?? API_KEY}` },
         signal: AbortSignal.timeout(3000),
       });
       if (res.ok) {
@@ -3601,6 +3907,7 @@ async function testEmailLogin(client: SpooledClient): Promise<void> {
   await runTest(
     "POST /api/v1/auth/email/start - Start email login",
     async () => {
+      if (!RUN_UNSAFE) return;
       // This would send an actual email, so we just test the endpoint exists
       const testEmail = `test-${Date.now()}@example.com`;
       try {
@@ -3622,6 +3929,7 @@ async function testEmailLogin(client: SpooledClient): Promise<void> {
         }
       }
     },
+    { skip: !RUN_UNSAFE, skipReason: UNSAFE_SKIP_REASON },
   );
 
   await runTest(
@@ -3687,6 +3995,20 @@ async function testTierLimits(mainClient: SpooledClient): Promise<void> {
   let tierTestJwt = "";
   let orgCreationDisabled = false;
 
+  if (!RUN_UNSAFE) {
+    for (const name of [
+      "Tier: Create fresh free tier org",
+      "Tier: Free org has correct limits",
+      "Tier: Free org job limit enforcement",
+    ]) {
+      await runTest(name, async () => {}, {
+        skip: true,
+        skipReason: UNSAFE_SKIP_REASON,
+      });
+    }
+    return;
+  }
+
   await runTest("Tier: Create fresh free tier org", async () => {
     const res = await fetch(`${BASE_URL}/api/v1/organizations`, {
       method: "POST",
@@ -3706,7 +4028,7 @@ async function testTierLimits(mainClient: SpooledClient): Promise<void> {
         "free",
         "new org should be free tier",
       );
-      log(`Created free tier org, key=${tierTestApiKey.substring(0, 16)}...`);
+      log("Created free tier org");
     } else if (res.status === 403) {
       // Org creation disabled in production - this is expected
       orgCreationDisabled = true;
@@ -4003,11 +4325,16 @@ async function testConcurrentOperations(client: SpooledClient): Promise<void> {
     }
 
     // Try to complete the same job multiple times concurrently
+    const leaseId = leaseOf(claimed.jobs[0]);
     const completePromises: Promise<string>[] = [];
     for (let i = 0; i < 5; i++) {
       completePromises.push(
         client.jobs
-          .complete(jobId, { workerId: worker.id, result: { attempt: i } })
+          .complete(jobId, {
+            workerId: worker.id,
+            leaseId,
+            result: { attempt: i },
+          })
           .then(() => "success")
           .catch((e) => `error: ${e instanceof Error ? e.message : e}`),
       );
@@ -4019,15 +4346,11 @@ async function testConcurrentOperations(client: SpooledClient): Promise<void> {
 
     log(`Concurrent complete: ${successes} success, ${errors} errors`);
 
-    // At least one should succeed or all should error (idempotent either way)
-    assert(successes >= 0, "test should complete without crashing");
+    assert(successes >= 1, "one of the completions should succeed");
 
     // Verify job is in final state
     const job = await client.jobs.get(jobId);
-    assert(
-      job.status === "completed" || job.status === "processing",
-      `job should be completed or processing, got ${job.status}`,
-    );
+    assertEqual(job.status, "completed", "job status");
 
     // Cleanup
     await client.workers.deregister(worker.id);
@@ -4158,7 +4481,7 @@ async function main(): Promise<void> {
   console.log("   🧪 COMPREHENSIVE SPOOLED TEST SUITE");
   console.log("═".repeat(60));
   console.log(`   API: ${BASE_URL}`);
-  console.log(`   Key: ${API_KEY!.substring(0, 12)}...`);
+  console.log(`   Key: ${API_KEY!.substring(0, 8)}... (prefix only)`);
   console.log(`   Webhook Port: ${WEBHOOK_PORT}`);
   console.log(`   Verbose: ${VERBOSE}`);
   console.log("═".repeat(60));
@@ -4192,6 +4515,7 @@ async function main(): Promise<void> {
     await testJobIdempotency(client);
     await testJobLifecycle(client);
     await testJobFailureAndRetry(client);
+    await testApi0122Surface(client);
     await testDLQ(client);
     await testQueues(client);
     await testWorkers(client);
