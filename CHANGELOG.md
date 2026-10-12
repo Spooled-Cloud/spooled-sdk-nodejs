@@ -22,8 +22,10 @@ types.
   the retries that `Retry-After` had already scheduled, then failed with
   `CircuitBreakerOpenError` for 30 s. No 429 counts toward the breaker now; the
   retry layer handles rate limiting. Network errors, timeouts, 408 and 5xx still
-  count. The default predicate is exported as `isCircuitBreakerFailure`.
-  (SDKNP-32)
+  count. The default predicate is exported as `isCircuitBreakerFailure`; an
+  `isFailure` you pass yourself (to `new CircuitBreaker()`,
+  `createCircuitBreaker()` or the client's `circuitBreaker` option) still
+  replaces it. (SDKNP-32)
 - **gRPC proto matches the backend.** `proto/spooled.proto` is the backend's
   file again: `FailRequest.retry` is `optional bool`, so `fail({ retry: false })`
   is sent with field presence and dead-letters the job whatever its

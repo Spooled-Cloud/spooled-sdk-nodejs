@@ -9,6 +9,7 @@ import {
   createCircuitBreaker,
   createDisabledCircuitBreaker,
   isCircuitBreakerFailure,
+  type CircuitBreakerOptions,
 } from "../../src/utils/circuit-breaker.js";
 import {
   ServerError,
@@ -320,5 +321,37 @@ describe("rate-limit 429s and the breaker", () => {
       cb.recordFailure(rateLimited());
     }
     expect(cb.getState()).toBe(CircuitState.OPEN);
+  });
+
+  // createCircuitBreaker takes a CircuitBreakerConfig, but a
+  // CircuitBreakerOptions value (or plain JS, or SpooledClient's
+  // `circuitBreaker` option, which resolveConfig spreads) carries isFailure
+  // through. 1.3.0 used it; the default must not overwrite it.
+  it.each([
+    ["new CircuitBreaker", (o: CircuitBreakerOptions) => new CircuitBreaker(o)],
+    [
+      "createCircuitBreaker",
+      (o: CircuitBreakerOptions) => createCircuitBreaker(o),
+    ],
+  ])("%s keeps a caller-supplied isFailure", (_name, make) => {
+    const countAll: CircuitBreakerOptions = {
+      ...config,
+      isFailure: () => true,
+    };
+    const cb = make(countAll);
+    for (let i = 0; i < 5; i++) {
+      cb.recordFailure(new ValidationError("bad"));
+    }
+    expect(cb.getState()).toBe(CircuitState.OPEN);
+
+    const countNone: CircuitBreakerOptions = {
+      ...config,
+      isFailure: () => false,
+    };
+    const lenient = make(countNone);
+    for (let i = 0; i < 5; i++) {
+      lenient.recordFailure(new ServerError("boom"));
+    }
+    expect(lenient.getState()).toBe(CircuitState.CLOSED);
   });
 });

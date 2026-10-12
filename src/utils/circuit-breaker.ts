@@ -255,13 +255,13 @@ export class CircuitBreaker {
 /**
  * Create a circuit breaker instance from configuration.
  *
- * Rate-limit 429s do not count as failures (see
- * {@link isCircuitBreakerFailure}).
+ * Unless the config carries its own `isFailure`, rate-limit 429s do not count
+ * as failures (the constructor defaults to {@link isCircuitBreakerFailure}).
  */
 export function createCircuitBreaker(
   config: CircuitBreakerConfig,
 ): CircuitBreaker {
-  return new CircuitBreaker({ ...config, isFailure: isCircuitBreakerFailure });
+  return new CircuitBreaker(config);
 }
 
 /**

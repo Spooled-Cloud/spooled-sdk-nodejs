@@ -415,6 +415,32 @@ describe("rate-limit 429 burst and the circuit breaker (SDKNP-32)", () => {
       CircuitBreakerOpenError,
     );
   });
+
+  it("keeps an isFailure passed in the client's circuitBreaker option", async () => {
+    server.use(
+      http.get(`${BASE}/jobs/stats`, () =>
+        HttpResponse.json(
+          { code: "VALIDATION_ERROR", message: "bad" },
+          { status: 400 },
+        ),
+      ),
+    );
+
+    // resolveConfig spreads options.circuitBreaker, so a predicate passed here
+    // reaches the breaker; it counted in 1.3.0 and must keep counting.
+    const client = makeClient({
+      retry: { ...fastRetry, maxRetries: 0 },
+      circuitBreaker: { isFailure: () => true },
+    });
+    for (let i = 0; i < 5; i++) {
+      await expect(client.jobs.getStats()).rejects.toBeInstanceOf(
+        ValidationError,
+      );
+    }
+    await expect(client.jobs.getStats()).rejects.toBeInstanceOf(
+      CircuitBreakerOpenError,
+    );
+  });
 });
 
 describe("single-flight token refresh (SDKNP-07)", () => {
