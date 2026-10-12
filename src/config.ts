@@ -4,6 +4,8 @@
  * Defines configuration types and defaults for the Spooled SDK.
  */
 
+import type { CircuitBreakerOptions } from "./utils/circuit-breaker.js";
+
 /** Retry configuration options */
 export interface RetryConfig {
   /** Maximum number of retry attempts (default: 3) */
@@ -59,8 +61,11 @@ export interface SpooledClientConfig {
   retryDelay?: number;
   /** Full retry configuration */
   retry?: Partial<RetryConfig>;
-  /** Circuit breaker configuration */
-  circuitBreaker?: Partial<CircuitBreakerConfig>;
+  /**
+   * Circuit breaker configuration. Besides the thresholds it takes
+   * `isFailure` (which errors count as failures) and `onStateChange`.
+   */
+  circuitBreaker?: Partial<CircuitBreakerOptions>;
   /** Additional headers to include in all requests */
   headers?: Record<string, string>;
   /** Custom fetch implementation (for testing or special runtimes) */
@@ -84,7 +89,7 @@ export interface ResolvedConfig {
   grpcAddress: string;
   timeout: number;
   retry: RetryConfig;
-  circuitBreaker: CircuitBreakerConfig;
+  circuitBreaker: CircuitBreakerOptions;
   headers: Record<string, string>;
   fetch: typeof fetch;
   userAgent: string;
@@ -162,7 +167,7 @@ export function resolveConfig(options: SpooledClientConfig): ResolvedConfig {
   };
 
   // Merge circuit breaker config
-  const circuitBreaker: CircuitBreakerConfig = {
+  const circuitBreaker: CircuitBreakerOptions = {
     ...DEFAULT_CONFIG.circuitBreaker,
     ...options.circuitBreaker,
   };

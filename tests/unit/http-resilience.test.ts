@@ -8,7 +8,11 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { SpooledClient } from "../../src/client.js";
 import { createHttpClient } from "../../src/utils/http.js";
-import { createCircuitBreaker } from "../../src/utils/circuit-breaker.js";
+import {
+  CircuitState,
+  createCircuitBreaker,
+} from "../../src/utils/circuit-breaker.js";
+import type { CircuitStateChange } from "../../src/utils/circuit-breaker.js";
 import { resolveConfig } from "../../src/config.js";
 import {
   AuthenticationError,
@@ -440,6 +444,36 @@ describe("rate-limit 429 burst and the circuit breaker (SDKNP-32)", () => {
     await expect(client.jobs.getStats()).rejects.toBeInstanceOf(
       CircuitBreakerOpenError,
     );
+  });
+
+  it("calls onStateChange passed in the client's circuitBreaker option", async () => {
+    server.use(
+      http.get(`${BASE}/jobs/stats`, () =>
+        HttpResponse.json(
+          { code: "INTERNAL", message: "boom" },
+          { status: 500 },
+        ),
+      ),
+    );
+
+    const events: CircuitStateChange[] = [];
+    const client = makeClient({
+      retry: { ...fastRetry, maxRetries: 0 },
+      circuitBreaker: {
+        failureThreshold: 2,
+        onStateChange: (event: CircuitStateChange) => events.push(event),
+      },
+    });
+    for (let i = 0; i < 2; i++) {
+      await expect(client.jobs.getStats()).rejects.toBeInstanceOf(ServerError);
+    }
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      from: CircuitState.CLOSED,
+      to: CircuitState.OPEN,
+      failureCount: 2,
+    });
   });
 
   it("calls a method-style isFailure in the circuitBreaker option with its options as this", async () => {

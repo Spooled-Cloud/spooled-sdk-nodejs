@@ -260,7 +260,7 @@ export class CircuitBreaker {
  * as failures (the constructor defaults to {@link isCircuitBreakerFailure}).
  */
 export function createCircuitBreaker(
-  config: CircuitBreakerConfig,
+  config: CircuitBreakerOptions,
 ): CircuitBreaker {
   return new CircuitBreaker(config);
 }

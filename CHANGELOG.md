@@ -73,6 +73,12 @@ types.
   recent response that carried them; `RateLimitInfo.scope` is new and is also
   filled on `RateLimitError.rateLimitInfo`.
 - `GrpcRegisterWorkerRequest.workerId`.
+- **Circuit breaker types:** `CircuitBreakerOptions` and `CircuitStateChange`
+  are exported. `createCircuitBreaker()` and the client's `circuitBreaker`
+  option accept `isFailure` and `onStateChange` in their types; both were
+  honoured at run time, but a TypeScript object literal carrying them was
+  rejected. `ResolvedConfig["circuitBreaker"]` is now `CircuitBreakerOptions`.
+  These types are only widened, so 1.3.0 code that uses them compiles unchanged.
 
 ### Documentation
 
@@ -91,6 +97,8 @@ types.
 
 ### Tooling
 
+- `npm run typecheck` also compiles `tests/types` (`tsconfig.types.json`), the
+  compile-only tests for the circuit breaker option types.
 - `scripts/test-local.ts` matches the current API: it sends `leaseId`, accepts
   `sp_` keys, expects a token-protected `/metrics`, checks the API 0.1.122
   surface and the gRPC `retry: false` dead-letter, and skips unauthenticated

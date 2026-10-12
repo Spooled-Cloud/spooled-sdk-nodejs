@@ -145,6 +145,10 @@ export {
   createCircuitBreaker,
   isCircuitBreakerFailure,
 } from "./utils/circuit-breaker.js";
+export type {
+  CircuitBreakerOptions,
+  CircuitStateChange,
+} from "./utils/circuit-breaker.js";
 export { HttpClient, createHttpClient } from "./utils/http.js";
 export {
   withRetry,

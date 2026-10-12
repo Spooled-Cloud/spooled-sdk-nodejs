@@ -215,6 +215,31 @@ seconds", which the retry layer already does, and a quota 429 is not retried at 
 burst above the plan limit could open the breaker on rate-limit 429s and fail every call on the
 client for `timeout` milliseconds. `isCircuitBreakerFailure` (exported) is the default predicate.
 
+To decide yourself which errors count, or to watch the breaker, add `isFailure` and
+`onStateChange` to the `circuitBreaker` option. They are typed by `CircuitBreakerOptions` and
+`CircuitStateChange` (both exported), and `createCircuitBreaker()` and `new CircuitBreaker()` take
+the same options.
+
+```typescript
+import {
+  SpooledClient,
+  RateLimitError,
+  isCircuitBreakerFailure,
+} from "@spooled/sdk";
+
+const client = new SpooledClient({
+  apiKey: "sp_live_...",
+  circuitBreaker: {
+    // Replaces the default predicate: also count rate-limit 429s.
+    isFailure: (error) =>
+      error instanceof RateLimitError || isCircuitBreakerFailure(error),
+    onStateChange: ({ from, to, failureCount }) => {
+      console.log(`breaker ${from} -> ${to} after ${failureCount} failures`);
+    },
+  },
+});
+```
+
 ### Handling Circuit Breaker Errors
 
 ```typescript
