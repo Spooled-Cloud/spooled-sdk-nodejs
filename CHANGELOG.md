@@ -78,6 +78,10 @@ types.
   token-protected on Spooled Cloud. `docs/grpc.md` gained an SDK client section
   and its raw `@grpc/grpc-js` examples now encode `Struct` payloads, use
   `batchSize` and the real `ProcessJobs` messages. (SDKNP-36)
+- `examples/grpc-streaming.ts` uses `SpooledGrpcClient`; the raw version sent
+  JSON strings as `Struct` payloads and settled jobs without `workerId` and
+  `leaseId`, so it failed against the API. `examples/workflow-dag.ts` compiles
+  against `JsonValue` payloads again (`npm run typecheck:examples` passes).
 
 ### Tooling
 
