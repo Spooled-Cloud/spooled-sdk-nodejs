@@ -1,7 +1,6 @@
 # Spooled Node SDK — Agent Entry
 
-Walk-up: `~/work/AGENTS.md`. **SSH:** host confirm (`ssh-and-hosts.md`). **Azure Foundry ON** (`azure_image`; `azure-enabled.md`).
-
+Local machine context, when this checkout sits under `~/work`: read `~/work/AGENTS.md` first.
 
 Read `docs/ai/knowledge/00-START-HERE.md` first. Workspace rules: `../AGENTS.md` when in `spooled-cloud`.
 
