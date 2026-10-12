@@ -39,7 +39,8 @@
       "types": "./dist/worker/index.d.ts",
       "import": "./dist/worker/index.js",
       "require": "./dist/worker/index.cjs"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
