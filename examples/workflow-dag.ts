@@ -309,7 +309,9 @@ export async function runWorker() {
   });
 
   worker.process(async (ctx): Promise<JsonObject> => {
-    const { step } = ctx.payload as { step: string };
+    // Payloads can be any JSON; this queue's jobs always send an object.
+    const payload = (ctx.payload ?? {}) as JsonObject;
+    const step = String(payload.step);
 
     console.log(`[Worker] Processing ${step} job: ${ctx.jobId}`);
 
@@ -319,7 +321,7 @@ export async function runWorker() {
         await sleep(1000);
         return {
           rowsExtracted: 10000,
-          source: String(ctx.payload.source ?? ""),
+          source: String(payload.source ?? ""),
         };
 
       case "transform":
@@ -327,8 +329,8 @@ export async function runWorker() {
         await sleep(2000);
         return {
           rowsTransformed: 9500,
-          operations: Array.isArray(ctx.payload.operations)
-            ? ctx.payload.operations
+          operations: Array.isArray(payload.operations)
+            ? payload.operations
             : [],
         };
 
@@ -337,7 +339,7 @@ export async function runWorker() {
         await sleep(1500);
         return {
           rowsLoaded: 9500,
-          destination: String(ctx.payload.destination ?? ""),
+          destination: String(payload.destination ?? ""),
         };
 
       default:
