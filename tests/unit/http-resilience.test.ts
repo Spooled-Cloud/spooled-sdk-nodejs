@@ -441,6 +441,38 @@ describe("rate-limit 429 burst and the circuit breaker (SDKNP-32)", () => {
       CircuitBreakerOpenError,
     );
   });
+
+  it("calls a method-style isFailure in the circuitBreaker option with its options as this", async () => {
+    server.use(
+      http.get(`${BASE}/jobs/stats`, () =>
+        HttpResponse.json(
+          { code: "VALIDATION_ERROR", message: "bad" },
+          { status: 400 },
+        ),
+      ),
+    );
+
+    // resolveConfig copies the option's own properties, so `this` is that copy
+    // and still carries countAll, as in 1.3.0.
+    const client = makeClient({
+      retry: { ...fastRetry, maxRetries: 0 },
+      circuitBreaker: {
+        failureThreshold: 2,
+        countAll: true,
+        isFailure(): boolean {
+          return this.countAll;
+        },
+      },
+    });
+    for (let i = 0; i < 2; i++) {
+      await expect(client.jobs.getStats()).rejects.toBeInstanceOf(
+        ValidationError,
+      );
+    }
+    await expect(client.jobs.getStats()).rejects.toBeInstanceOf(
+      CircuitBreakerOpenError,
+    );
+  });
 });
 
 describe("single-flight token refresh (SDKNP-07)", () => {

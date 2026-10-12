@@ -137,10 +137,11 @@ export class CircuitBreaker {
       return;
     }
 
-    // Check if this error should count as a failure
-    const shouldCount = (this.config.isFailure ?? isCircuitBreakerFailure)(
-      error,
-    );
+    // Check if this error should count as a failure. Call a caller predicate
+    // as a method of its options, as 1.3.0 did, so one that reads `this` works.
+    const shouldCount = this.config.isFailure
+      ? this.config.isFailure(error)
+      : isCircuitBreakerFailure(error);
 
     if (!shouldCount) {
       return;

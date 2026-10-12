@@ -25,7 +25,8 @@ types.
   count. The default predicate is exported as `isCircuitBreakerFailure`; an
   `isFailure` you pass yourself (to `new CircuitBreaker()`,
   `createCircuitBreaker()` or the client's `circuitBreaker` option) still
-  replaces it. (SDKNP-32)
+  replaces it and is still called as a method of those options, as in 1.3.0.
+  (SDKNP-32)
 - **gRPC proto matches the backend.** `proto/spooled.proto` is the backend's
   file again: `FailRequest.retry` is `optional bool`, so `fail({ retry: false })`
   is sent with field presence and dead-letters the job whatever its

@@ -354,4 +354,52 @@ describe("rate-limit 429s and the breaker", () => {
     }
     expect(lenient.getState()).toBe(CircuitState.CLOSED);
   });
+
+  // 1.3.0 called the predicate as `config.isFailure(error)`, so a predicate
+  // written as a method can read its own options object through `this`.
+  it.each([
+    ["new CircuitBreaker", (o: CircuitBreakerOptions) => new CircuitBreaker(o)],
+    [
+      "createCircuitBreaker",
+      (o: CircuitBreakerOptions) => createCircuitBreaker(o),
+    ],
+  ])("%s calls isFailure as a method of its options", async (_name, make) => {
+    const opts = {
+      ...config,
+      failureThreshold: 2,
+      countAll: true,
+      isFailure(): boolean {
+        return this.countAll;
+      },
+    };
+    const cb = make(opts);
+    for (let i = 0; i < 2; i++) {
+      await expect(
+        cb.execute(() => Promise.reject(new ValidationError("bad"))),
+      ).rejects.toBeInstanceOf(ValidationError);
+    }
+    expect(cb.getState()).toBe(CircuitState.OPEN);
+  });
+
+  // Plain JS can pass a falsy non-function isFailure (false, null, 0); 1.3.0
+  // treated it as unset and used the default predicate.
+  it.each([false, null, 0])(
+    "falls back to the default predicate when isFailure is %s",
+    async (value) => {
+      const cb = new CircuitBreaker({
+        ...config,
+        isFailure: value as unknown as CircuitBreakerOptions["isFailure"],
+      });
+      await expect(
+        cb.execute(() => Promise.reject(new ValidationError("bad"))),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(cb.getStats().failureCount).toBe(0);
+      for (let i = 0; i < 5; i++) {
+        await expect(
+          cb.execute(() => Promise.reject(new ServerError("boom"))),
+        ).rejects.toBeInstanceOf(ServerError);
+      }
+      expect(cb.getState()).toBe(CircuitState.OPEN);
+    },
+  );
 });
