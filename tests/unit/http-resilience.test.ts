@@ -318,6 +318,105 @@ describe("quota 429 (SDKNP-06)", () => {
   });
 });
 
+describe("rate-limit 429 burst and the circuit breaker (SDKNP-32)", () => {
+  const rateLimitBody = {
+    error: "rate_limit_exceeded",
+    code: "RATE_LIMIT_EXCEEDED",
+    message: "Too many requests",
+  };
+
+  function rateLimited(): Response {
+    return HttpResponse.json(rateLimitBody, {
+      status: 429,
+      headers: {
+        "Retry-After": "1",
+        "X-RateLimit-Limit": "200",
+        "X-RateLimit-Remaining": "0",
+        "X-RateLimit-Reset": String(Math.floor(Date.now() / 1000) + 1),
+        "X-RateLimit-Scope": "organization",
+      },
+    });
+  }
+
+  const stats = {
+    pending: 0,
+    scheduled: 0,
+    processing: 0,
+    completed: 0,
+    failed: 0,
+    deadletter: 0,
+    cancelled: 0,
+    total: 0,
+  };
+
+  it("keeps the breaker closed and lets every call succeed after Retry-After", async () => {
+    const concurrent = 8;
+    let hits = 0;
+    server.use(
+      http.get(`${BASE}/jobs/stats`, () => {
+        hits++;
+        // The first wave of a burst above the plan limit is rate limited.
+        return hits <= concurrent ? rateLimited() : HttpResponse.json(stats);
+      }),
+    );
+
+    // Default breaker (threshold 5, 30 s); fastRetry caps the 1 s Retry-After.
+    const client = makeClient();
+    const results = await Promise.allSettled(
+      Array.from({ length: concurrent }, () => client.jobs.getStats()),
+    );
+
+    expect(results.map((r) => r.status)).toEqual(
+      Array(concurrent).fill("fulfilled"),
+    );
+    expect(hits).toBe(concurrent * 2);
+    expect(client.getCircuitBreakerStats().state).toBe("CLOSED");
+    expect(client.getCircuitBreakerStats().failureCount).toBe(0);
+    await expect(client.jobs.getStats()).resolves.toEqual(stats);
+  });
+
+  it("does not open the breaker on rate-limit 429s that reach the caller", async () => {
+    let limited = true;
+    server.use(
+      http.get(`${BASE}/jobs/stats`, () =>
+        limited ? rateLimited() : HttpResponse.json(stats),
+      ),
+    );
+
+    const client = makeClient({ retry: { ...fastRetry, maxRetries: 0 } });
+    for (let i = 0; i < 6; i++) {
+      await expect(client.jobs.getStats()).rejects.toBeInstanceOf(
+        RateLimitError,
+      );
+    }
+    limited = false;
+
+    // Before the fix the 5th 429 opened the breaker and this call failed with
+    // CircuitBreakerOpenError without reaching the server.
+    await expect(client.jobs.getStats()).resolves.toEqual(stats);
+    expect(client.getCircuitBreakerStats().state).toBe("CLOSED");
+  });
+
+  it("still opens the breaker on 5xx", async () => {
+    server.use(
+      http.get(`${BASE}/jobs/stats`, () =>
+        HttpResponse.json(
+          { code: "INTERNAL", message: "boom" },
+          { status: 500 },
+        ),
+      ),
+    );
+
+    const client = makeClient({ retry: { ...fastRetry, maxRetries: 0 } });
+    for (let i = 0; i < 5; i++) {
+      await expect(client.jobs.getStats()).rejects.toBeInstanceOf(ServerError);
+    }
+    await expect(client.jobs.getStats()).rejects.toBeInstanceOf(
+      CircuitBreakerOpenError,
+    );
+  });
+});
+
 describe("single-flight token refresh (SDKNP-07)", () => {
   function createRaw() {
     const config = resolveConfig({

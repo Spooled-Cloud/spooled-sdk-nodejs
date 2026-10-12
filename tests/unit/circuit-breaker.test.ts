@@ -8,11 +8,14 @@ import {
   CircuitState,
   createCircuitBreaker,
   createDisabledCircuitBreaker,
+  isCircuitBreakerFailure,
 } from "../../src/utils/circuit-breaker.js";
 import {
   ServerError,
   ValidationError,
   CircuitBreakerOpenError,
+  NetworkError,
+  RateLimitError,
 } from "../../src/errors.js";
 
 describe("CircuitBreaker", () => {
@@ -254,5 +257,68 @@ describe("CircuitBreaker", () => {
       const cb = createDisabledCircuitBreaker();
       expect(cb.isEnabled()).toBe(false);
     });
+  });
+});
+
+describe("rate-limit 429s and the breaker", () => {
+  const config = {
+    enabled: true,
+    failureThreshold: 5,
+    successThreshold: 3,
+    timeout: 30000,
+  };
+
+  function rateLimited(): RateLimitError {
+    // A per-second 429 as production sends it: Retry-After 1, retryable.
+    return new RateLimitError("Too many requests", "RATE_LIMIT_EXCEEDED", {
+      retryAfter: 1,
+      limit: 200,
+      remaining: 0,
+    });
+  }
+
+  it("does not count a rate-limit 429 as a failure", () => {
+    expect(rateLimited().isRetryable()).toBe(true);
+    expect(isCircuitBreakerFailure(rateLimited())).toBe(false);
+    expect(isCircuitBreakerFailure(new ServerError("boom"))).toBe(true);
+    expect(isCircuitBreakerFailure(new NetworkError("down"))).toBe(true);
+    expect(isCircuitBreakerFailure(new ValidationError("bad"))).toBe(false);
+  });
+
+  it.each([
+    ["new CircuitBreaker", () => new CircuitBreaker(config)],
+    ["createCircuitBreaker", () => createCircuitBreaker(config)],
+  ])("%s stays closed after many rate-limit 429s", (_name, make) => {
+    const cb = make();
+    for (let i = 0; i < 20; i++) {
+      cb.recordFailure(rateLimited());
+    }
+    expect(cb.getState()).toBe(CircuitState.CLOSED);
+    expect(cb.getStats().failureCount).toBe(0);
+  });
+
+  it("does not reopen a half-open breaker on a rate-limit 429", () => {
+    vi.useFakeTimers();
+    try {
+      const cb = new CircuitBreaker(config);
+      for (let i = 0; i < 5; i++) {
+        cb.recordFailure(new ServerError("boom"));
+      }
+      expect(cb.getState()).toBe(CircuitState.OPEN);
+      vi.advanceTimersByTime(30000);
+      expect(cb.getState()).toBe(CircuitState.HALF_OPEN);
+      cb.recordFailure(rateLimited());
+      expect(cb.getState()).toBe(CircuitState.HALF_OPEN);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still honours a custom isFailure", () => {
+    const cb = new CircuitBreaker({ ...config, isFailure: () => true });
+    for (let i = 0; i < 5; i++) {
+      cb.recordFailure(rateLimited());
+    }
+    expect(cb.getState()).toBe(CircuitState.OPEN);
   });
 });

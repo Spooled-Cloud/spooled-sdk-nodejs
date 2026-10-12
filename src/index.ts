@@ -143,6 +143,7 @@ export {
   CircuitBreaker,
   CircuitState,
   createCircuitBreaker,
+  isCircuitBreakerFailure,
 } from "./utils/circuit-breaker.js";
 export { HttpClient, createHttpClient } from "./utils/http.js";
 export {

@@ -207,6 +207,14 @@ const client = new SpooledClient({
 });
 ```
 
+### What Counts as a Failure
+
+Network errors, timeouts, 408 and 5xx responses count toward `failureThreshold`. Other 4xx
+responses do not, and neither does any 429: a rate-limit 429 means "slow down for `Retry-After`
+seconds", which the retry layer already does, and a quota 429 is not retried at all. Before 1.4.0 a
+burst above the plan limit could open the breaker on rate-limit 429s and fail every call on the
+client for `timeout` milliseconds. `isCircuitBreakerFailure` (exported) is the default predicate.
+
 ### Handling Circuit Breaker Errors
 
 ```typescript

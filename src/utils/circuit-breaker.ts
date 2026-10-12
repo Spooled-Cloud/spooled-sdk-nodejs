@@ -6,7 +6,11 @@
  */
 
 import type { CircuitBreakerConfig } from "../config.js";
-import { CircuitBreakerOpenError, isRetryableError } from "../errors.js";
+import {
+  CircuitBreakerOpenError,
+  RateLimitError,
+  isRetryableError,
+} from "../errors.js";
 
 /** Circuit breaker states */
 export enum CircuitState {
@@ -30,8 +34,30 @@ export interface CircuitStateChange {
 export interface CircuitBreakerOptions extends CircuitBreakerConfig {
   /** Callback when state changes */
   onStateChange?: (event: CircuitStateChange) => void;
-  /** Custom function to determine if an error should count as a failure */
+  /**
+   * Custom function to determine if an error should count as a failure.
+   * Defaults to {@link isCircuitBreakerFailure}.
+   */
   isFailure?: (error: Error) => boolean;
+}
+
+/**
+ * Default circuit breaker failure predicate.
+ *
+ * Counts the errors that say the API or the network is unhealthy: the
+ * retryable ones (network errors, timeouts, 5xx, 408). A 429 never counts. A
+ * rate-limit 429 is the API working as designed and telling this client to
+ * slow down for `Retry-After` seconds; counting it let a burst above the plan
+ * limit open the breaker and fail every call on the client for the breaker
+ * timeout (30 s by default), including the retries that `Retry-After` had
+ * already scheduled. The retry layer handles rate limiting on its own. A quota
+ * 429 (`RateLimitError.isQuota`) was already excluded.
+ */
+export function isCircuitBreakerFailure(error: Error): boolean {
+  if (error instanceof RateLimitError) {
+    return false;
+  }
+  return isRetryableError(error);
 }
 
 /**
@@ -112,9 +138,9 @@ export class CircuitBreaker {
     }
 
     // Check if this error should count as a failure
-    const shouldCount = this.config.isFailure
-      ? this.config.isFailure(error)
-      : isRetryableError(error);
+    const shouldCount = (this.config.isFailure ?? isCircuitBreakerFailure)(
+      error,
+    );
 
     if (!shouldCount) {
       return;
@@ -227,12 +253,15 @@ export class CircuitBreaker {
 }
 
 /**
- * Create a circuit breaker instance from configuration
+ * Create a circuit breaker instance from configuration.
+ *
+ * Rate-limit 429s do not count as failures (see
+ * {@link isCircuitBreakerFailure}).
  */
 export function createCircuitBreaker(
   config: CircuitBreakerConfig,
 ): CircuitBreaker {
-  return new CircuitBreaker(config);
+  return new CircuitBreaker({ ...config, isFailure: isCircuitBreakerFailure });
 }
 
 /**

@@ -394,8 +394,9 @@ try {
 
 (Request-rate limiting also returns `429`, as a `RateLimitError` with the default `RATE_LIMIT_EXCEEDED` code. The plan limit is per organization in requests per second; an API key's own `rateLimit` is requests per minute. The only rate-limit header the API sends is `Retry-After`; there are no `X-RateLimit-*` headers.)
 
-A plan quota does not clear for hours, so `error.isQuota` is `true` for it and the SDK never retries it and
-never counts it toward the circuit breaker (rate-limit 429s are retried after `Retry-After`).
+A plan quota does not clear for hours, so `error.isQuota` is `true` for it and the SDK never retries it.
+Rate-limit 429s are retried after `Retry-After`. No 429 counts toward the circuit breaker, so a burst
+above the plan limit slows the client down instead of opening the breaker for every call.
 
 ## Error Handling
 
