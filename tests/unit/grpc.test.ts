@@ -501,12 +501,14 @@ describe("gRPC TLS detection (SDKNP-24)", () => {
 
 describe("gRPC streams decode jobs like unary calls", () => {
   function fakeStream() {
-    const handlers: Record<string, Array<(arg?: unknown) => void>> = {};
+    // eslint-disable-next-line no-unused-vars
+    type Handler = (...args: unknown[]) => void;
+    const handlers: Record<string, Handler[]> = {};
     return {
       write: vi.fn(),
       end: vi.fn(),
       cancel: vi.fn(),
-      on(event: string, handler: (arg?: unknown) => void) {
+      on(event: string, handler: Handler) {
         (handlers[event] ??= []).push(handler);
         return this;
       },
