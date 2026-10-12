@@ -5,6 +5,89 @@ All notable changes to the Spooled Node.js SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-10-12
+
+Support for Spooled API 0.1.122 and fixes from the final production
+verification of 2026-10-12 (findings SDKNP-32 to SDKNP-39). Everything is
+additive for SDK users: new methods, fields and optional parameters; no method,
+type or field was renamed or removed. Servers older than API 0.1.122 ignore the
+new list filters and do not send the new fields, which are optional in the
+types.
+
+### Fixed
+
+- **Rate-limit 429s no longer open the circuit breaker.** The breaker counted
+  every retryable error, and a per-second 429 is retryable, so a burst above
+  the plan limit opened it after five 429s: every call on the client, including
+  the retries that `Retry-After` had already scheduled, then failed with
+  `CircuitBreakerOpenError` for 30 s. No 429 counts toward the breaker now; the
+  retry layer handles rate limiting. Network errors, timeouts, 408 and 5xx still
+  count. The default predicate is exported as `isCircuitBreakerFailure`.
+  (SDKNP-32)
+- **gRPC proto matches the backend.** `proto/spooled.proto` is the backend's
+  file again: `FailRequest.retry` is `optional bool`, so `fail({ retry: false })`
+  is sent with field presence and dead-letters the job whatever its
+  `maxRetries`, and `RegisterWorkerRequest.worker_id` (field 7) exists, so
+  `workers.register({ workerId })` keeps a stable id instead of dropping it.
+  `fail()` still sends `retry: true` when you leave it out. (SDKNP-33)
+- **gRPC streams decode like the unary calls.** `streamJobs()` and
+  `processJobs().receive()` returned the raw protobuf `Struct`
+  (`{ fields: { ... } }`) as `payload` and `result`; they now return plain
+  objects, as `dequeue()` and `getJob()` do. `processJobs().send({ complete })`
+  encodes `result` as a `Struct`; it was sent as a plain object and lost.
+  (SDKNP-39)
+- A gRPC job status newer than the SDK's proto is returned as a string (`"42"`)
+  instead of a number. (SDKNP-38)
+- `jobs.list()` sends a `Date` filter as ISO 8601; `String(date)` is not
+  RFC 3339 and the API answered 400. An empty status list sends no filter.
+  (SDKNP-34)
+- `require("@spooled/sdk/package.json")` works: `./package.json` is in the
+  `exports` map. (SDKNP-35)
+
+### Added
+
+- **Job search** (API 0.1.122): `jobs.list()` and `jobs.dlq.list()` take `q`,
+  `jobType`, `createdAfter` and `createdBefore`, and `jobs.list()` a status list
+  (`status: ["failed", "deadletter"]`). `jobs.listPage()` and
+  `jobs.dlq.listPage()` return `{ data, hasMore }` with `hasMore` from the
+  `X-Has-More` header. New types `JobSearchParams` and `ListPage<T>`.
+- **Job history:** `jobs.history(id, { order, limit, offset })` and
+  `jobs.historyPage()` for `GET /jobs/{id}/history` (`JobHistoryEvent`,
+  `JobHistoryParams`, `JobHistoryEventType`).
+- **Worker counters:** `jobsProcessed` and `jobsFailed` on `Worker` and
+  `WorkerSummary`.
+- **Webhook events and formats:** `WebhookEventType` has `job.deadlettered`,
+  `job.retried`, `workflow.completed` and `workflow.failed`; webhooks take and
+  return `format` (`WebhookFormat`: `json`, `slack`, `discord`, `teams`).
+- **Inbound webhook log:** `ingest.listDeliveries({ status, since, queueName,
+limit, offset })` for `GET /webhooks/deliveries` (`InboundWebhookDelivery`,
+  `ListInboundDeliveriesParams`).
+- **Rate-limit info:** `client.getRateLimitInfo()` returns `X-RateLimit-Limit`,
+  `-Remaining`, `-Reset` (Unix seconds, as a `Date`) and `-Scope` from the most
+  recent response that carried them; `RateLimitInfo.scope` is new and is also
+  filled on `RateLimitError.rateLimitInfo`.
+- `GrpcRegisterWorkerRequest.workerId`.
+
+### Documentation
+
+- README and docs: the API sends `X-RateLimit-*` headers (they said it did
+  not); `leaseId` is required on `complete`, `fail` and `heartbeat` (a call
+  without it is a 422, since 2026-07); the new events, `format`, job search,
+  history, worker counters and inbound log; the gRPC `Struct` payload limits
+  (only a JSON object travels, integers at or above 2^53 lose precision); `/metrics` is
+  token-protected on Spooled Cloud. `docs/grpc.md` gained an SDK client section
+  and its raw `@grpc/grpc-js` examples now encode `Struct` payloads, use
+  `batchSize` and the real `ProcessJobs` messages. (SDKNP-36)
+
+### Tooling
+
+- `scripts/test-local.ts` matches the current API: it sends `leaseId`, accepts
+  `sp_` keys, expects a token-protected `/metrics`, checks the API 0.1.122
+  surface and the gRPC `retry: false` dead-letter, and skips unauthenticated
+  organization sign-up and email login unless `RUN_UNSAFE=1` (on by default only
+  for a localhost `BASE_URL`). `scripts/test-production.ts` starts it through a
+  shell on Windows. (SDKNP-37)
+
 ## [1.3.0] - 2026-10-10
 
 A reliability pass on the worker and the HTTP layer, from the 2026-10-10 deep
