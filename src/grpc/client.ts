@@ -186,6 +186,10 @@ function encodeCompleteRequest(
 function decodeJob(job: GrpcJob): GrpcJob {
   return {
     ...job,
+    // proto-loader keeps an enum number it does not know (a status added to
+    // the server's proto after this SDK) as a number; keep it a string so
+    // `status` always matches its type.
+    status: typeof job.status === "number" ? String(job.status) : job.status,
     payload: decodeStruct(job.payload),
     result: decodeStruct(job.result),
   };

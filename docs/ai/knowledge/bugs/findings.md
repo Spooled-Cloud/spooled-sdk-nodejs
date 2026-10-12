@@ -40,3 +40,8 @@
 | SDKNP-19..28 | P3  | ~~stop timer, stopped workerId, autoStart rejection, idempotencyKey retry, SSE force refresh, `[::1]` TLS, completionWebhookSecret, clearWebhookToken, README usage, admin-only client~~ **FIXED in 1.3.0** | see CHANGELOG 1.3.0                                                      |
 
 See `findings.jsonl`. SDKNP-03/04/11/12/13/29/30 are Python-only; SDKNP-31 (`job.status` vs `job.status_changed`) is open.
+
+## 1.4.0 (final production verification, 2026-10-12)
+
+- SDKNP-33 (P2), fixed: gRPC proto drift. `retry` had no presence and `RegisterWorkerRequest.worker_id` was missing; `proto/spooled.proto` is now the backend file.
+- SDKNP-38 (P3), fixed: an unknown gRPC job status enum number is returned as a string.

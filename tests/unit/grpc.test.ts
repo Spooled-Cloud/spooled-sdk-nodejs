@@ -220,6 +220,21 @@ describe("SpooledGrpcClient", () => {
 
       expect(result.job).toBeNull();
     });
+
+    it("keeps a job status this SDK does not know as a string", async () => {
+      (client as any).queueClient.GetJob = vi.fn((...args: unknown[]) => {
+        const callback = args[args.length - 1] as (
+          // eslint-disable-next-line no-unused-vars
+          ...a: unknown[]
+        ) => void;
+        // proto-loader hands an unknown enum number through as a number.
+        callback(null, { job: { id: "job_123", status: 42 } });
+      });
+
+      const result = await client.queue.getJob("job_123");
+
+      expect(result.job?.status).toBe("42");
+    });
   });
 
   describe("worker operations", () => {
@@ -243,6 +258,22 @@ describe("SpooledGrpcClient", () => {
       });
 
       expect(result.workerId).toBe("w_1");
+    });
+
+    it("sends a stable workerId on register (proto field 7)", async () => {
+      await client.workers.register({
+        queueName: "test-queue",
+        hostname: "my-host",
+        workerId: "test-queue-worker-01",
+      });
+
+      const register = (client as any).workerClient.Register as ReturnType<
+        typeof vi.fn
+      >;
+      expect(register.mock.calls[0][0]).toMatchObject({
+        queueName: "test-queue",
+        workerId: "test-queue-worker-01",
+      });
     });
 
     it("should send heartbeat", async () => {

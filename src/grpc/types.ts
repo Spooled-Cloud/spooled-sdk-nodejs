@@ -168,9 +168,11 @@ export interface GrpcFailRequest {
   error: string;
   /**
    * Retry the job (until its `maxRetries` run out) instead of dead-lettering it
-   * at once. Defaults to `true` here; the wire default would be `false`, which
-   * dead-letters the job on its first failure whatever `maxRetries` says. Pass
-   * `false` explicitly to dead-letter.
+   * at once. Defaults to `true`, which the SDK sends explicitly, so servers
+   * from before proto field 4 became `optional bool` (where an absent field
+   * read as `false` and dead-lettered the job on its first failure) behave the
+   * same. Pass `false` to dead-letter the job now, whatever `maxRetries` says:
+   * the SDK puts `retry = false` on the wire with field presence.
    */
   retry?: boolean;
   /**
@@ -279,6 +281,17 @@ export interface GrpcRegisterWorkerRequest {
   maxConcurrency?: number;
   version?: string;
   metadata?: Record<string, string>;
+  /**
+   * Stable worker id (proto `optional string worker_id = 7`): 1-128
+   * characters, letters, digits, `-`, `_` and `.`.
+   *
+   * Send the same id after a restart and the server updates that worker
+   * instead of adding one, so a restarting worker does not count twice against
+   * the plan's worker limit. Omitted or empty: the server assigns a new id. An
+   * id that another organization already uses fails with ALREADY_EXISTS
+   * (`ConflictError`). Servers older than API 0.1.119 ignore the field.
+   */
+  workerId?: string;
 }
 
 /** Register worker response */
