@@ -7,7 +7,12 @@
 
 import * as grpc from "@grpc/grpc-js";
 import { loadProtoDefinition } from "./loader.js";
-import { encodeFailRequest } from "./encode.js";
+import {
+  decodeJob,
+  encodeCompleteRequest,
+  encodeEnqueueRequest,
+  encodeFailRequest,
+} from "./encode.js";
 import {
   createJobStream,
   createProcessJobsStream,
@@ -65,135 +70,6 @@ type UnaryMethod<TReq, TRes> = {
     callback: UnaryCallback<TRes>,
   ): void;
 };
-
-type ProtobufValue =
-  | { nullValue: 0 }
-  | { numberValue: number }
-  | { stringValue: string }
-  | { boolValue: boolean }
-  | { structValue: ProtobufStruct }
-  | { listValue: { values: ProtobufValue[] } };
-
-interface ProtobufStruct {
-  fields: Record<string, ProtobufValue>;
-}
-
-function encodeStruct(
-  value: Record<string, unknown> | null | undefined,
-): ProtobufStruct | undefined {
-  if (value == null) {
-    return undefined;
-  }
-  return {
-    fields: Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, encodeValue(entry)]),
-    ),
-  };
-}
-
-function encodeValue(value: unknown): ProtobufValue {
-  if (value == null) {
-    return { nullValue: 0 };
-  }
-  if (Array.isArray(value)) {
-    return { listValue: { values: value.map(encodeValue) } };
-  }
-  switch (typeof value) {
-    case "number":
-      return { numberValue: value };
-    case "string":
-      return { stringValue: value };
-    case "boolean":
-      return { boolValue: value };
-    case "object":
-      return { structValue: encodeStruct(value as Record<string, unknown>)! };
-    default:
-      return { stringValue: String(value) };
-  }
-}
-
-function decodeStruct(
-  value: unknown,
-): Record<string, unknown> | null | undefined {
-  if (!value || typeof value !== "object" || !("fields" in value)) {
-    return value as Record<string, unknown> | null | undefined;
-  }
-  const fields = (value as ProtobufStruct).fields ?? {};
-  return Object.fromEntries(
-    Object.entries(fields).map(([key, entry]) => [key, decodeValue(entry)]),
-  );
-}
-
-function decodeValue(value: ProtobufValue): unknown {
-  if ("nullValue" in value) {
-    return null;
-  }
-  if ("numberValue" in value) {
-    return value.numberValue;
-  }
-  if ("stringValue" in value) {
-    return value.stringValue;
-  }
-  if ("boolValue" in value) {
-    return value.boolValue;
-  }
-  if ("structValue" in value) {
-    return decodeStruct(value.structValue);
-  }
-  if ("listValue" in value) {
-    return (value.listValue.values ?? []).map(decodeValue);
-  }
-  return undefined;
-}
-
-function encodeEnqueueRequest(params: GrpcEnqueueRequest): GrpcEnqueueRequest {
-  // Omit unset numeric fields so proto-loader `defaults: true` does not force
-  // wire zeros for maxRetries/timeoutSeconds (server treats 0 as its default).
-  const encoded: Record<string, unknown> = {
-    queueName: params.queueName,
-    payload: encodeStruct(params.payload),
-  };
-  if (params.priority !== undefined) {
-    encoded.priority = params.priority;
-  }
-  if (params.maxRetries !== undefined) {
-    encoded.maxRetries = params.maxRetries;
-  }
-  if (params.timeoutSeconds !== undefined) {
-    encoded.timeoutSeconds = params.timeoutSeconds;
-  }
-  if (params.idempotencyKey !== undefined && params.idempotencyKey !== "") {
-    encoded.idempotencyKey = params.idempotencyKey;
-  }
-  if (params.scheduledAt !== undefined) {
-    encoded.scheduledAt = params.scheduledAt;
-  }
-  if (params.tags !== undefined) {
-    encoded.tags = params.tags;
-  }
-  return encoded as unknown as GrpcEnqueueRequest;
-}
-
-function encodeCompleteRequest(
-  params: GrpcCompleteRequest,
-): GrpcCompleteRequest {
-  return {
-    ...params,
-    result: encodeStruct(params.result) as unknown as Record<string, unknown>,
-  };
-}
-
-function decodeJob(job: GrpcJob): GrpcJob {
-  return {
-    ...job,
-    // proto-loader keeps an enum number it does not know (a status added to
-    // the server's proto after this SDK) as a number; keep it a string so
-    // `status` always matches its type.
-    status: typeof job.status === "number" ? String(job.status) : job.status,
-    payload: decodeStruct(job.payload),
-    result: decodeStruct(job.result),
-  };
-}
 
 interface QueueServiceClient extends grpc.Client {
   Enqueue: UnaryMethod<GrpcEnqueueRequest, GrpcEnqueueResponse>;

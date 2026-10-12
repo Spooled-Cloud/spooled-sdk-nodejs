@@ -14,6 +14,7 @@ import * as grpc from "@grpc/grpc-js";
 import {
   SpooledGrpcClient,
   GrpcJobStatus,
+  createJobStream,
   createProcessJobsStream,
   timestampToDate,
   dateToTimestamp,
@@ -495,5 +496,83 @@ describe("gRPC TLS detection (SDKNP-24)", () => {
       tls ? 0 : 1,
     );
     client.close();
+  });
+});
+
+describe("gRPC streams decode jobs like unary calls", () => {
+  function fakeStream() {
+    const handlers: Record<string, Array<(arg?: unknown) => void>> = {};
+    return {
+      write: vi.fn(),
+      end: vi.fn(),
+      cancel: vi.fn(),
+      on(event: string, handler: (arg?: unknown) => void) {
+        (handlers[event] ??= []).push(handler);
+        return this;
+      },
+      emit(event: string, arg?: unknown) {
+        for (const handler of handlers[event] ?? []) handler(arg);
+      },
+    };
+  }
+
+  const wireJob = {
+    id: "job_1",
+    status: 42,
+    leaseId: "lease_1",
+    payload: {
+      fields: {
+        to: { stringValue: "a@example.com" },
+        n: { numberValue: 3 },
+        tags: { listValue: { values: [{ stringValue: "x" }] } },
+      },
+    },
+    result: null,
+  };
+
+  it("StreamJobs yields plain payload objects and string statuses", async () => {
+    const call = fakeStream();
+    const stream = createJobStream(call as any);
+    const iterator = stream[Symbol.asyncIterator]();
+    const next = iterator.next();
+    call.emit("data", wireJob);
+    call.emit("end");
+
+    const { value } = await next;
+    expect(value?.payload).toEqual({
+      to: "a@example.com",
+      n: 3,
+      tags: ["x"],
+    });
+    expect(value?.status).toBe("42");
+    expect(value?.leaseId).toBe("lease_1");
+  });
+
+  it("ProcessJobs decodes received jobs and encodes a complete result", async () => {
+    const call = fakeStream();
+    const stream = createProcessJobsStream(call as any);
+
+    stream.send({
+      complete: {
+        jobId: "job_1",
+        workerId: "w1",
+        leaseId: "lease_1",
+        result: { ok: true },
+      },
+    });
+    expect(call.write.mock.calls[0][0].complete.result).toEqual({
+      fields: { ok: { boolValue: true } },
+    });
+
+    const iterator = stream.receive()[Symbol.asyncIterator]();
+    const next = iterator.next();
+    call.emit("data", { job: wireJob });
+    call.emit("end");
+    const { value } = await next;
+    expect(value?.job?.payload).toEqual({
+      to: "a@example.com",
+      n: 3,
+      tags: ["x"],
+    });
   });
 });

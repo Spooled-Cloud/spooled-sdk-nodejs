@@ -5,7 +5,11 @@
  */
 
 import type * as grpc from "@grpc/grpc-js";
-import { encodeFailRequest } from "./encode.js";
+import {
+  decodeJob,
+  decodeProcessResponse,
+  encodeProcessRequest,
+} from "./encode.js";
 import type {
   GrpcJob,
   GrpcProcessRequest,
@@ -55,13 +59,16 @@ export async function* asyncIterableFromStream<T>(
 class AsyncIterableStream<T> implements AsyncIterable<T> {
   private stream: grpc.ClientReadableStream<T>;
   private options: Omit<StreamOptions, "signal">;
+  private readonly decode: (item: T) => T;
 
   constructor(
     stream: grpc.ClientReadableStream<T>,
     options: Omit<StreamOptions, "signal"> = {},
+    decode: (item: T) => T = (item) => item,
   ) {
     this.stream = stream;
     this.options = options;
+    this.decode = decode;
   }
 
   async *[Symbol.asyncIterator](): AsyncGenerator<T, void, undefined> {
@@ -72,7 +79,14 @@ class AsyncIterableStream<T> implements AsyncIterable<T> {
     let resolve: (() => void) | null = null;
 
     this.stream.on("data", (data: T) => {
-      queue.push(data);
+      try {
+        queue.push(this.decode(data));
+      } catch (decodeError) {
+        error =
+          decodeError instanceof Error
+            ? decodeError
+            : new Error(String(decodeError));
+      }
       resolve?.();
     });
 
@@ -148,15 +162,15 @@ export function createProcessJobsStream(
 
   return {
     send(request: GrpcProcessRequest): void {
-      call.write(
-        request.fail
-          ? { ...request, fail: encodeFailRequest(request.fail) }
-          : request,
-      );
+      call.write(encodeProcessRequest(request));
     },
 
     receive(): AsyncIterable<GrpcProcessResponse> {
-      return new AsyncIterableStream(call, { onError, onEnd });
+      return new AsyncIterableStream(
+        call,
+        { onError, onEnd },
+        decodeProcessResponse,
+      );
     },
 
     end(): void {
@@ -193,11 +207,11 @@ export function createJobStream(
     });
   }
 
-  const iterable = new AsyncIterableStream<GrpcJob>(call, {
-    onConnected,
-    onError,
-    onEnd,
-  });
+  const iterable = new AsyncIterableStream<GrpcJob>(
+    call,
+    { onConnected, onError, onEnd },
+    decodeJob,
+  );
 
   return {
     [Symbol.asyncIterator]() {

@@ -46,3 +46,4 @@ See `findings.jsonl`. SDKNP-03/04/11/12/13/29/30 are Python-only; SDKNP-31 (`job
 - SDKNP-32 (P2), fixed: the circuit breaker counted rate-limit 429s, so a burst above the plan limit opened it for 30 s. No 429 counts now (`isCircuitBreakerFailure`).
 - SDKNP-33 (P2), fixed: gRPC proto drift. `retry` had no presence and `RegisterWorkerRequest.worker_id` was missing; `proto/spooled.proto` is now the backend file.
 - SDKNP-38 (P3), fixed: an unknown gRPC job status enum number is returned as a string.
+- SDKNP-39 (P2), fixed: gRPC streams returned the raw `Struct` payload and ProcessJobs dropped `complete.result`; streams now decode and encode like the unary calls.
