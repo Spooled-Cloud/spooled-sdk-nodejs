@@ -6,7 +6,7 @@
  * Stripe option types are kept only so existing code still compiles.
  */
 
-import type { JsonValue } from "./common.js";
+import type { JsonValue, PaginationParams } from "./common.js";
 
 export interface IngestCustomWebhookParams {
   queueName: string;
@@ -21,6 +21,41 @@ export interface IngestCustomWebhookResponse {
   jobId?: string;
   queueName?: string;
   status?: string;
+}
+
+/** `status` of an inbound webhook log entry */
+export type InboundDeliveryStatus = "created" | "duplicate";
+
+/** Parameters for `ingest.listDeliveries()` (`GET /webhooks/deliveries`) */
+export interface ListInboundDeliveriesParams extends PaginationParams {
+  /** `created` (a new job) or `duplicate` (an idempotent replay) */
+  status?: InboundDeliveryStatus;
+  /**
+   * Only entries received at or after this instant. A `Date` is sent as an
+   * ISO 8601 UTC string; a string must be RFC 3339.
+   */
+  since?: Date | string;
+  /** Only entries whose job went to this queue (exact match) */
+  queueName?: string;
+}
+
+/**
+ * One accepted request to `POST /webhooks/{org_id}/custom`, from the inbound
+ * webhook log (API 0.1.122+). The log never holds the payload or a signature.
+ */
+export interface InboundWebhookDelivery {
+  id: string;
+  /** `custom` today */
+  provider: string;
+  /** The request's event type, `custom` when it had none */
+  eventType: string;
+  /** Queue of the job the request resolved to */
+  matchedQueue: string | null;
+  /** Job the request created or matched (`null` for entries before 0.1.122) */
+  jobId: string | null;
+  /** `created` or `duplicate` (`null` for entries before 0.1.122) */
+  status: InboundDeliveryStatus | (string & {}) | null;
+  createdAt: string;
 }
 
 /** @deprecated The API has no GitHub webhook route; `ingest.github` throws. */

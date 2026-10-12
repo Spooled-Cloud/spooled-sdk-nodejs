@@ -4,7 +4,12 @@
  * Types for job-related operations.
  */
 
-import type { JobStatus, JsonValue, ListParams } from "./common.js";
+import type {
+  JobStatus,
+  JsonValue,
+  ListParams,
+  PaginationParams,
+} from "./common.js";
 
 /** Full job model */
 export interface Job {
@@ -91,12 +96,37 @@ export interface CreateJobResult {
   created: boolean;
 }
 
+/**
+ * Server-side job search filters (API 0.1.122+), shared by `GET /jobs` and
+ * `GET /jobs/dlq`. All filters combine with AND. An invalid value is a 400
+ * `ValidationError`; an older server ignores them.
+ */
+export interface JobSearchParams {
+  /**
+   * Search text, case-insensitive: matches a job whose id starts with it, or
+   * whose queue name or `payload.job_type` contains it (at most 255 bytes).
+   */
+  q?: string;
+  /** Exact `payload.job_type` (at most 255 bytes) */
+  jobType?: string;
+  /**
+   * Only jobs created at or after this instant. A `Date` is sent as an
+   * ISO 8601 UTC string; a string must be RFC 3339.
+   */
+  createdAfter?: Date | string;
+  /** Only jobs created before this instant (exclusive); see `createdAfter` */
+  createdBefore?: Date | string;
+}
+
 /** Parameters for listing jobs */
-export interface ListJobsParams extends ListParams {
+export interface ListJobsParams extends ListParams, JobSearchParams {
   /** Filter by queue name */
   queueName?: string;
-  /** Filter by status */
-  status?: JobStatus;
+  /**
+   * Filter by status: one status, or several (sent as the comma list
+   * `status=failed,deadletter`, which needs API 0.1.122+).
+   */
+  status?: JobStatus | readonly JobStatus[];
   /** Filter by a single tag (matches Postgres `tags ? tag` semantics) */
   tag?: string;
 }
@@ -133,10 +163,9 @@ export interface ClaimedJob {
   timeoutSeconds: number;
   leaseExpiresAt?: string;
   /**
-   * Lease fencing token for this claim. Echo it back on
-   * complete/fail/heartbeat so the operation applies only to the lease this
-   * worker actually holds (backend rejects stale leases with 409
-   * LEASE_EXPIRED). Omitted = legacy behavior.
+   * Lease fencing token for this claim. Send it back on
+   * complete/fail/heartbeat: the API requires it (a call without it is a 422
+   * `ValidationError`, since 2026-07) and rejects a stale lease with 409.
    */
   leaseId?: string | null;
 }
@@ -164,7 +193,10 @@ export interface CompleteJobParams {
   workerId: string;
   /** Optional result payload (any JSON) */
   result?: JsonValue;
-  /** Lease fencing token from the claimed job (rejects stale leases when set) */
+  /**
+   * Lease fencing token from the claimed job (`ClaimedJob.leaseId`). The API
+   * requires it: without it the call is a 422 `ValidationError`.
+   */
   leaseId?: string;
 }
 
@@ -174,7 +206,10 @@ export interface FailJobParams {
   workerId: string;
   /** Error message (1-2048 chars) */
   error: string;
-  /** Lease fencing token from the claimed job (rejects stale leases when set) */
+  /**
+   * Lease fencing token from the claimed job (`ClaimedJob.leaseId`). The API
+   * requires it: without it the call is a 422 `ValidationError`.
+   */
   leaseId?: string;
 }
 
@@ -184,7 +219,10 @@ export interface HeartbeatJobParams {
   workerId: string;
   /** Lease duration in seconds (5-3600) */
   leaseDurationSecs: number;
-  /** Lease fencing token from the claimed job (rejects stale leases when set) */
+  /**
+   * Lease fencing token from the claimed job (`ClaimedJob.leaseId`). The API
+   * requires it: without it the call is a 422 `ValidationError`.
+   */
   leaseId?: string;
 }
 
@@ -227,9 +265,45 @@ export interface BulkEnqueueResponse {
 }
 
 /** Parameters for listing DLQ */
-export interface ListDlqParams extends ListParams {
+export interface ListDlqParams extends ListParams, JobSearchParams {
   /** Filter by queue name */
   queueName?: string;
+}
+
+/**
+ * Event types of `GET /jobs/{id}/history`. The server records `processing`
+ * (REST claim), `completed` (REST complete), `retry_scheduled` and
+ * `deadlettered` (REST fail, scheduler sweeps); `created` is defined but not
+ * written today, and jobs settled over gRPC have sparse history. Any other
+ * string the server sends is passed through.
+ */
+export type JobHistoryEventType =
+  | "created"
+  | "processing"
+  | "completed"
+  | "retry_scheduled"
+  | "deadlettered"
+  | (string & {});
+
+/** One recorded lifecycle event of a job (`GET /jobs/{id}/history`) */
+export interface JobHistoryEvent {
+  id: string;
+  jobId: string;
+  eventType: JobHistoryEventType;
+  /** The worker that caused the event, when known */
+  workerId?: string | null;
+  /**
+   * Event details as stored (any JSON, keys left in snake_case as the server
+   * wrote them).
+   */
+  details: JsonValue;
+  createdAt: string;
+}
+
+/** Parameters for `jobs.history()` (API 0.1.122+) */
+export interface JobHistoryParams extends PaginationParams {
+  /** `asc` (default, oldest first) or `desc` (newest first) */
+  order?: "asc" | "desc";
 }
 
 /** Parameters for retrying DLQ jobs */

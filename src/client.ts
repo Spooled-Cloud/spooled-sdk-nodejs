@@ -10,7 +10,7 @@ import {
   resolveConfig,
   validateConfig,
 } from "./config.js";
-import { AuthenticationError } from "./errors.js";
+import { AuthenticationError, type RateLimitInfo } from "./errors.js";
 import { HttpClient, createHttpClient } from "./utils/http.js";
 import {
   CircuitBreaker,
@@ -376,6 +376,18 @@ export class SpooledClient {
    */
   getConfig(): Readonly<ResolvedConfig> {
     return this.config;
+  }
+
+  /**
+   * Rate-limit state from the most recent response that carried
+   * `X-RateLimit-*` headers (API 0.1.122+): `limit`, `remaining`, `reset`
+   * (from the Unix-seconds header), `scope` and, after a 429, `retryAfter`.
+   * `undefined` until such a response arrives, and for servers or routes that
+   * do not send the headers. A 429 also carries the same values on
+   * `RateLimitError.rateLimitInfo`.
+   */
+  getRateLimitInfo(): RateLimitInfo | undefined {
+    return this.http.getLastRateLimitInfo();
   }
 
   /**

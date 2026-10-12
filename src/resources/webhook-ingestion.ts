@@ -8,12 +8,15 @@
 
 import type { HttpClient } from "../utils/http.js";
 import type {
+  InboundWebhookDelivery,
   IngestCustomWebhookParams,
   IngestCustomWebhookResponse,
   IngestGitHubWebhookOptions,
   IngestStripeWebhookOptions,
+  ListInboundDeliveriesParams,
 } from "../types/webhook-ingestion.js";
 import { UnsupportedOperationError } from "../errors.js";
+import { toQueryTimestamp } from "../utils/paging.js";
 
 export class WebhookIngestionResource {
   constructor(private readonly http: HttpClient) {}
@@ -89,5 +92,33 @@ export class WebhookIngestionResource {
       queueName: raw.queueName,
       status: raw.status,
     };
+  }
+
+  /**
+   * The inbound webhook log: accepted requests to
+   * `POST /webhooks/{org_id}/custom`, newest first
+   * (`GET /webhooks/deliveries`, API 0.1.122+).
+   *
+   * Needs an API key without a queue restriction (a queue-scoped key gets a
+   * 403 `AuthorizationError`). Entries carry no payload and no signature;
+   * requests that were rejected are not logged. `limit` defaults to 50 (at
+   * most 100); an invalid filter is a 400 `ValidationError`.
+   */
+  async listDeliveries(
+    params?: ListInboundDeliveriesParams,
+  ): Promise<InboundWebhookDelivery[]> {
+    const rows = await this.http.get<InboundWebhookDelivery[]>(
+      "/webhooks/deliveries",
+      {
+        params: {
+          status: params?.status,
+          since: toQueryTimestamp(params?.since),
+          queueName: params?.queueName,
+          limit: params?.limit,
+          offset: params?.offset,
+        },
+      },
+    );
+    return rows ?? [];
   }
 }

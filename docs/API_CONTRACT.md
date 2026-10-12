@@ -184,14 +184,47 @@ the browser and authenticates by header.
 **Query params:**
 
 - `queue_name?: string`
-- `status?: 'pending' | 'scheduled' | 'processing' | 'completed' | 'failed' | 'deadletter' | 'cancelled'`
+- `status?: string` — one of `pending`, `scheduled`, `processing`, `completed`, `failed`,
+  `deadletter`, `cancelled`, or a comma list of them (`failed,deadletter`; API 0.1.122+)
 - `tag?: string` — filter by a single tag (matches Postgres `tags ? tag` semantics)
+- `q?: string` — search text: id prefix, or substring of `queue_name` or `payload.job_type`
+  (case-insensitive, at most 255 bytes; API 0.1.122+)
+- `job_type?: string` — exact `payload.job_type` (API 0.1.122+)
+- `created_after?: string` (RFC 3339, inclusive) / `created_before?: string` (RFC 3339, exclusive)
+  (API 0.1.122+)
 - `limit?: number` (default 50, max 100)
 - `offset?: number`
 - `order_by?: string`
 - `order_dir?: 'asc' | 'desc'`
 
-**Response:** `JobSummary[]`
+An invalid filter value is a `400`. `GET /api/v1/jobs/dlq` takes the same filters except `status`.
+
+**Response:** `JobSummary[]`, with the header `X-Has-More: true|false` (API 0.1.122+) saying whether
+another page follows. SDK: `jobs.list()` returns the array, `jobs.listPage()` returns
+`{ data, hasMore }`.
+
+### GET /api/v1/jobs/{id}/history
+
+The recorded lifecycle events of a job (API 0.1.122+), oldest first.
+
+**Query params:** `order?: 'asc' | 'desc'` (alias of `order_dir`), `limit?: number` (default 100,
+1-500), `offset?: number`. Header `X-Has-More` as on the job list. An unknown job is `404`.
+
+**Response:** `JobHistoryEvent[]`
+
+```typescript
+interface JobHistoryEvent {
+  id: string;
+  job_id: string;
+  event_type: string; // processing | completed | retry_scheduled | deadlettered | ...
+  worker_id: string | null;
+  details: object;
+  created_at: string;
+}
+```
+
+Events are written by REST claim, complete and fail and by the scheduler's dead-letter sweeps, so a
+job settled over gRPC has sparse history. SDK: `jobs.history(id, { order, limit, offset })`.
 
 ### Job Model
 
@@ -282,6 +315,9 @@ interface ClaimedJob {
 }
 ```
 
+`lease_id` is required on complete, fail and heartbeat: a call without it is a `422` (since
+2026-07; earlier servers answered `409`). The SDK's `SpooledWorker` sends it for you.
+
 ### POST /api/v1/jobs/{id}/complete
 
 **Request:**
@@ -289,7 +325,7 @@ interface ClaimedJob {
 ```typescript
 {
   worker_id: string;
-  lease_id?: string; // echo the claim token; stale token => 409 LEASE_EXPIRED
+  lease_id: string; // required (422 without it); stale token => 409 LEASE_EXPIRED
   result?: object;
 }
 ```
@@ -303,7 +339,7 @@ interface ClaimedJob {
 ```typescript
 {
   worker_id: string;
-  lease_id?: string; // echo the claim token; stale token => 409 LEASE_EXPIRED
+  lease_id: string; // required (422 without it); stale token => 409 LEASE_EXPIRED
   error: string; // 1-2048 chars
 }
 ```
@@ -317,7 +353,7 @@ interface ClaimedJob {
 ```typescript
 {
   worker_id: string;
-  lease_id?: string; // echo the claim token; stale token => 409 LEASE_EXPIRED
+  lease_id: string; // required (422 without it); stale token => 409 LEASE_EXPIRED
   lease_duration_secs: number; // 5-3600
 }
 ```
@@ -457,6 +493,8 @@ interface Worker {
   metadata: object;
   version?: string;
   registered_at: string;
+  jobs_processed: number; // API 0.1.122+: completions while holding the lease
+  jobs_failed: number; // API 0.1.122+: failed attempts reported while holding the lease
 }
 
 interface WorkerSummary {
@@ -467,6 +505,8 @@ interface WorkerSummary {
   current_jobs: number;
   max_concurrency: number;
   last_heartbeat: string;
+  jobs_processed: number; // API 0.1.122+
+  jobs_failed: number; // API 0.1.122+
 }
 
 interface RegisterWorkerRequest {
@@ -685,6 +725,19 @@ Valid event types:
 - `worker.registered`
 - `worker.deregistered`
 - `schedule.triggered`
+- `job.deadlettered` (API 0.1.122+) — sent next to every `job.failed` whose `data.status` is
+  `deadletter`
+- `job.retried` (API 0.1.122+) — a job, DLQ or workflow retry put the job back to `pending`
+- `workflow.completed` / `workflow.failed` (API 0.1.122+) — announced at most once, by a scheduler
+  pass every 10 s; treat them as a prompt and confirm with `GET /workflows/{id}`
+
+### Webhook Formats
+
+`format` (API 0.1.122+) is `json` (the default: the signed JSON envelope), `slack`, `discord` or
+`teams`. A chat format sends one short message built from the event, so a chat service's
+incoming-webhook URL works as it is; `X-Spooled-Signature` signs the bytes actually sent. `teams`
+is the legacy Office 365 connector `MessageCard` (Teams Workflows URLs reject it). On update,
+omitting `format` keeps the current one.
 
 ### Webhook Models
 
@@ -699,6 +752,7 @@ interface OutgoingWebhook {
   failure_count: number; // consecutive failed deliveries; 20 = auto-disable
   last_triggered_at?: string;
   last_status?: "success" | "failed" | "auto_disabled";
+  format?: "json" | "slack" | "discord" | "teams"; // API 0.1.122+
   created_at: string;
   updated_at: string;
 }
@@ -709,6 +763,7 @@ interface CreateOutgoingWebhookRequest {
   events: string[];
   secret?: string;
   enabled?: boolean;
+  format?: "json" | "slack" | "discord" | "teams"; // default json
 }
 
 interface UpdateOutgoingWebhookRequest {
@@ -717,6 +772,7 @@ interface UpdateOutgoingWebhookRequest {
   events?: string[];
   secret?: string | null; // omit = keep, null = clear, string = replace
   enabled?: boolean; // true re-enables an auto-disabled webhook
+  format?: "json" | "slack" | "discord" | "teams"; // omit = keep
 }
 
 interface TestWebhookResponse {
@@ -1045,9 +1101,36 @@ interface RecentActivity {
 
 Each organization gets a unique webhook URL for receiving events from external sources.
 
-| Method | Path                               | Description              |
-| ------ | ---------------------------------- | ------------------------ |
-| POST   | `/api/v1/webhooks/{org_id}/custom` | Custom webhook ingestion |
+| Method | Path                               | Description                                 |
+| ------ | ---------------------------------- | ------------------------------------------- |
+| POST   | `/api/v1/webhooks/{org_id}/custom` | Custom webhook ingestion                    |
+| GET    | `/api/v1/webhooks/deliveries`      | Inbound webhook log (API key; API 0.1.122+) |
+
+### GET /api/v1/webhooks/deliveries
+
+The accepted requests to the custom endpoint, newest first. Unrestricted API keys only (a
+queue-scoped key gets `403`). No payload, signature or organization id is returned, and rejected
+requests are not logged.
+
+**Query params:** `status?: 'created' | 'duplicate'`, `since?: string` (RFC 3339, inclusive),
+`queue_name?: string`, `limit?: number` (default 50, 1-100), `offset?: number`. An invalid filter
+is a `400`.
+
+**Response:** `InboundWebhookDelivery[]`
+
+```typescript
+interface InboundWebhookDelivery {
+  id: string;
+  provider: string; // "custom"
+  event_type: string; // "custom" when the request had none
+  matched_queue: string | null;
+  job_id: string | null; // null for entries before 0.1.122
+  status: "created" | "duplicate" | null; // null for entries before 0.1.122
+  created_at: string;
+}
+```
+
+SDK: `client.ingest.listDeliveries({ status, since, queueName, limit, offset })`.
 
 ### Webhook Token Management
 
@@ -1208,10 +1291,25 @@ All API errors return JSON:
 
 ### Rate Limit Headers
 
-When rate limited (429), the response includes `Retry-After: <seconds>`. It is the only rate-limit
-header; the API does not send `X-RateLimit-Limit`, `X-RateLimit-Remaining` or `X-RateLimit-Reset`.
-The JSON body carries `retry_after_secs`, `limit`, `remaining` and `reset_at`. The plan limit is a
-token bucket per organization; an API key's `rate_limit` is requests per minute and can only lower it.
+Since API 0.1.122, authenticated responses that went through the plan rate limiter carry:
+
+| Header                  | Meaning                                                                           |
+| ----------------------- | --------------------------------------------------------------------------------- |
+| `X-RateLimit-Limit`     | The limit the others describe: plan burst, or the API key's requests per minute   |
+| `X-RateLimit-Remaining` | Whole requests left after this one                                                |
+| `X-RateLimit-Reset`     | Unix time in seconds when `Remaining` next goes up (now while the bucket is full) |
+| `X-RateLimit-Scope`     | `organization` (plan token bucket) or `api_key` (the key's own `rate_limit`)      |
+
+A `429` carries the same headers with `Remaining` 0, plus `Retry-After: <seconds>`; its JSON body
+has `retry_after_secs`, `limit`, `remaining` and `reset_at` (equal to `X-RateLimit-Reset`). The
+headers are left out when no rate-limit check ran (public and admin routes, a server without
+Redis), so treat them as optional. The plan limit is a token bucket per organization; an API key's
+`rate_limit` is requests per minute and can only lower it. Browsers can read them (CORS exposes
+them, with `X-Request-Id` and `X-Has-More`).
+
+SDK: `client.getRateLimitInfo()` returns the values of the most recent response that had them, and
+`RateLimitError.rateLimitInfo` those of a 429. Rate-limit 429s are retried after `Retry-After` and
+do not count toward the circuit breaker.
 
 A 429 with code `QUOTA_EXCEEDED` is a plan limit, not rate limiting:
 `RateLimitError.isQuota` is `true`, and the SDK neither retries it nor counts it

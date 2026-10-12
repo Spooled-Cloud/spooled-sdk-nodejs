@@ -7,6 +7,7 @@
 import type {
   WebhookEventType,
   WebhookDeliveryStatus,
+  WebhookFormat,
   JsonObject,
 } from "./common.js";
 
@@ -36,6 +37,12 @@ export interface OutgoingWebhook {
    * it is re-enabled with `update(id, { enabled: true })`.
    */
   lastStatus?: "success" | "failed" | "auto_disabled";
+  /**
+   * Body format of the deliveries (API 0.1.122+; absent from older servers,
+   * which only send `json`). A format newer than this SDK is passed through
+   * as a string.
+   */
+  format?: WebhookFormat | (string & {});
   createdAt: string;
   updatedAt: string;
 }
@@ -52,6 +59,11 @@ export interface CreateOutgoingWebhookParams {
   secret?: string;
   /** Whether enabled (default: true) */
   enabled?: boolean;
+  /**
+   * Body format (default `json`; API 0.1.122+). `slack`, `discord` and
+   * `teams` post a chat message to that service's incoming-webhook URL.
+   */
+  format?: WebhookFormat;
 }
 
 /**
@@ -83,6 +95,8 @@ export interface UpdateOutgoingWebhookParams {
    * `QUOTA_EXCEEDED` even though no webhook is being created.
    */
   enabled?: boolean;
+  /** New body format; omit it to keep the current one (API 0.1.122+). */
+  format?: WebhookFormat;
 }
 
 /** Response for webhook test */

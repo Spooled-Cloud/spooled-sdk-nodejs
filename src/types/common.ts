@@ -48,7 +48,14 @@ export type ScheduleRunStatus = "pending" | "running" | "completed" | "failed";
 /** Webhook delivery status */
 export type WebhookDeliveryStatus = "pending" | "success" | "failed";
 
-/** Webhook event types */
+/**
+ * Webhook event types.
+ *
+ * `job.deadlettered`, `job.retried`, `workflow.completed` and
+ * `workflow.failed` need API 0.1.122 or later. The SDK does not check event
+ * names in responses: a name newer than this list is passed through as a
+ * string, so give a `switch` over it a `default` branch.
+ */
 export type WebhookEventType =
   | "job.created"
   | "job.started"
@@ -59,7 +66,25 @@ export type WebhookEventType =
   | "queue.resumed"
   | "worker.registered"
   | "worker.deregistered"
-  | "schedule.triggered";
+  | "schedule.triggered"
+  /** Sent next to every `job.failed` whose `data.status` is `deadletter`. */
+  | "job.deadlettered"
+  /** A manual retry (job, DLQ or workflow retry) put the job back to pending. */
+  | "job.retried"
+  /** A workflow finished; announced at most once, up to ~10 s late. */
+  | "workflow.completed"
+  /** A workflow failed; announced at most once, up to ~10 s late. */
+  | "workflow.failed";
+
+/**
+ * Body format of an outgoing webhook (API 0.1.122+).
+ *
+ * `json` (the default) is the signed JSON envelope. `slack`, `discord` and
+ * `teams` send one short chat message built from the event, so a chat
+ * service's incoming-webhook URL can be used as it is (`teams` is the legacy
+ * Office 365 connector `MessageCard`; Teams Workflows URLs reject it).
+ */
+export type WebhookFormat = "json" | "slack" | "discord" | "teams";
 
 /** Dependency mode for workflows */
 export type DependencyMode = "all" | "any";
@@ -91,6 +116,23 @@ export interface PaginatedResponse<T> {
   /** Page size limit */
   limit: number;
   /** Whether there are more results */
+  hasMore: boolean;
+}
+
+/**
+ * One page of a list endpoint that reports `X-Has-More` (API 0.1.122+):
+ * `GET /jobs`, `GET /jobs/dlq` and `GET /jobs/{id}/history`.
+ *
+ * The response body stays a bare array; `hasMore` comes from the header.
+ */
+export interface ListPage<T> {
+  /** Items of this page, in the server's order */
+  data: T[];
+  /**
+   * `true` when another page follows: ask again with
+   * `offset + data.length`. From the `X-Has-More` header; an older server
+   * without it gets a guess from the page size (a full page means "maybe").
+   */
   hasMore: boolean;
 }
 

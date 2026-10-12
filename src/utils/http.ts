@@ -16,9 +16,11 @@ import type { RetryConfig } from "../config.js";
 import {
   createErrorFromResponse,
   NetworkError,
+  parseRateLimitHeaders,
   RateLimitError,
   TimeoutError,
   SpooledError,
+  type RateLimitInfo,
 } from "../errors.js";
 import {
   convertRequest,
@@ -121,6 +123,9 @@ export class HttpClient {
    */
   private refreshInFlight: Promise<boolean> | null = null;
 
+  /** Rate-limit headers of the most recent response that carried them */
+  private lastRateLimit: RateLimitInfo | undefined;
+
   constructor(config: ResolvedConfig, circuitBreaker: CircuitBreaker) {
     this.config = config;
     this.circuitBreaker = circuitBreaker;
@@ -135,6 +140,15 @@ export class HttpClient {
    */
   setAuthToken(token: string): void {
     this.authToken = token;
+  }
+
+  /**
+   * The `X-RateLimit-*` (and `Retry-After`) values of the most recent
+   * response that carried them, successful or not. `undefined` until such a
+   * response arrives. With concurrent requests it is the last one to finish.
+   */
+  getLastRateLimitInfo(): RateLimitInfo | undefined {
+    return this.lastRateLimit ? { ...this.lastRateLimit } : undefined;
   }
 
   /**
@@ -341,6 +355,8 @@ export class HttpClient {
 
     this.debug?.(`Response: ${response.status}`, { url });
 
+    this.recordRateLimit(response.headers);
+
     // Handle non-OK responses
     if (!response.ok) {
       // On an expired-token 401, refresh the access token (once, shared by
@@ -384,6 +400,19 @@ export class HttpClient {
       headers: response.headers,
       data,
     };
+  }
+
+  /** Remember the rate-limit headers of a response that has them. */
+  private recordRateLimit(headers: Headers | undefined): void {
+    if (
+      !headers ||
+      typeof headers.get !== "function" ||
+      (headers.get("X-RateLimit-Limit") === null &&
+        headers.get("X-RateLimit-Remaining") === null)
+    ) {
+      return;
+    }
+    this.lastRateLimit = parseRateLimitHeaders(headers);
   }
 
   /**

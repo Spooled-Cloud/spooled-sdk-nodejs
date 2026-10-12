@@ -26,6 +26,17 @@ export interface Worker {
   registeredAt: string;
   /** Last row update (detail response). */
   updatedAt?: string;
+  /**
+   * Jobs this worker completed while it held the lease (API 0.1.122+; counts
+   * start at 0 with that release).
+   */
+  jobsProcessed?: number;
+  /**
+   * Failed attempts this worker reported while it held the lease: a fail
+   * that was retried or dead-lettered (API 0.1.122+). Lease-expiry recovery
+   * does not count.
+   */
+  jobsFailed?: number;
 }
 
 /** Worker summary for list responses */
@@ -37,6 +48,10 @@ export interface WorkerSummary {
   currentJobs: number;
   maxConcurrency: number;
   lastHeartbeat: string;
+  /** See {@link Worker.jobsProcessed} (API 0.1.122+). */
+  jobsProcessed?: number;
+  /** See {@link Worker.jobsFailed} (API 0.1.122+). */
+  jobsFailed?: number;
 }
 
 /** Parameters for registering a worker */

@@ -26,12 +26,53 @@ const { id, created } = await client.jobs.create({
 ```typescript
 const jobs = await client.jobs.list({
   queueName: "my-queue", // Optional: filter by queue
-  status: "pending", // Optional: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+  status: "pending", // Optional: one status, or several: ["failed", "deadletter"]
   tag: "billing", // Optional: filter by a single tag
-  limit: 10, // Pagination limit
+  q: "invoice", // Optional: id prefix, or text in the queue name or payload.job_type
+  jobType: "send-invoice", // Optional: exact payload.job_type
+  createdAfter: new Date(Date.now() - 86_400_000), // Optional: Date or RFC 3339 string
+  createdBefore: "2026-10-12T00:00:00Z", // Optional, exclusive
+  limit: 10, // Pagination limit (max 100)
   offset: 0, // Pagination offset
 });
 ```
+
+The status list, `q`, `jobType`, `createdAfter` and `createdBefore` need API 0.1.122 or later; an
+invalid value is a `ValidationError`. `jobs.dlq.list()` takes the same filters except `status`.
+
+To page through results, `listPage()` also returns whether another page follows (the
+`X-Has-More` header):
+
+```typescript
+let offset = 0;
+for (;;) {
+  const page = await client.jobs.listPage({
+    status: "failed",
+    limit: 100,
+    offset,
+  });
+  handle(page.data);
+  if (!page.hasMore) break;
+  offset += page.data.length;
+}
+// jobs.dlq.listPage() works the same way.
+```
+
+### Job History
+
+```typescript
+const events = await client.jobs.history("job_id", {
+  order: "asc",
+  limit: 100,
+});
+// [{ id, jobId, eventType: "processing" | "completed" | "retry_scheduled" | "deadlettered" | ...,
+//    workerId, details, createdAt }]
+const page = await client.jobs.historyPage("job_id", { limit: 50, offset: 0 }); // { data, hasMore }
+```
+
+API 0.1.122+. The server records REST claims, completions and failures and the scheduler's
+dead-letter sweeps, so jobs settled over gRPC have sparse history. `details` keeps the server's
+snake_case keys.
 
 ### Get Job
 
@@ -98,7 +139,7 @@ const result = await client.jobs.claim({
 // Each claimed job may include leaseId, the fencing token for this execution.
 ```
 
-Echo `leaseId` from the claimed job on complete, fail, and heartbeat. The backend rejects a stale token with HTTP 409 and code `LEASE_EXPIRED`; omitting it retains legacy worker-ID-only fencing.
+Send `leaseId` from the claimed job on complete, fail, and heartbeat. The API requires it: a call without it is a `ValidationError` (HTTP 422; since 2026-07, before that a 409), and a stale token is HTTP 409 with code `LEASE_EXPIRED`. `SpooledWorker` does this for you.
 
 ### Complete Job
 
@@ -343,11 +384,20 @@ await client.workflows.jobs.addDependencies("job_id", {
 const webhook = await client.webhooks.create({
   name: "Slack Notifications",
   url: "https://hooks.slack.com/...",
-  events: ["job.completed", "job.failed"],
+  events: ["job.completed", "job.failed", "job.deadlettered"],
   secret: "hmac-secret",
   enabled: true,
+  format: "slack", // "json" (default) | "slack" | "discord" | "teams"
 });
 ```
+
+Events: `job.created`, `job.started`, `job.completed`, `job.failed`, `job.cancelled`,
+`queue.paused`, `queue.resumed`, `worker.registered`, `worker.deregistered`,
+`schedule.triggered`, and since API 0.1.122 `job.deadlettered`, `job.retried`,
+`workflow.completed` and `workflow.failed`. `format` (API 0.1.122+) makes the delivery a chat
+message the chat service's incoming-webhook URL accepts as it is; `teams` is the legacy Office 365
+connector card. `update(id, { format })` changes it; omitting it keeps the current one. Values newer
+than the SDK's types come back as plain strings.
 
 ### List Webhooks
 
@@ -437,7 +487,12 @@ const workers = await client.workers.list();
 
 ```typescript
 const worker = await client.workers.get("worker_id");
+console.log(worker.jobsProcessed, worker.jobsFailed); // API 0.1.122+
 ```
+
+`jobsProcessed` and `jobsFailed` (also on `workers.list()` rows) count the outcomes a worker
+reported while it held the lease, from API 0.1.122 on: completions, and failures that were retried
+or dead-lettered. Lease-expiry recovery is not counted.
 
 ### Register Worker
 
@@ -665,7 +720,7 @@ const metrics = await client.metrics.get();
 // Raw Prometheus metrics text
 ```
 
-These are the service's own operator-level metrics, not per-tenant metrics: Spooled has no tenant-facing Prometheus endpoint or alert rules. Self-hosters scrape this endpoint.
+These are the service's own operator-level metrics, not per-tenant metrics: Spooled has no tenant-facing Prometheus endpoint or alert rules. Self-hosters scrape this endpoint. When the server sets `METRICS_TOKEN` (Spooled Cloud does), `/metrics` needs `Authorization: Bearer <METRICS_TOKEN>` and answers an API key with 401 (`AuthenticationError`).
 
 ---
 
@@ -733,6 +788,22 @@ await client.ingest.custom("org_id", {
 });
 ```
 
+### Inbound Webhook Log
+
+```typescript
+const deliveries = await client.ingest.listDeliveries({
+  status: "created", // or "duplicate"
+  since: new Date(Date.now() - 3_600_000),
+  queueName: "custom_events",
+  limit: 50,
+});
+// [{ id, provider, eventType, matchedQueue, jobId, status, createdAt }]
+```
+
+`GET /webhooks/deliveries` (API 0.1.122+) lists the accepted requests to the custom endpoint, newest
+first. Unlike `custom()` it uses the client's API key, which must not be queue-scoped (403). It
+never returns payloads or signatures.
+
 ---
 
 ## Type Exports
@@ -748,6 +819,9 @@ import type {
   JobStatus,
   CreateJobParams,
   JobStats,
+  ListJobsParams,
+  JobHistoryEvent,
+  ListPage,
 
   // Queues
   Queue,
@@ -770,8 +844,13 @@ import type {
   JobContext,
 
   // Webhooks
-  Webhook,
-  WebhookEvent,
+  OutgoingWebhook,
+  WebhookEventType,
+  WebhookFormat,
+  InboundWebhookDelivery,
+
+  // Rate limits
+  RateLimitInfo,
 
   // Common
   PaginationParams,

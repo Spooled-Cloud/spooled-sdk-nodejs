@@ -218,6 +218,16 @@ describe("Errors", () => {
       expect(info.reset).toEqual(new Date(1700000000 * 1000));
     });
 
+    it("parses X-RateLimit-Scope (API 0.1.122+)", () => {
+      const headers = new Headers({
+        "X-RateLimit-Limit": "60",
+        "X-RateLimit-Remaining": "0",
+        "X-RateLimit-Scope": "api_key",
+      });
+
+      expect(parseRateLimitHeaders(headers).scope).toBe("api_key");
+    });
+
     it("should handle missing headers", () => {
       const headers = new Headers();
       const info = parseRateLimitHeaders(headers);

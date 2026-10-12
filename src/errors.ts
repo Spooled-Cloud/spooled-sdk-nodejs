@@ -11,16 +11,35 @@ export interface ApiErrorBody {
   details?: Record<string, unknown>;
 }
 
-/** Rate limit information parsed from headers */
+/**
+ * Rate limit information parsed from headers.
+ *
+ * Authenticated responses that went through the plan rate limiter carry
+ * `X-RateLimit-Limit`, `-Remaining`, `-Reset` and `-Scope` (API 0.1.122+); a
+ * 429 adds `Retry-After`. Every field is optional: the headers are left out
+ * when no rate-limit check ran (public and admin routes, a server without
+ * Redis, older servers).
+ */
 export interface RateLimitInfo {
-  /** Maximum requests per window */
+  /**
+   * The limit the other fields describe: the plan burst (organization token
+   * bucket) or an API key's own requests per minute.
+   */
   limit?: number;
-  /** Remaining requests in current window */
+  /** Whole requests left after this one */
   remaining?: number;
-  /** Unix timestamp when the window resets */
+  /**
+   * When `remaining` next goes up (`X-RateLimit-Reset`, a Unix time in
+   * seconds; the current time while the bucket is full).
+   */
   reset?: Date;
-  /** Seconds to wait before retrying */
+  /** Seconds to wait before retrying (`Retry-After`, on a 429) */
   retryAfter?: number;
+  /**
+   * Which limit the headers describe (`X-RateLimit-Scope`): `organization`
+   * (the plan's token bucket) or `api_key` (the key's `rateLimit`).
+   */
+  scope?: "organization" | "api_key" | (string & {});
 }
 
 /**
@@ -384,6 +403,11 @@ export function parseRateLimitHeaders(headers: Headers): RateLimitInfo {
     if (!isNaN(timestamp)) {
       info.reset = new Date(timestamp * 1000);
     }
+  }
+
+  const scope = headers.get("X-RateLimit-Scope");
+  if (scope) {
+    info.scope = scope.trim();
   }
 
   return info;
