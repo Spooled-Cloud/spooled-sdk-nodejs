@@ -49,3 +49,4 @@ See `findings.jsonl`. SDKNP-03/04/11/12/13/29/30 are Python-only; SDKNP-31 (`job
 - SDKNP-39 (P2), fixed: gRPC streams returned the raw `Struct` payload and ProcessJobs dropped `complete.result`; streams now decode and encode like the unary calls.
 - SDKNP-34 (P3), fixed: the API 0.1.122 surface is typed and has methods (`jobs.listPage`, `jobs.history`, `ingest.listDeliveries`, `getRateLimitInfo`); `Date` list filters are sent as ISO 8601.
 - SDKNP-35 (P3), fixed: `@spooled/sdk/package.json` is in the `exports` map.
+- SDKNP-36 (P3), fixed: README and docs describe the `X-RateLimit-*` headers, the required `lease_id`, the four new webhook events and `format`, and the gRPC `Struct` payload limits; `docs/grpc.md` raw examples encode `Struct` payloads and use the real `ProcessJobs` messages.

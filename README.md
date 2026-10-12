@@ -21,6 +21,7 @@ Official Node.js/TypeScript SDK for [Spooled Cloud](https://spooled.cloud) - a m
 - **Organization management** with usage tracking
 - **Webhook management** with automatic retries
 - **Dead Letter Queue (DLQ)** operations
+- **Server-side job search** (status lists, text, job type, creation time), paging with `hasMore`, and **job history**
 - **API Key management** with Redis caching (~28x faster authentication)
 - **Billing integration** via Stripe
 - **Automatic case conversion** between camelCase (SDK) and snake_case (API)
@@ -109,6 +110,24 @@ const { id } = await client.jobs.create({
 });
 ```
 
+Find jobs on the server and page through them (API 0.1.122+):
+
+```typescript
+const page = await client.jobs.listPage({
+  status: ["failed", "deadletter"], // one status or several
+  q: "invoice", // id prefix, or text in the queue name or payload.job_type
+  jobType: "send-invoice", // exact payload.job_type
+  createdAfter: new Date(Date.now() - 86_400_000), // Date or RFC 3339 string
+  limit: 100,
+});
+console.log(page.data.length, page.hasMore); // hasMore comes from X-Has-More
+
+// What happened to a job: claims, completions, retries, dead-lettering
+const history = await client.jobs.history(id, { order: "desc" });
+```
+
+`jobs.list()` takes the same filters and still returns a plain array.
+
 ### Workers
 
 Process jobs with the built-in worker runtime:
@@ -153,7 +172,13 @@ the server makes them idempotent. If an ack still fails after the retries the wo
 Give any worker that restarts a stable `workerId` (1-128 chars, `[A-Za-z0-9._-]`). Registration then
 upserts a single row instead of minting a new UUID each start, which otherwise leaves the previous
 registration counting against your plan's worker limit until the stale-worker reaper clears it
-(~2 minutes).
+(~2 minutes). `workers.get()` and `workers.list()` report `jobsProcessed` and `jobsFailed` per worker
+(API 0.1.122+).
+
+If you process jobs without `SpooledWorker` (`jobs.claim()` and then `jobs.complete()`,
+`jobs.fail()` or `jobs.heartbeat()`), pass the claimed job's `leaseId` on every one of those calls.
+The API requires it: a call without it fails with a `ValidationError` (HTTP 422), and a stale lease
+with HTTP 409. `SpooledWorker` does this for you.
 
 ### Workflows (DAGs)
 
@@ -241,6 +266,14 @@ const webhook = await client.webhooks.create({
   secret: "webhook_secret_key",
 });
 
+// Post dead-lettered jobs and workflow outcomes straight to a Slack channel
+await client.webhooks.create({
+  name: "On-call",
+  url: "https://hooks.slack.com/services/...",
+  events: ["job.deadlettered", "workflow.failed"],
+  format: "slack", // "json" (default) | "slack" | "discord" | "teams"
+});
+
 // Retry a failed delivery
 await client.webhooks.retryDelivery(webhookId, deliveryId);
 
@@ -248,6 +281,13 @@ await client.webhooks.retryDelivery(webhookId, deliveryId);
 // enterprise 90 — and only the newest 100 deliveries per webhook)
 const deliveries = await client.webhooks.getDeliveries(webhookId);
 ```
+
+API 0.1.122 added the events `job.deadlettered`, `job.retried`, `workflow.completed` and
+`workflow.failed`, and `format`, which sends each delivery as a chat message that a Slack, Discord
+or Teams (legacy Office 365 connector) incoming-webhook URL accepts as it is.
+
+The inbound side has a log too: `client.ingest.listDeliveries({ status, since, queueName })` lists
+the accepted requests to your custom webhook URL (`GET /webhooks/deliveries`, no payloads).
 
 After 20 consecutive failed deliveries a webhook is disabled automatically (`enabled: false`,
 `lastStatus: "auto_disabled"`) and stops receiving events until you turn it back on:
@@ -392,7 +432,19 @@ try {
 }
 ```
 
-(Request-rate limiting also returns `429`, as a `RateLimitError` with the default `RATE_LIMIT_EXCEEDED` code. The plan limit is per organization in requests per second; an API key's own `rateLimit` is requests per minute. The only rate-limit header the API sends is `Retry-After`; there are no `X-RateLimit-*` headers.)
+(Request-rate limiting also returns `429`, as a `RateLimitError` with the default `RATE_LIMIT_EXCEEDED` code. The plan limit is per organization in requests per second; an API key's own `rateLimit` is requests per minute.)
+
+Since API 0.1.122, responses carry `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
+(a Unix time in seconds) and `X-RateLimit-Scope` (`organization` or `api_key`), and a 429 adds
+`Retry-After`. `client.getRateLimitInfo()` returns the values from the most recent response that had
+them, and `RateLimitError.rateLimitInfo` those of a 429. The headers are optional: public routes and
+servers without Redis do not send them.
+
+```typescript
+await client.jobs.getStats();
+const rate = client.getRateLimitInfo();
+// { limit: 200, remaining: 199, reset: Date, scope: "organization" }
+```
 
 A plan quota does not clear for hours, so `error.isQuota` is `true` for it and the SDK never retries it.
 Rate-limit 429s are retried after `Retry-After`. No 429 counts toward the circuit breaker, so a burst
@@ -444,11 +496,12 @@ const grpcClient = new SpooledGrpcClient({
   useTls: true,
 });
 
-// Register worker
+// Register worker (a stable workerId is reused across restarts)
 const { workerId } = await grpcClient.workers.register({
   queueName: "emails",
   hostname: "worker-1",
   maxConcurrency: 10,
+  workerId: "emails-worker-1",
 });
 
 // Enqueue job (enforces plan limits automatically)
@@ -489,6 +542,13 @@ for (const job of jobs) {
   }
 }
 ```
+
+`fail` sends `retry: true` unless you pass `retry: false`; `false` is sent on the wire (proto field 4
+has presence) and dead-letters the job at once, whatever its `maxRetries`.
+
+Over gRPC `payload` and `result` are `google.protobuf.Struct`, so two things differ from REST: only a
+JSON object travels (a job whose payload is an array, string, number or `null` arrives as an empty
+object), and integers at or above 2^53 lose precision (send them as strings). Use REST for such jobs.
 
 `dequeue` hands out up to `batchSize` jobs, each with a lease of `leaseDurationSecs` (5-3600 s; when
 omitted the server default applies, 300 s on Spooled Cloud). For a job that can run longer than its

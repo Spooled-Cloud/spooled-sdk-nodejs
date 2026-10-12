@@ -51,7 +51,96 @@ try {
 | Low-latency operations     | **gRPC**        |
 | Batch processing           | **gRPC**        |
 
+## SDK gRPC Client (recommended)
+
+`@spooled/sdk` ships a typed gRPC client, `SpooledGrpcClient`, that loads the bundled proto, converts
+`payload` and `result` to and from `google.protobuf.Struct`, applies the client timeout as a
+deadline and maps gRPC status codes to the SDK's error classes.
+
+```typescript
+import { SpooledGrpcClient } from "@spooled/sdk";
+
+const grpcClient = new SpooledGrpcClient({
+  address: "grpc.spooled.cloud:443",
+  apiKey: process.env.SPOOLED_API_KEY!,
+});
+
+// A stable workerId (proto field 7) makes a restart update the same worker
+// instead of adding one that counts against the plan's worker limit.
+const { workerId } = await grpcClient.workers.register({
+  queueName: "emails",
+  hostname: "worker-1",
+  workerId: "emails-worker-01",
+});
+
+await grpcClient.queue.enqueue({
+  queueName: "emails",
+  payload: { to: "user@example.com" },
+});
+
+const { jobs } = await grpcClient.queue.dequeue({
+  queueName: "emails",
+  workerId,
+  batchSize: 10,
+  leaseDurationSecs: 300,
+});
+
+for (const job of jobs) {
+  const leaseId = job.leaseId as string; // required on complete/fail/renewLease
+  try {
+    await grpcClient.queue.complete({
+      jobId: job.id,
+      workerId,
+      leaseId,
+      result: { sent: true },
+    });
+  } catch (error) {
+    await grpcClient.queue.fail({
+      jobId: job.id,
+      workerId,
+      leaseId,
+      error: String(error),
+      // retry defaults to true: retried until maxRetries run out.
+      // retry: false dead-letters the job now.
+    });
+  }
+}
+```
+
+### Settlement Rules
+
+- **`leaseId` is required** on `Complete`, `Fail` and `RenewLease`: a call without it fails with
+  `INVALID_ARGUMENT` (`ValidationError`), and a stale lease with `FAILED_PRECONDITION`.
+- **`Fail.retry` is `optional bool` (field 4).** Omitted or `true`: the job is retried until its
+  `maxRetries` run out, the same as REST. `false`: the job goes to the dead-letter queue now. The SDK
+  sends `retry: true` when you do not set it, because servers before API 0.1.118 declared a plain
+  `bool` and read an absent field as `false`. With raw `@grpc/proto-loader`, load the current
+  `proto/spooled.proto` so an explicit `false` is encoded with presence.
+- **Omitted lease = 300 s.** `leaseDurationSecs` 0 or omitted uses the server default (300 s on
+  Spooled Cloud); otherwise 5-3600 s.
+
+### Payload and Result Are `google.protobuf.Struct`
+
+Over gRPC `payload` and `result` are `google.protobuf.Struct` messages, which limits them compared
+with REST (documented server limitation, BEGRPC-05):
+
+- **Only a JSON object travels.** A job whose payload is an array, string, number, boolean or `null`
+  (possible over REST) arrives over gRPC as an empty object, and the SDK's `enqueue` types only
+  accept an object.
+- **Numbers are doubles.** Integers at or above 2^53 lose precision over gRPC (REST keeps them):
+  send such ids as strings.
+
+Use REST (`client.jobs.*`) for jobs that need non-object payloads or exact large integers.
+
+### Forward Compatibility
+
+A `Job.status` enum value newer than the SDK's proto arrives as its number in a string (for example
+`"42"`), never as an error. Handle a `default` case when you switch over it.
+
 ## Prerequisites
+
+The rest of this guide calls `@grpc/grpc-js` directly, for languages or setups that cannot use the
+SDK client.
 
 ```bash
 npm install @grpc/grpc-js @grpc/proto-loader
@@ -111,6 +200,44 @@ function createMetadata(apiKey: string): grpc.Metadata {
 }
 
 const metadata = createMetadata("sp_live_your_api_key");
+
+// payload/result are google.protobuf.Struct messages. proto-loader does not
+// convert plain objects, so encode and decode them yourself (or use
+// SpooledGrpcClient, which does this for you).
+function toValue(v: unknown): any {
+  if (v === null || v === undefined) return { nullValue: 0 };
+  if (Array.isArray(v)) return { listValue: { values: v.map(toValue) } };
+  switch (typeof v) {
+    case "number":
+      return { numberValue: v };
+    case "string":
+      return { stringValue: v };
+    case "boolean":
+      return { boolValue: v };
+    default:
+      return { structValue: toStruct(v as Record<string, unknown>) };
+  }
+}
+function toStruct(obj: Record<string, unknown>): any {
+  return {
+    fields: Object.fromEntries(
+      Object.entries(obj).map(([k, v]) => [k, toValue(v)]),
+    ),
+  };
+}
+function fromValue(v: any): unknown {
+  if (v.structValue) return fromStruct(v.structValue);
+  if (v.listValue) return (v.listValue.values ?? []).map(fromValue);
+  if ("stringValue" in v) return v.stringValue;
+  if ("numberValue" in v) return v.numberValue;
+  if ("boolValue" in v) return v.boolValue;
+  return null;
+}
+function fromStruct(s: any): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(s?.fields ?? {}).map(([k, v]) => [k, fromValue(v)]),
+  );
+}
 ```
 
 ## Enqueue Jobs
@@ -120,7 +247,7 @@ const metadata = createMetadata("sp_live_your_api_key");
 queueClient.Enqueue(
   {
     queueName: "emails",
-    payload: JSON.stringify({ to: "user@example.com", subject: "Hello" }),
+    payload: toStruct({ to: "user@example.com", subject: "Hello" }),
     priority: 5,
     maxRetries: 3,
   },
@@ -151,7 +278,7 @@ function enqueue(request: any): Promise<any> {
 // Usage
 const result = await enqueue({
   queueName: "emails",
-  payload: JSON.stringify({ to: "user@example.com" }),
+  payload: toStruct({ to: "user@example.com" }),
 });
 ```
 
@@ -162,7 +289,7 @@ queueClient.Dequeue(
   {
     queueName: "emails",
     workerId: "worker-1",
-    limit: 10,
+    batchSize: 10,
     leaseDurationSecs: 300,
   },
   metadata,
@@ -173,7 +300,7 @@ queueClient.Dequeue(
     }
 
     for (const job of response.jobs) {
-      console.log(`Job ${job.id}:`, JSON.parse(job.payload));
+      console.log(`Job ${job.id}:`, fromStruct(job.payload));
       processJob(job);
     }
   },
@@ -196,7 +323,7 @@ const stream = queueClient.StreamJobs(
 
 stream.on("data", (job) => {
   console.log(`Received job: ${job.id}`);
-  const payload = JSON.parse(job.payload);
+  const payload = fromStruct(job.payload);
 
   processJob(job.id, payload)
     .then((result) => completeJob(job.id, "worker-1", job.leaseId, result))
@@ -225,10 +352,11 @@ Spooled Cloud). A job that may run longer than its lease must be renewed with `R
 
 ## Bidirectional Streaming (ProcessJobs)
 
-Full duplex streaming for the highest performance:
+Full duplex streaming on `QueueService.ProcessJobs`. Each request is one of `dequeue`, `complete`,
+`fail` or `renewLease`; each response one of `job`, `complete`, `fail`, `renewLease` or `error`:
 
 ```typescript
-const call = workerClient.ProcessJobs(metadata);
+const call = queueClient.ProcessJobs(metadata);
 
 // Handle incoming jobs from server
 call.on("data", (response) => {
@@ -242,10 +370,8 @@ call.on("data", (response) => {
           complete: {
             jobId: response.job.id,
             workerId: "worker-1",
-            ...(response.job.leaseId != null && {
-              leaseId: response.job.leaseId,
-            }),
-            result: JSON.stringify(result),
+            leaseId: response.job.leaseId, // required by the server
+            result: toStruct(result),
           },
         });
       })
@@ -255,38 +381,30 @@ call.on("data", (response) => {
           fail: {
             jobId: response.job.id,
             workerId: "worker-1",
-            ...(response.job.leaseId != null && {
-              leaseId: response.job.leaseId,
-            }),
+            leaseId: response.job.leaseId, // required by the server
             error: error.message,
+            retry: true, // false dead-letters the job now
           },
         });
       });
   }
 
-  if (response.heartbeatAck) {
-    console.log("Heartbeat acknowledged");
+  if (response.error) {
+    console.error("Stream request failed:", response.error.message);
   }
 });
 
-// Request jobs
+// Ask for jobs (repeat after settling them)
 call.write({
-  subscribe: {
+  dequeue: {
     queueName: "emails",
     workerId: "worker-1",
     leaseDurationSecs: 300,
-    maxConcurrent: 10,
+    batchSize: 10,
   },
 });
 
-// Send periodic heartbeats
-setInterval(() => {
-  call.write({
-    heartbeat: {
-      workerId: "worker-1",
-    },
-  });
-}, 10000);
+// Worker heartbeats are a separate unary call: WorkerService.Heartbeat.
 
 // Handle stream events
 call.on("error", (error) => {
@@ -304,7 +422,7 @@ call.on("end", () => {
 function completeJob(
   jobId: string,
   workerId: string,
-  leaseId: string | null | undefined,
+  leaseId: string,
   result?: any,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -312,8 +430,8 @@ function completeJob(
       {
         jobId,
         workerId,
-        ...(leaseId != null && { leaseId }),
-        result: result ? JSON.stringify(result) : undefined,
+        leaseId, // required by the server
+        result: result ? toStruct(result) : undefined,
       },
       metadata,
       (error, response) => {
@@ -327,7 +445,7 @@ function completeJob(
 function failJob(
   jobId: string,
   workerId: string,
-  leaseId: string | null | undefined,
+  leaseId: string,
   errorMessage: string,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -335,10 +453,10 @@ function failJob(
       {
         jobId,
         workerId,
-        ...(leaseId != null && { leaseId }),
+        leaseId, // required by the server
         error: errorMessage,
-        // proto3 false means "do not retry": omit it and the job is
-        // dead-lettered on its first failure. Send true to honour maxRetries.
+        // optional bool: true (or omitted, on API 0.1.118+) retries until
+        // maxRetries run out; false dead-letters the job now.
         retry: true,
       },
       metadata,
@@ -359,7 +477,7 @@ Keep jobs alive during long processing. Preserve the dequeued job's `leaseId` an
 function renewLease(
   jobId: string,
   workerId: string,
-  leaseId: string | null | undefined,
+  leaseId: string,
   durationSecs: number,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -367,7 +485,7 @@ function renewLease(
       {
         jobId,
         workerId,
-        ...(leaseId != null && { leaseId }),
+        leaseId, // required by the server
         extensionSecs: durationSecs,
       },
       metadata,
@@ -556,7 +674,7 @@ async function main() {
     activeJobs.set(job.id, renewalTimer);
 
     try {
-      const payload = JSON.parse(job.payload);
+      const payload = fromStruct(job.payload);
       const result = await processEmail(payload);
 
       client.Complete(
@@ -564,7 +682,7 @@ async function main() {
           jobId: job.id,
           workerId: "worker-1",
           leaseId: job.leaseId, // required by the server
-          result: JSON.stringify(result),
+          result: toStruct(result),
         },
         metadata,
         (err) => {
@@ -579,7 +697,7 @@ async function main() {
           workerId: "worker-1",
           leaseId: job.leaseId, // required by the server
           error: error.message,
-          retry: true, // proto3 false would dead-letter on the first failure
+          retry: true, // false would dead-letter the job now
         },
         metadata,
         (err) => {
@@ -717,5 +835,9 @@ The full proto file is available at:
 
 Key services:
 
-- `QueueService`: Enqueue, Dequeue, StreamJobs, Complete, Fail, RenewLease
-- `WorkerService`: ProcessJobs (bidirectional streaming)
+- `QueueService`: Enqueue, Dequeue, Complete, Fail, RenewLease, GetJob, GetQueueStats,
+  StreamJobs (server streaming), ProcessJobs (bidirectional streaming)
+- `WorkerService`: Register, Heartbeat, Deregister
+
+The SDK's copy is the backend's `proto/spooled.proto` unchanged (`FailRequest.retry` and
+`RegisterWorkerRequest.worker_id` are `optional`, so they carry field presence).
