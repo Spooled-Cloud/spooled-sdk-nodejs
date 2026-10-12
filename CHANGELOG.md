@@ -8,11 +8,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.4.0] - 2026-10-12
 
 Support for Spooled API 0.1.122 and fixes from the final production
-verification of 2026-10-12 (findings SDKNP-32 to SDKNP-39). Everything is
-additive for SDK users: new methods, fields and optional parameters; no method,
-type or field was renamed or removed. Servers older than API 0.1.122 ignore the
+verification of 2026-10-12 (findings SDKNP-32 to SDKNP-39). No method, type or
+field was renamed or removed, and most of the release is new methods, fields
+and optional parameters. A few results and types do change for code written
+against 1.3.0; see "Upgrade notes". Servers older than API 0.1.122 ignore the
 new list filters and do not send the new fields, which are optional in the
 types.
+
+### Upgrade notes
+
+- **gRPC streams return plain objects.** `streamJobs()` and
+  `processJobs().receive()` now return `payload` and `result` as plain
+  objects, as `dequeue()` and `getJob()` do, not the raw protobuf `Struct`.
+  Delete any workaround that unwraps it (`payload.fields.x.stringValue`, a
+  hand-written Struct decoder): it no longer finds a `fields` object.
+- **`processJobs().send({ complete })` encodes `result` itself.** Pass the plain
+  object. Delete any pre-encoding of `result` to a `Struct`: the SDK would
+  encode it a second time and the job's result would be `{ fields: ... }`.
+- **Unknown gRPC status numbers come back as strings.** A job status newer than
+  the SDK's proto used to arrive as a number although `status` is typed as a
+  string; it is now `"42"`. Known statuses are unchanged.
+- **The circuit breaker no longer counts 429s.** A burst of rate-limit 429s no
+  longer ends in `CircuitBreakerOpenError`; the retry layer waits for
+  `Retry-After` instead. If you relied on 429s to open the breaker, pass
+  `circuitBreaker: { isFailure }` with a predicate that returns `true` for
+  `RateLimitError` and falls back to `isCircuitBreakerFailure`.
+- **Four new `WebhookEventType` members** (`job.deadlettered`, `job.retried`,
+  `workflow.completed`, `workflow.failed`) can break a `switch` over the type
+  that has no `default` branch and checks exhaustiveness with `never`. Handle
+  them or add a `default`.
+- **`DlqOperations` gained `listPage`.** Code that calls `client.jobs.dlq` is
+  unaffected; a hand-written fake or wrapper typed as `DlqOperations` (or
+  `JobsResource["dlq"]`) must add the method.
+- **`ListJobsParams.status` also takes a list of statuses.** Passing one status
+  is unchanged; code that reads `status` off a `ListJobsParams` value as a
+  single status must handle both.
 
 ### Fixed
 
