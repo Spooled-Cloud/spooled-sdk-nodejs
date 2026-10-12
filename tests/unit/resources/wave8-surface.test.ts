@@ -396,15 +396,41 @@ describe("webhook format and events (QW8, QW14)", () => {
           updated_at: "2026-10-12T08:00:00Z",
         }),
       ),
+      http.get(`${BASE}/organizations/usage`, () =>
+        HttpResponse.json({
+          plan: "business",
+          plan_display_name: "Business",
+          limits: { tier: "business" },
+          usage: {},
+          warnings: [],
+        }),
+      ),
+      http.get(`${BASE}/workers`, () =>
+        HttpResponse.json([
+          {
+            id: "w1",
+            queue_name: "q",
+            hostname: "h",
+            status: "hibernating",
+            current_jobs: 0,
+            max_concurrency: 1,
+            last_heartbeat: "2026-10-12T08:00:00Z",
+          },
+        ]),
+      ),
     );
 
     const client = createClient();
     const [webhook] = await client.webhooks.list();
     const job = await client.jobs.get("job_1");
+    const usage = await client.organizations.getUsage();
+    const [worker] = await client.workers.list();
     expect(webhook.events).toEqual(["job.created", "queue.drained"]);
     expect(webhook.format).toBe("googlechat");
     expect(webhook.lastStatus).toBe("throttled");
     expect(job.status).toBe("archived");
+    expect(usage.plan).toBe("business");
+    expect(worker.status).toBe("hibernating");
   });
 });
 
