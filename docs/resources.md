@@ -179,7 +179,7 @@ const config = await client.queues.get("my-queue");
 await client.queues.updateConfig("my-queue", {
   maxRetries: 5,
   defaultTimeout: 600,
-  rateLimit: 100,
+  rateLimit: 100, // stored and returned, but NOT enforced: workers are not throttled by it
   enabled: true,
 });
 ```
@@ -493,7 +493,7 @@ const keys = await client.apiKeys.list();
 const { id, key } = await client.apiKeys.create({
   name: "Production API Key",
   queues: ["queue-1", "queue-2"], // Optional: restrict to queues
-  rateLimit: 1000,
+  rateLimit: 1000, // requests per minute for this key
 });
 // IMPORTANT: 'key' is only shown once!
 ```
@@ -664,6 +664,8 @@ const ready = await client.health.readiness();
 const metrics = await client.metrics.get();
 // Raw Prometheus metrics text
 ```
+
+These are the service's own operator-level metrics, not per-tenant metrics: Spooled has no tenant-facing Prometheus endpoint or alert rules. Self-hosters scrape this endpoint.
 
 ---
 

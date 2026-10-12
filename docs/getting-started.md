@@ -213,8 +213,9 @@ The SDK reliably preserves the HTTP status, code, message, request ID, and rate-
 
 | Tier           | Active Jobs | Daily Jobs | Queues    | Workers   |
 | -------------- | ----------- | ---------- | --------- | --------- |
-| **Free**       | 10          | 1,000      | 5         | 3         |
-| **Starter**    | 100         | 100,000    | 25        | 25        |
+| **Free**       | 10          | 1,000      | 2         | 1         |
+| **Starter**    | 500         | 10,000     | 10        | 5         |
+| **Pro**        | 5,000       | 100,000    | 50        | 25        |
 | **Enterprise** | Unlimited   | Unlimited  | Unlimited | Unlimited |
 
 Limits are enforced on:

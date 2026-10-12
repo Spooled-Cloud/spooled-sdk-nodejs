@@ -1208,12 +1208,10 @@ All API errors return JSON:
 
 ### Rate Limit Headers
 
-When rate limited (429), the response may include:
-
-- `Retry-After: <seconds>`
-- `X-RateLimit-Limit: <number>`
-- `X-RateLimit-Remaining: <number>`
-- `X-RateLimit-Reset: <unix-timestamp>`
+When rate limited (429), the response includes `Retry-After: <seconds>`. It is the only rate-limit
+header; the API does not send `X-RateLimit-Limit`, `X-RateLimit-Remaining` or `X-RateLimit-Reset`.
+The JSON body carries `retry_after_secs`, `limit`, `remaining` and `reset_at`. The plan limit is a
+token bucket per organization; an API key's `rate_limit` is requests per minute and can only lower it.
 
 A 429 with code `QUOTA_EXCEEDED` is a plan limit, not rate limiting:
 `RateLimitError.isQuota` is `true`, and the SDK neither retries it nor counts it

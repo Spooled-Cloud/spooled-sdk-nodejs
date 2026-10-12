@@ -94,8 +94,9 @@ interface JobContext {
   retryCount: number; // Current retry attempt (0-indexed)
   maxRetries: number; // Max retries configured
 
-  signal: AbortSignal; // Abort signal for cancellation
+  signal: AbortSignal; // Aborted on job timeout or shutdown timeout (not when a job is cancelled on the server)
 
+  // Local debug logging only: progress is NOT sent to the server or shown in the dashboard
   progress: (percent: number, message?: string) => Promise<void>;
   log: (
     level: "debug" | "info" | "warn" | "error",
@@ -255,7 +256,9 @@ message becomes "Job failed" and a message over 2048 characters is truncated.
 
 ## Abort-Aware Processing
 
-Jobs receive an `AbortSignal` for cooperative cancellation. It is aborted when
+Jobs receive an `AbortSignal` that the worker aborts itself. There is no server push: cancelling
+a job with `DELETE /jobs/{id}` only works on pending or scheduled jobs and does not abort a handler
+that is already running. The signal is aborted when
 the job exceeds its `timeoutSeconds` and when a stop outlives `shutdownTimeout`
 (see above), not when a stop is merely requested:
 

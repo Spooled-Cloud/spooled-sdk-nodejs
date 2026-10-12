@@ -129,7 +129,7 @@ const client = new SpooledClient({
 
 ## Retry Behavior
 
-The SDK uses exponential backoff with jitter for transient failures:
+The SDK uses exponential backoff with jitter to retry its own HTTP requests after transient failures. This is client-side and separate from job retries on the server, which use a fixed `2^n` second delay capped at 60 s (not configurable):
 
 ```
 delay = min(maxDelay, baseDelay * (factor ^ attempt)) * (1 + random * jitter)

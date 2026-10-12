@@ -215,6 +215,14 @@ stream.on("end", () => {
 // stream.cancel();
 ```
 
+**`StreamJobs` delivers one job at a time per stream.** The server sends the next job only after
+the previous one on that stream is completed, failed, released, or its lease has run out, so settle
+every job with `Complete` or `Fail`. To process several jobs at once, open one stream per job slot
+(at most 100 open streams per organization per server). A lease is whatever you send in
+`leaseDurationSecs` (5-3600 s); when it is omitted or `0` the server's default applies (300 s on
+Spooled Cloud). A job that may run longer than its lease must be renewed with `RenewLease`
+(`jobId`, `workerId`, `leaseId`, `extensionSecs`) before it expires.
+
 ## Bidirectional Streaming (ProcessJobs)
 
 Full duplex streaming for the highest performance:
@@ -535,7 +543,12 @@ async function main() {
     // Start lease renewal
     const renewalTimer = setInterval(() => {
       client.RenewLease(
-        { jobId: job.id, leaseDurationSecs: 300 },
+        {
+          jobId: job.id,
+          workerId: `worker-${process.pid}`,
+          leaseId: job.leaseId,
+          extensionSecs: 300,
+        },
         metadata,
         () => {},
       );

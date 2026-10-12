@@ -296,7 +296,7 @@ Manage API keys programmatically:
 const apiKey = await client.apiKeys.create({
   name: "Production Worker",
   queues: ["emails", "notifications"],
-  rateLimit: 1000,
+  rateLimit: 1000, // optional, requests per MINUTE for this key (can only lower the plan limit)
 });
 
 console.log(`Save this key: ${apiKey.key}`); // Only shown once!
@@ -351,9 +351,12 @@ All operations automatically enforce tier-based limits:
 
 | Tier           | Active Jobs | Daily Jobs | Queues    | Workers   | Webhooks  |
 | -------------- | ----------- | ---------- | --------- | --------- | --------- |
-| **Free**       | 10          | 1,000      | 5         | 3         | 2         |
-| **Starter**    | 100         | 100,000    | 25        | 25        | 10        |
+| **Free**       | 10          | 1,000      | 2         | 1         | 1         |
+| **Starter**    | 500         | 10,000     | 10        | 5         | 5         |
+| **Pro**        | 5,000       | 100,000    | 50        | 25        | 20        |
 | **Enterprise** | Unlimited   | Unlimited  | Unlimited | Unlimited | Unlimited |
+
+(Source: the backend's `config/plans.rs`; Free has no workflows, Starter 5, Pro 25.)
 
 **Limits are enforced on:**
 
@@ -389,7 +392,7 @@ try {
 }
 ```
 
-(Per-second rate limiting also returns `429`, as a `RateLimitError` with the default `RATE_LIMIT_EXCEEDED` code.)
+(Request-rate limiting also returns `429`, as a `RateLimitError` with the default `RATE_LIMIT_EXCEEDED` code. The plan limit is per organization in requests per second; an API key's own `rateLimit` is requests per minute. The only rate-limit header the API sends is `Retry-After`; there are no `X-RateLimit-*` headers.)
 
 A plan quota does not clear for hours, so `error.isQuota` is `true` for it and the SDK never retries it and
 never counts it toward the circuit breaker (rate-limit 429s are retried after `Retry-After`).
@@ -485,6 +488,13 @@ for (const job of jobs) {
   }
 }
 ```
+
+`dequeue` hands out up to `batchSize` jobs, each with a lease of `leaseDurationSecs` (5-3600 s; when
+omitted the server default applies, 300 s on Spooled Cloud). For a job that can run longer than its
+lease, pass a longer lease or renew it before it expires (`renewLease` with `jobId`, `workerId`,
+`leaseId`, `extensionSecs`). A gRPC `StreamJobs` stream delivers **one job at a time**: the next
+job is sent only after the previous one on that stream is completed, failed or released, so open
+one stream per job slot you want to run in parallel.
 
 **gRPC Features:**
 
