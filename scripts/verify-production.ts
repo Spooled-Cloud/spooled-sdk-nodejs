@@ -12,7 +12,7 @@
  *   1. Start your Cloudflare tunnel first:
  *      cloudflared tunnel --url http://localhost:3000
  *
- *   2. Have your API key ready (sk_live_... or sk_test_...)
+ *   2. Have your API key ready (sp_live_... or sp_test_...; legacy sk_ keys work too)
  */
 
 import {
@@ -107,7 +107,7 @@ async function promptConfiguration(): Promise<{
     chalk.white("      cloudflared tunnel --url http://localhost:3001"),
   );
   console.log(
-    chalk.gray("   2. Your API key ready (sk_live_... or sk_test_...)\n"),
+    chalk.gray("   2. Your API key ready (sp_live_... or sp_test_...)\n"),
   );
 
   const answers = await inquirer.prompt([
@@ -116,8 +116,13 @@ async function promptConfiguration(): Promise<{
       name: "apiKey",
       message: "Enter your API Key:",
       validate: (input: string) => {
-        if (!input.startsWith("sk_live_") && !input.startsWith("sk_test_")) {
-          return "API key must start with sk_live_ or sk_test_";
+        // sp_live_/sp_test_ today; sk_live_/sk_test_ is the legacy prefix
+        if (
+          !["sp_live_", "sp_test_", "sk_live_", "sk_test_"].some((prefix) =>
+            input.startsWith(prefix),
+          )
+        ) {
+          return "API key must start with sp_live_ or sp_test_ (or legacy sk_)";
         }
         if (input.length < 20) {
           return "API key seems too short";
