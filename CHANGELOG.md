@@ -59,9 +59,9 @@ types.
 - **Webhook events and formats:** `WebhookEventType` has `job.deadlettered`,
   `job.retried`, `workflow.completed` and `workflow.failed`; webhooks take and
   return `format` (`WebhookFormat`: `json`, `slack`, `discord`, `teams`).
-- **Inbound webhook log:** `ingest.listDeliveries({ status, since, queueName,
-limit, offset })` for `GET /webhooks/deliveries` (`InboundWebhookDelivery`,
-  `ListInboundDeliveriesParams`).
+- **Inbound webhook log:** `ingest.listDeliveries()` for
+  `GET /webhooks/deliveries`, filtered by `status`, `since` and `queueName`
+  (`InboundWebhookDelivery`, `ListInboundDeliveriesParams`).
 - **Rate-limit info:** `client.getRateLimitInfo()` returns `X-RateLimit-Limit`,
   `-Remaining`, `-Reset` (Unix seconds, as a `Date`) and `-Scope` from the most
   recent response that carried them; `RateLimitInfo.scope` is new and is also
@@ -86,7 +86,8 @@ limit, offset })` for `GET /webhooks/deliveries` (`InboundWebhookDelivery`,
   surface and the gRPC `retry: false` dead-letter, and skips unauthenticated
   organization sign-up and email login unless `RUN_UNSAFE=1` (on by default only
   for a localhost `BASE_URL`). `scripts/test-production.ts` starts it through a
-  shell on Windows. (SDKNP-37)
+  shell on Windows, and `scripts/verify-production.ts` accepts `sp_live_` and
+  `sp_test_` keys. (SDKNP-37)
 
 ## [1.3.0] - 2026-10-10
 
