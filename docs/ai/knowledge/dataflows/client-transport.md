@@ -6,7 +6,7 @@
 - Proto loader `defaults: true` (`src/grpc/loader.ts`) — encodeEnqueue omits unset ints (1.0.39); backend maps wire 0 → QUEUE*DEFAULT*\* since 0.1.107.
 
 - `getProtoPath` resolves `proto/spooled.proto` from both `dist/` and `src/grpc/` layouts (1.0.39 / NS-04).
-- gRPC message codec lives in `src/grpc/encode.ts` (1.4.0): `payload`/`result` <-> `google.protobuf.Struct`, `fail.retry` default, unknown enum numbers as strings. Unary calls, `StreamJobs` and `ProcessJobs` all use it (SDKNP-39).
+- gRPC message codec lives in `src/grpc/encode.ts` (1.4.0): `payload`/`result` <-> `google.protobuf.Struct`, `fail.retry` default, unknown enum numbers as strings. Unary calls, `StreamJobs` and `ProcessJobs` all use it (SDKNP-39). `AsyncIterableStream` (`src/grpc/streaming.ts`) cancels the call when `decode` throws, then rethrows that error; the CANCELLED error the cancel causes is ignored and items still in flight are dropped.
 
 ## Retry, auth and acks (1.3.0)
 

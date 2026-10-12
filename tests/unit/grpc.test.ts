@@ -577,4 +577,98 @@ describe("gRPC streams decode jobs like unary calls", () => {
       tags: ["x"],
     });
   });
+
+  // A Struct entry that is not a protobuf Value makes decodeValue throw.
+  const undecodableJob = {
+    ...wireJob,
+    id: "job_bad",
+    payload: { fields: { a: null } },
+  };
+
+  it("cancels the stream when a received job cannot be decoded, then rethrows", async () => {
+    const call = fakeStream();
+    const onError = vi.fn();
+    const stream = createJobStream(call as any, { onError });
+    const iterator = stream[Symbol.asyncIterator]();
+
+    const first = iterator.next();
+    call.emit("data", wireJob);
+    expect((await first).value?.id).toBe("job_1");
+
+    const second = iterator.next();
+    const rejected = expect(second).rejects.toThrow(TypeError);
+    call.emit("data", undecodableJob);
+    await rejected;
+
+    expect(call.cancel).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("reports the decode error, not the CANCELLED error its own cancel() causes", async () => {
+    const call = fakeStream();
+    const onError = vi.fn();
+    // grpc-js answers cancel() with an 'error' event carrying status CANCELLED.
+    call.cancel.mockImplementation(() => {
+      call.emit(
+        "error",
+        Object.assign(new Error("1 CANCELLED: Cancelled on client"), {
+          code: grpc.status.CANCELLED,
+        }),
+      );
+    });
+    const stream = createProcessJobsStream(call as any, { onError });
+    const iterator = stream.receive()[Symbol.asyncIterator]();
+
+    const next = iterator.next();
+    const rejected = expect(next).rejects.toThrow(TypeError);
+    call.emit("data", { job: undecodableJob });
+    await rejected;
+
+    expect(call.cancel).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("drops what the server still sends after a decode failure", async () => {
+    const call = fakeStream();
+    const stream = createJobStream(call as any);
+    const iterator = stream[Symbol.asyncIterator]();
+
+    const next = iterator.next();
+    const rejected = expect(next).rejects.toThrow(TypeError);
+    call.emit("data", undecodableJob);
+    call.emit("data", wireJob);
+    await rejected;
+    expect(call.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("rethrows the decode error when the stream has no cancel()", async () => {
+    const call = fakeStream() as Record<string, unknown>;
+    delete call.cancel;
+    const stream = createJobStream(call as any);
+    const iterator = stream[Symbol.asyncIterator]();
+
+    const next = iterator.next();
+    const rejected = expect(next).rejects.toThrow(TypeError);
+    call.emit("data", undecodableJob);
+    await rejected;
+  });
+
+  it("does not cancel a stream that ends or fails by itself", async () => {
+    const ended = fakeStream();
+    const endedIterator = createJobStream(ended as any)[Symbol.asyncIterator]();
+    const endedNext = endedIterator.next();
+    ended.emit("end");
+    await expect(endedNext).resolves.toMatchObject({ done: true });
+    expect(ended.cancel).not.toHaveBeenCalled();
+
+    const failed = fakeStream();
+    const failedIterator = createJobStream(failed as any)[
+      Symbol.asyncIterator
+    ]();
+    const failedNext = failedIterator.next();
+    const rejected = expect(failedNext).rejects.toThrow("unavailable");
+    failed.emit("error", new Error("unavailable"));
+    await rejected;
+    expect(failed.cancel).not.toHaveBeenCalled();
+  });
 });

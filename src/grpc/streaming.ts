@@ -76,21 +76,40 @@ class AsyncIterableStream<T> implements AsyncIterable<T> {
     const queue: T[] = [];
     let error: Error | null = null;
     let ended = false;
+    let decodeFailed = false;
     let resolve: (() => void) | null = null;
 
     this.stream.on("data", (data: T) => {
+      // After a decode failure the stream is being cancelled; what the server
+      // still has in flight is dropped, so no item is yielded out of order.
+      if (decodeFailed) {
+        return;
+      }
       try {
         queue.push(this.decode(data));
       } catch (decodeError) {
+        decodeFailed = true;
         error =
           decodeError instanceof Error
             ? decodeError
             : new Error(String(decodeError));
+        // The iteration ends with this error, so stop the call instead of
+        // leaving it open and receiving jobs nobody reads.
+        try {
+          this.stream.cancel?.();
+        } catch {
+          // The decode error is the one to report.
+        }
       }
       resolve?.();
     });
 
     this.stream.on("error", (err: Error) => {
+      // The CANCELLED error our own cancel() causes must not replace the
+      // decode error or reach onError.
+      if (decodeFailed) {
+        return;
+      }
       error = err;
       onError?.(err);
       resolve?.();

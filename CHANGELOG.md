@@ -38,7 +38,10 @@ types.
   (`{ fields: { ... } }`) as `payload` and `result`; they now return plain
   objects, as `dequeue()` and `getJob()` do. `processJobs().send({ complete })`
   encodes `result` as a `Struct`; it was sent as a plain object and lost.
-  (SDKNP-39)
+  A stream that receives an item it cannot decode is cancelled before the
+  iterator throws the decode error; the call used to stay open. The CANCELLED
+  error that the cancel causes does not replace the decode error or reach
+  `onError`. (SDKNP-39)
 - A gRPC job status newer than the SDK's proto is returned as a string (`"42"`)
   instead of a number. (SDKNP-38)
 - `jobs.list()` sends a `Date` filter as ISO 8601; `String(date)` is not
