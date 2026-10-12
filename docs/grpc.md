@@ -114,8 +114,9 @@ for (const job of jobs) {
 - **`Fail.retry` is `optional bool` (field 4).** Omitted or `true`: the job is retried until its
   `maxRetries` run out, the same as REST. `false`: the job goes to the dead-letter queue now. The SDK
   sends `retry: true` when you do not set it, because servers before API 0.1.118 declared a plain
-  `bool` and read an absent field as `false`. With raw `@grpc/proto-loader`, load the current
-  `proto/spooled.proto` so an explicit `false` is encoded with presence.
+  `bool` and read an absent field as `false`. Calling the service yourself, set `retry` explicitly
+  and use the current `proto/spooled.proto`: it declares the field `optional`, so every protobuf
+  library puts an explicit `false` on the wire.
 - **Omitted lease = 300 s.** `leaseDurationSecs` 0 or omitted uses the server default (300 s on
   Spooled Cloud); otherwise 5-3600 s.
 
