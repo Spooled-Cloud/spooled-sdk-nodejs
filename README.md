@@ -590,12 +590,13 @@ import type {
 
 ## Development and releases
 
-Before opening a pull request or tagging a release, run the same checks used by the package and publish workflow:
+CI (`.github/workflows/ci.yml`) runs these checks on Node 22 and 24 for every push to `main` and every pull request; the publish workflow runs them again on Node 22 before publishing. Run them locally before opening a pull request or tagging a release:
 
 ```bash
 npm ci
 npm run lint
 npm run typecheck
+npm run typecheck:examples
 npm run build
 npm test
 ```
