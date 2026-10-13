@@ -5,6 +5,37 @@ All notable changes to the Spooled Node.js SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-10-13
+
+Dependency security patch. The SDK's code and API are unchanged from 1.4.0.
+
+### Security
+
+- **`@grpc/grpc-js` floor raised to `^1.14.5`** (was `^1.14.3`), so installing
+  the SDK can no longer resolve 1.14.0 to 1.14.4, which are affected by
+  GHSA-m9gg-hp2v-232j (high: in some configurations `getAuthContext` reports
+  unauthorized certificates as authorized) and GHSA-f596-whhp-79r4 (low: a
+  server sends some error messages thrown by method handlers to the client).
+  Both advisories describe grpc-js server behaviour; the SDK only creates gRPC
+  clients, but its range decides which grpc-js an application installs and may
+  share. The lockfile resolves 1.14.6. `@grpc/proto-loader` is `^0.8.1`.
+  `npm audit --omit=dev` reports no vulnerabilities.
+- Development dependencies only (not in the published package): `vitest` and
+  `@vitest/coverage-v8` are `^4.1.11` (GHSA-82fw-gwwq-j7x9 in
+  `@vitest/mocker`), and `npm audit fix` updated the lockfile's transitive
+  `brace-expansion`, `js-yaml`, `nanoid`, `postcss`, `source-map-js` and
+  `@humanfs/node`. `npm audit` reports no vulnerabilities.
+
+### Changed
+
+- **CI on every push and pull request.** `.github/workflows/ci.yml` runs
+  `npm ci`, lint, typecheck, `typecheck:examples`, build and tests on Node 22
+  and 24 for each push to `main` and each pull request. These checks used to run
+  only in the tag publish workflow.
+- The publish workflow runs on Node 22 instead of Node 20, which is end of life.
+  Its Trusted Publishing and provenance setup (npm 11, OIDC,
+  `npm publish --provenance`) is unchanged.
+
 ## [1.4.0] - 2026-10-12
 
 Support for Spooled API 0.1.122 and fixes from the final production
