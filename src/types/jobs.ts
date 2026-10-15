@@ -320,6 +320,12 @@ export interface RetryDlqParams {
 export interface RetryDlqResponse {
   retriedCount: number;
   retriedJobs: string[];
+  /**
+   * Jobs left dead-lettered because reviving their workflow would pass the
+   * plan's workflow cap. A partial retry is still HTTP 200, so these ids are
+   * the only sign those jobs were not retried. Sent by backend 0.1.121+.
+   */
+  skippedJobs?: string[];
 }
 
 /** Parameters for purging DLQ */

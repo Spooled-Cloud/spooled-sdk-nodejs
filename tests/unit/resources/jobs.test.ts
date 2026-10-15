@@ -657,6 +657,24 @@ describe("JobsResource", () => {
       expect(result.retriedJobs).toHaveLength(5);
     });
 
+    it("exposes the jobs a partial DLQ retry skipped", async () => {
+      server.use(
+        http.post("https://api.spooled.cloud/api/v1/jobs/dlq/retry", () => {
+          return HttpResponse.json({
+            retried_count: 1,
+            retried_jobs: ["job_1"],
+            skipped_jobs: ["job_2", "job_3"],
+          });
+        }),
+      );
+
+      const client = createClient();
+      const result = await client.jobs.dlq.retry({ limit: 3 });
+
+      expect(result.retriedCount).toBe(1);
+      expect(result.skippedJobs).toEqual(["job_2", "job_3"]);
+    });
+
     it("should purge DLQ", async () => {
       server.use(
         http.post("https://api.spooled.cloud/api/v1/jobs/dlq/purge", () => {
