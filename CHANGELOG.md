@@ -5,6 +5,62 @@ All notable changes to the Spooled Node.js SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-10-15
+
+Large integers in job data keep their digits, a worker stops working a job whose
+lease it has lost, and the SSE client can authenticate in a browser. One change
+affects code that reads large integers out of job data; read "Changed" before
+upgrading.
+
+### Changed
+
+- **Behavior change: integers above 2^53 in user-owned JSON are now returned as
+  decimal strings.** Inside `payload`, `result`, `tags` and the other free-form
+  fields (`metadata`, `settings`, `details`, `extra`, `payloadTemplate` and
+  `customLimits`), an integer whose magnitude is greater than 2^53 used to be
+  returned as a rounded number: `1234567890123456789` arrived as
+  `1234567890123456768`, silently, with no error. The SDK parsed every response
+  with `response.json()`, which turns each number into a float64. The API sends
+  the exact digits, so the SDK now parses the text itself and returns those
+  integers as strings (`"1234567890123456789"`). This applies to REST responses
+  and to events from the SSE and WebSocket clients. Integers up to and including
+  2^53, floats, and every number outside those fields (counters, timestamps,
+  `retryCount` and so on) are still `number`s. `JsonValue` is unchanged, so this
+  does not show up as a type error: code that reads such an id from a job and
+  treats it as a `number` now gets a `string`. Use the string as it is, or pass
+  it to `BigInt()`. What you send is unchanged. gRPC cannot do this:
+  `google.protobuf.Struct` stores every number as a float64, so over gRPC an
+  integer above 2^53 is already rounded before the SDK sees it. Send such values
+  as strings on that path; the `GrpcJob` documentation says so.
+
+### Fixed
+
+- **The SSE client authenticates when it uses the platform `EventSource`.** In a
+  browser, and with the `EventSource` global of recent Node versions, the client
+  passed the `Authorization` header through a `fetch` option that the platform
+  constructor ignores, and a browser `EventSource` cannot set headers at all. The
+  request went out without a credential. It now sends the JWT as the `token`
+  query parameter, the same credential the WebSocket client sends. The
+  `eventsource` package, which the SDK uses when there is no platform
+  `EventSource`, still sends the `Authorization` header and keeps the token off
+  the URL. The debug log prints the URL before the token is added, so the token
+  does not reach debug output.
+- **A worker stops working a job whose lease it lost.** A job heartbeat answered
+  with HTTP 409 `LEASE_EXPIRED` (the lease timed out, or `lease_id` no longer
+  matches the job's current lease) was only logged. The handler kept running and
+  then completed or failed the job with the stale lease, while another worker
+  could be running the same payload. The worker now aborts `ctx.signal` with that
+  error, stops renewing the lease and the job timeout, and frees the concurrency
+  slot at once, even if the handler ignores the abort or never returns. The
+  handler's late result is dropped, and the job is never completed or failed by
+  that worker. Other heartbeat failures, such as a dropped connection or a 5xx,
+  are still only logged, and the next beat may renew the lease in time.
+- **A `complete` or `fail` rejected with `LEASE_EXPIRED` is no longer emitted as
+  a worker `error`.** The job belongs to whoever holds it now, so it is not a
+  worker failure. It is logged at debug level and the handler is signalled as
+  above. Any other failure to report a result, including another 409, is still
+  emitted as `error`.
+
 ## [1.4.1] - 2026-10-13
 
 Dependency security patch. The SDK's code and API are unchanged from 1.4.0.
