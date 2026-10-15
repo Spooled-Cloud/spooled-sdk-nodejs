@@ -5,6 +5,15 @@ All notable changes to the Spooled Node.js SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2026-10-15
+
+### Fixed
+
+- `RetryDlqResponse` declares `skippedJobs?: string[]`. The backend has sent
+  `skipped_jobs` since 0.1.121 (jobs left dead-lettered because reviving their
+  workflow would pass the plan's workflow cap) and the SDK already returned it
+  at runtime, but TypeScript code could not read it without a cast.
+
 ## [1.5.0] - 2026-10-15
 
 Large integers in job data keep their digits, a worker stops working a job whose
