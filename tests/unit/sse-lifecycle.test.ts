@@ -9,6 +9,51 @@ import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { SseRealtimeClient } from "../../src/realtime/sse.js";
 
 /* eslint-disable no-unused-vars -- TS function-type parameter names */
+
+const { packageSources } = vi.hoisted(() => ({
+  packageSources: [] as Array<{
+    url: string;
+    init?: {
+      fetch?: (
+        input: unknown,
+        init?: { headers?: Record<string, string> },
+      ) => Promise<unknown>;
+    };
+    onopen: (() => void) | null;
+  }>,
+}));
+
+vi.mock("eventsource", () => {
+  class PackageEventSource {
+    onopen: (() => void) | null = null;
+    onmessage: unknown = null;
+    onerror: unknown = null;
+    url: string;
+    init?: {
+      fetch?: (
+        input: unknown,
+        init?: { headers?: Record<string, string> },
+      ) => Promise<unknown>;
+    };
+    constructor(
+      url: string,
+      init?: {
+        fetch?: (
+          input: unknown,
+          init?: { headers?: Record<string, string> },
+        ) => Promise<unknown>;
+      },
+    ) {
+      this.url = url;
+      this.init = init;
+      packageSources.push(this);
+    }
+    addEventListener(): void {}
+    close(): void {}
+  }
+  return { default: PackageEventSource };
+});
+
 type MessageListener = (e: { data: string }) => void;
 
 class FakeEventSource {
@@ -208,5 +253,74 @@ describe("SseRealtimeClient reconnect lifecycle", () => {
     last().fail();
     await vi.advanceTimersByTimeAsync(800);
     expect(tokenProvider).toHaveBeenLastCalledWith(false);
+  });
+
+  it("authenticates a platform EventSource with the token query param, not fetch", async () => {
+    const debug = vi.fn();
+    const { client } = makeClient({
+      tokenProvider: async () => "jwt+/= x",
+      debug,
+    });
+
+    await connect(client, { queueName: "orders" });
+    expect(last().url).toBe(
+      "https://api.spooled.cloud/api/v1/events?queue=orders&token=" +
+        encodeURIComponent("jwt+/= x"),
+    );
+    expect(last().init).toBeUndefined();
+
+    const logged = debug.mock.calls.map((call) => String(call[0])).join("\n");
+    expect(logged).not.toContain("token=");
+    expect(logged).not.toContain("jwt+");
+    client.disconnect();
+
+    const job = makeClient();
+    await connect(job.client, { jobId: "job/1" });
+    expect(last().url).toBe(
+      "https://api.spooled.cloud/api/v1/events/jobs/" +
+        `${encodeURIComponent("job/1")}?token=jwt`,
+    );
+    expect(last().init).toBeUndefined();
+    job.client.disconnect();
+  });
+
+  it("keeps the Authorization header on the eventsource package and the token off the URL", async () => {
+    delete (globalThis as { EventSource?: unknown }).EventSource;
+    packageSources.length = 0;
+    // A missed mock must not open a socket to production.
+    const { client } = makeClient({
+      baseUrl: "http://127.0.0.1:9",
+      wsUrl: "ws://127.0.0.1:9",
+    });
+
+    const connecting = client.connect({ jobId: "job/1" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(packageSources).toHaveLength(1);
+    const src = packageSources[0];
+    expect(src.url).toBe(
+      `http://127.0.0.1:9/api/v1/events/jobs/${encodeURIComponent("job/1")}`,
+    );
+    expect(src.url).not.toContain("token=");
+
+    const fetchMock = vi.fn(async () => new Response(null, { status: 200 }));
+    const previousFetch = globalThis.fetch;
+    globalThis.fetch = fetchMock as typeof fetch;
+    try {
+      await src.init?.fetch?.("http://127.0.0.1:9/events", {
+        headers: { Accept: "text/event-stream" },
+      });
+    } finally {
+      globalThis.fetch = previousFetch;
+    }
+    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:9/events", {
+      headers: {
+        Accept: "text/event-stream",
+        Authorization: "Bearer jwt",
+      },
+    });
+
+    src.onopen?.();
+    await connecting;
+    client.disconnect();
   });
 });

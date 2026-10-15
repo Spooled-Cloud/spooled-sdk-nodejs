@@ -29,6 +29,7 @@ import {
 } from "./casing.js";
 import { withRetry } from "./retry.js";
 import { CircuitBreaker } from "./circuit-breaker.js";
+import { parseApiJson } from "./json.js";
 
 /**
  * HTTP methods considered idempotent per HTTP semantics.
@@ -386,7 +387,11 @@ export class HttpClient {
     if (response.status === 204) {
       data = undefined as T;
     } else if (contentType.includes("application/json")) {
-      const rawData = (await response.json()) as T;
+      // response.json() parses every number as a float64, which changes an
+      // integer above 2^53 before a job handler can see it. Parse the text so
+      // those integers stay exact inside payload/result (and the other
+      // free-form fields) and arrive as decimal strings.
+      const rawData = parseApiJson(await response.text()) as T;
       data = options.skipResponseConversion
         ? rawData
         : convertResponse(rawData);

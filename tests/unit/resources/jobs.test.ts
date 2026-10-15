@@ -428,6 +428,54 @@ describe("JobsResource", () => {
 
       expect(result.jobs[0].leaseId).toBeNull();
     });
+
+    it("keeps integers above 2^53 exact in a claimed payload", async () => {
+      server.use(
+        http.post("https://api.spooled.cloud/api/v1/jobs/claim", () => {
+          return new HttpResponse(
+            '{"jobs":[{"id":"job_123","queue_name":"my-queue","payload":{"discord_id":1234567890123456789,"count":42},"result":{"n":9007199254740993},"retry_count":0,"max_retries":3,"timeout_seconds":300,"lease_id":"lease_abc"}]}',
+            { headers: { "Content-Type": "application/json" } },
+          );
+        }),
+      );
+
+      const result = await createClient().jobs.claim({
+        queueName: "my-queue",
+        workerId: "worker_123",
+      });
+
+      // JSON.parse would have turned the id into 1234567890123456768.
+      expect(result.jobs[0].payload).toEqual({
+        discord_id: "1234567890123456789",
+        count: 42,
+      });
+      expect(result.jobs[0].retryCount).toBe(0);
+      expect(result.jobs[0].leaseId).toBe("lease_abc");
+    });
+  });
+
+  describe("get exact integers", () => {
+    it("keeps integers above 2^53 exact in payload, result and tags", async () => {
+      server.use(
+        http.get("https://api.spooled.cloud/api/v1/jobs/job_123", () => {
+          return new HttpResponse(
+            '{"id":"job_123","queue_name":"my-queue","status":"completed","payload":{"discord_id":1234567890123456789,"job_type":"send_email"},"result":{"snowflake":1234567890123456789},"tags":{"team":1234567890123456789},"retry_count":1,"max_retries":3,"priority":0,"timeout_seconds":300,"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"}',
+            { headers: { "Content-Type": "application/json" } },
+          );
+        }),
+      );
+
+      const job = await createClient().jobs.get("job_123");
+
+      expect(job.payload).toEqual({
+        discord_id: "1234567890123456789",
+        job_type: "send_email",
+      });
+      expect(job.result).toEqual({ snowflake: "1234567890123456789" });
+      expect(job.tags).toEqual({ team: "1234567890123456789" });
+      expect(job.retryCount).toBe(1);
+      expect(job.jobType).toBe("send_email");
+    });
   });
 
   describe("complete", () => {

@@ -9,7 +9,7 @@
  * Keys that should NOT have their values deeply converted.
  * These typically contain user-defined JSON that shouldn't be modified.
  */
-const SKIP_CONVERSION_KEYS = new Set([
+export const SKIP_CONVERSION_KEYS = new Set([
   "payload",
   "result",
   "metadata",

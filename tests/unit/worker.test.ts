@@ -3,6 +3,7 @@
  */
 
 import { afterEach, describe, it, expect, vi } from "vitest";
+import { ConflictError, ServerError } from "../../src/errors.js";
 import { SpooledWorker } from "../../src/worker/worker.js";
 
 /** Build a minimal fake SpooledClient for the worker to drive. */
@@ -365,5 +366,213 @@ describe("SpooledWorker lease fencing", () => {
     expect(complete).toHaveBeenCalledTimes(1);
     const params = complete.mock.calls[0][1];
     expect("leaseId" in params).toBe(false);
+  });
+
+  it("aborts the handler and does not ack when the heartbeat returns LEASE_EXPIRED", async () => {
+    vi.useFakeTimers();
+    const { client, heartbeat, complete, fail } = makeFakeClient({
+      leaseId: "lease_1",
+    });
+    // A mismatched lease uses the same code as an expired one.
+    heartbeat.mockRejectedValue(
+      new ConflictError(
+        "lease_id does not match the job's current lease; this worker no longer holds it",
+        "LEASE_EXPIRED",
+      ),
+    );
+
+    const worker = new SpooledWorker(client, {
+      queueName: "q",
+      concurrency: 1,
+      pollInterval: 5,
+      leaseDuration: 5,
+      // 5s * 0.002 * 1000 = 10ms heartbeat interval
+      heartbeatFraction: 0.002,
+      shutdownTimeout: 30,
+    });
+
+    let signal: AbortSignal | undefined;
+    worker.process(async (ctx) => {
+      signal = ctx.signal;
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, 60_000);
+        ctx.signal.addEventListener("abort", () => {
+          clearTimeout(timer);
+          resolve();
+        });
+      });
+      // A handler that notices the abort by throwing must not fail the job:
+      // the lease is already someone else's.
+      if (ctx.signal.aborted) {
+        throw new Error("lease lost");
+      }
+      return { ok: true };
+    });
+
+    await worker.start();
+    await vi.advanceTimersByTimeAsync(30);
+
+    expect(signal?.aborted).toBe(true);
+    expect((signal?.reason as ConflictError).code).toBe("LEASE_EXPIRED");
+    expect(complete).not.toHaveBeenCalled();
+    expect(fail).not.toHaveBeenCalled();
+
+    const beats = heartbeat.mock.calls.length;
+    expect(beats).toBeGreaterThan(0);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(heartbeat.mock.calls.length).toBe(beats);
+    expect(worker.getActiveJobCount()).toBe(0);
+
+    await worker.stop();
+  });
+
+  it("frees the slot on LEASE_EXPIRED even when the handler ignores the abort", async () => {
+    vi.useFakeTimers();
+    const { client, heartbeat, complete, fail, claim } = makeFakeClient({
+      leaseId: "lease_1",
+      timeoutSeconds: 1,
+    });
+    heartbeat.mockRejectedValue(
+      new ConflictError("Job lease has expired", "LEASE_EXPIRED"),
+    );
+
+    const worker = new SpooledWorker(client, {
+      queueName: "q",
+      concurrency: 1,
+      pollInterval: 5,
+      leaseDuration: 5,
+      heartbeatFraction: 0.002,
+      shutdownTimeout: 1,
+    });
+
+    // Never settles and never looks at ctx.signal.
+    worker.process(() => new Promise<never>(() => undefined));
+
+    await worker.start();
+    await vi.advanceTimersByTimeAsync(30);
+    const claimsAfterLoss = claim.mock.calls.length;
+
+    expect(worker.getActiveJobCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(2_000);
+    // The freed slot is polled again, and the lost job is never acked, not
+    // even by the job timeout.
+    expect(claim.mock.calls.length).toBeGreaterThan(claimsAfterLoss);
+    expect(complete).not.toHaveBeenCalled();
+    expect(fail).not.toHaveBeenCalled();
+
+    await worker.stop();
+  });
+
+  it("does not abort the handler when a heartbeat fails for another reason", async () => {
+    vi.useFakeTimers();
+    const { client, heartbeat, complete, fail } = makeFakeClient({
+      leaseId: "lease_1",
+    });
+    heartbeat.mockRejectedValueOnce(
+      new ServerError("upstream down", 503, "SERVER_ERROR"),
+    );
+
+    const worker = new SpooledWorker(client, {
+      queueName: "q",
+      concurrency: 1,
+      pollInterval: 5,
+      leaseDuration: 5,
+      heartbeatFraction: 0.002,
+    });
+
+    let signal: AbortSignal | undefined;
+    worker.process(async (ctx) => {
+      signal = ctx.signal;
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 25);
+      });
+      return { ok: true };
+    });
+
+    await worker.start();
+    await vi.advanceTimersByTimeAsync(40);
+
+    expect(signal?.aborted).toBe(false);
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(fail).not.toHaveBeenCalled();
+    await worker.stop();
+  });
+
+  it("does not emit error when complete is rejected with LEASE_EXPIRED", async () => {
+    vi.useFakeTimers();
+    const { client, complete } = makeFakeClient();
+    complete.mockRejectedValue(
+      new ConflictError(
+        "Job lease expired and cannot be extended",
+        "LEASE_EXPIRED",
+      ),
+    );
+
+    const worker = new SpooledWorker(client, {
+      queueName: "q",
+      concurrency: 1,
+      pollInterval: 5,
+      leaseDuration: 30,
+      heartbeatFraction: 0.5,
+    });
+    const errors = vi.fn();
+    worker.on("error", errors);
+    worker.process(async () => ({ ok: true }));
+    await worker.start();
+    await vi.advanceTimersByTimeAsync(20);
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(errors).not.toHaveBeenCalled();
+    await worker.stop();
+  });
+
+  it("does not emit error when fail is rejected with LEASE_EXPIRED", async () => {
+    vi.useFakeTimers();
+    const { client, fail } = makeFakeClient();
+    fail.mockRejectedValue(
+      new ConflictError(
+        "Job lease expired and cannot be extended",
+        "LEASE_EXPIRED",
+      ),
+    );
+
+    const worker = new SpooledWorker(client, {
+      queueName: "q",
+      concurrency: 1,
+      pollInterval: 5,
+      leaseDuration: 30,
+      heartbeatFraction: 0.5,
+    });
+    const errors = vi.fn();
+    worker.on("error", errors);
+    worker.process(() => {
+      throw new Error("boom");
+    });
+    await worker.start();
+    await vi.advanceTimersByTimeAsync(20);
+    expect(fail).toHaveBeenCalledTimes(1);
+    expect(errors).not.toHaveBeenCalled();
+    await worker.stop();
+  });
+
+  it("still emits error when an ack is rejected with another 409", async () => {
+    vi.useFakeTimers();
+    const { client, complete } = makeFakeClient();
+    complete.mockRejectedValue(
+      new ConflictError("Job is already completed", "CONFLICT"),
+    );
+
+    const worker = new SpooledWorker(client, {
+      queueName: "q",
+      concurrency: 1,
+      pollInterval: 5,
+    });
+    const errors = vi.fn();
+    worker.on("error", errors);
+    worker.process(async () => ({ ok: true }));
+    await worker.start();
+    await vi.advanceTimersByTimeAsync(20);
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(errors).toHaveBeenCalledTimes(1);
+    await worker.stop();
   });
 });

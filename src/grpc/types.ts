@@ -83,9 +83,18 @@ export interface GrpcJob {
   organizationId: string;
   queueName: string;
   status: GrpcJobStatus | string;
-  /** Payload as google.protobuf.Struct (object) */
+  /**
+   * Payload as google.protobuf.Struct (object).
+   *
+   * Struct stores every number as a float64, so an integer above 2^53 is
+   * already rounded before this SDK sees it. REST keeps those integers as
+   * decimal strings; send them as strings on this path.
+   */
   payload?: Record<string, unknown> | null;
-  /** Result as google.protobuf.Struct (object) */
+  /**
+   * Result as google.protobuf.Struct (object). Same float64 limit as
+   * `payload`: an integer above 2^53 cannot round-trip.
+   */
   result?: Record<string, unknown> | null;
   retryCount: number;
   maxRetries: number;

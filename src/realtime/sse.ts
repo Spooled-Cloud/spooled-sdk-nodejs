@@ -12,6 +12,7 @@ import type {
   ConnectionState,
 } from "./types.js";
 import { convertResponse } from "../utils/casing.js";
+import { parseApiJson } from "../utils/json.js";
 import { mapEventType } from "./event-map.js";
 
 /** Event handler type - simplified for internal use */
@@ -131,12 +132,18 @@ export class SseRealtimeClient {
     this.setState("connecting");
 
     const sseUrl = this.buildSseUrl(filter);
+    // Logged before the credential is added. A platform EventSource puts the
+    // token on the query string, and that must not land in debug output.
     this.options.debug(`Connecting to SSE: ${sseUrl}`);
 
-    // Use eventsource package in Node.js, native EventSource in browser
+    // The platform EventSource (browser, and Node's undici global) ignores a
+    // `fetch` option, so an Authorization header passed that way is never
+    // sent. The `eventsource` package is the one that honors `fetch`. Prefer
+    // the package when there is no platform constructor.
+    const usingPlatformEventSource = typeof EventSource !== "undefined";
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let EventSourceImpl: any;
-    if (typeof EventSource !== "undefined") {
+    if (usingPlatformEventSource) {
       EventSourceImpl = EventSource;
     } else {
       // Dynamic import for ESM compatibility
@@ -167,19 +174,29 @@ export class SseRealtimeClient {
 
     return new Promise((resolve, reject) => {
       try {
-        // Create EventSource with authorization header
-        // Note: eventsource v4 changed API - headers are now passed via custom fetch
-        this.eventSource = new EventSourceImpl(sseUrl, {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          fetch: (input: any, init: any) =>
-            fetch(input, {
-              ...init,
-              headers: {
-                ...init?.headers,
-                Authorization: `Bearer ${token}`,
+        // Platform EventSource cannot set a header. The API accepts `?token=`
+        // for that case (the same credential the WebSocket client sends). The
+        // `eventsource` package can set Authorization, so it keeps the header
+        // and the token stays off the URL.
+        const connectUrl = usingPlatformEventSource
+          ? appendSseToken(sseUrl, token)
+          : sseUrl;
+        this.eventSource = new EventSourceImpl(
+          connectUrl,
+          usingPlatformEventSource
+            ? undefined
+            : {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                fetch: (input: any, init: any) =>
+                  fetch(input, {
+                    ...init,
+                    headers: {
+                      ...init?.headers,
+                      Authorization: `Bearer ${token}`,
+                    },
+                  }),
               },
-            }),
-        });
+        );
 
         this.eventSource.onopen = () => {
           this.options.debug("SSE connected");
@@ -335,7 +352,7 @@ export class SseRealtimeClient {
       // event shapes. User blobs (`result`/`payload`) are preserved via
       // SKIP_CONVERSION_KEYS.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const parsed = convertResponse(JSON.parse(data)) as any;
+      const parsed = convertResponse(parseApiJson(data)) as any;
       // Translate the backend's PascalCase variant name (`JobCompleted`) to the
       // SDK's dotted event name (`job.completed`) before dispatch, matching the
       // WebSocket client. Unknown/pre-dotted names pass through unchanged.
@@ -444,6 +461,16 @@ export class SseRealtimeClient {
       }
     }, delay);
   }
+}
+
+/**
+ * Credential for a platform EventSource, which cannot send Authorization.
+ * Appended after the subscription query (`?queue=`), so the separator depends
+ * on whether the URL already has a query string.
+ */
+function appendSseToken(url: string, token: string): string {
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}token=${encodeURIComponent(token)}`;
 }
 
 /**

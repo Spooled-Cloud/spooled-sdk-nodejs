@@ -7,7 +7,17 @@
 /** JSON primitive types */
 export type JsonPrimitive = string | number | boolean | null;
 
-/** JSON value type */
+/**
+ * JSON value type.
+ *
+ * Inside user-owned JSON (`payload`, `result`, `tags`, and the other
+ * free-form fields) an integer whose magnitude is greater than 2^53 is
+ * returned as a decimal string, so the digits survive decoding. A float64
+ * cannot hold those integers, and a string is already a `JsonValue`. Every
+ * smaller number, and every number outside those fields, stays a `number`.
+ * gRPC payloads cannot do this: `google.protobuf.Struct` has already stored
+ * the value as a float64.
+ */
 export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
 
 /** JSON object type */

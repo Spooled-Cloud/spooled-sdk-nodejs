@@ -6,6 +6,7 @@
 
 import type { SpooledClient } from "../client.js";
 import { SDK_VERSION } from "../config.js";
+import { SpooledError } from "../errors.js";
 import type { JsonValue } from "../types/common.js";
 import type { ClaimedJob } from "../types/jobs.js";
 import { coerceFailureMessage } from "../utils/failure.js";
@@ -437,6 +438,12 @@ export class SpooledWorker {
     try {
       const outcome = await this.runHandler(activeJob, context);
 
+      // A lost lease (heartbeat 409) means another worker may already be
+      // running this job. Acking it would 409 and must not happen.
+      if (activeJob.leaseLost) {
+        this.debug(`Job ${job.id} lost its lease; dropping late result`);
+        return;
+      }
       // The shutdown drain already failed this job while its handler was still
       // running; the lease is gone, so a late result must not be sent.
       if (activeJob.settled) {
@@ -450,11 +457,14 @@ export class SpooledWorker {
       // is still sent, never silently dropped.
       switch (outcome.kind) {
         case "returned":
-          activeJob.ack = this.completeJob(job, outcome.value ?? undefined);
+          activeJob.ack = this.completeJob(
+            activeJob,
+            outcome.value ?? undefined,
+          );
           break;
         case "threw":
           activeJob.ack = this.failJob(
-            job,
+            activeJob,
             outcome.error instanceof Error
               ? outcome.error.message
               : String(outcome.error),
@@ -469,7 +479,7 @@ export class SpooledWorker {
             jobId: job.id,
             queueName: job.queueName,
           });
-          activeJob.ack = this.failJob(job, JOB_TIMEOUT_MESSAGE);
+          activeJob.ack = this.failJob(activeJob, JOB_TIMEOUT_MESSAGE);
           break;
       }
       await activeJob.ack;
@@ -518,7 +528,7 @@ export class SpooledWorker {
     // outcome must not be acked on top of this failure.
     activeJob.settled = true;
     activeJob.abortController.abort(new Error(SHUTDOWN_TIMEOUT_MESSAGE));
-    activeJob.ack = this.failJob(activeJob.job, SHUTDOWN_TIMEOUT_MESSAGE);
+    activeJob.ack = this.failJob(activeJob, SHUTDOWN_TIMEOUT_MESSAGE);
     await activeJob.ack;
     // The handler's finally may never run if user code ignores the abort
     // signal, so explicitly clear this exact execution's timers.
@@ -526,10 +536,11 @@ export class SpooledWorker {
   }
 
   private async completeJob(
-    job: ClaimedJob,
+    activeJob: ActiveJob,
     result?: JsonValue,
   ): Promise<void> {
-    if (!this.workerId) return;
+    if (!this.workerId || activeJob.leaseLost) return;
+    const { job } = activeJob;
 
     try {
       await this.client.jobs.complete(job.id, {
@@ -544,6 +555,13 @@ export class SpooledWorker {
         result,
       });
     } catch (error) {
+      // The lease was reclaimed between the handler returning and the ack.
+      // The result belongs to whoever holds the job now; this is not a
+      // worker failure.
+      if (isLeaseExpired(error)) {
+        this.noteLeaseLost(activeJob, error);
+        return;
+      }
       // The ack was already retried by the HTTP layer; what is left is a job
       // that finished but could not be reported.
       this.debug(`Failed to complete job ${job.id}`, error);
@@ -551,8 +569,12 @@ export class SpooledWorker {
     }
   }
 
-  private async failJob(job: ClaimedJob, errorMessage: string): Promise<void> {
-    if (!this.workerId) return;
+  private async failJob(
+    activeJob: ActiveJob,
+    errorMessage: string,
+  ): Promise<void> {
+    if (!this.workerId || activeJob.leaseLost) return;
+    const { job } = activeJob;
 
     const willRetry = job.retryCount < job.maxRetries;
     // The API rejects empty or over-long failure text with a 400, which would
@@ -573,6 +595,10 @@ export class SpooledWorker {
         willRetry,
       });
     } catch (error) {
+      if (isLeaseExpired(error)) {
+        this.noteLeaseLost(activeJob, error);
+        return;
+      }
       this.debug(`Failed to fail job ${job.id}`, error);
       this.emit("error", { error: error as Error });
     }
@@ -601,7 +627,7 @@ export class SpooledWorker {
   }
 
   private async sendJobHeartbeat(activeJob: ActiveJob): Promise<void> {
-    if (!this.workerId) return;
+    if (!this.workerId || activeJob.leaseLost) return;
 
     const { job } = activeJob;
 
@@ -612,8 +638,45 @@ export class SpooledWorker {
         ...(job.leaseId != null && { leaseId: job.leaseId }),
       });
     } catch (error) {
+      // 409 LEASE_EXPIRED means this worker no longer holds the job: the
+      // lease timed out, or the lease_id does not match. The scheduler has
+      // already made the job claimable again, so the handler has to stop
+      // and this execution must not ack it. Any other failure is only
+      // logged; the next beat may still renew the lease in time.
+      if (isLeaseExpired(error)) {
+        this.noteLeaseLost(activeJob, error);
+        return;
+      }
       this.debug(`Job heartbeat failed for ${job.id}`, error);
     }
+  }
+
+  /**
+   * The lease is gone. Abort the handler if it listens, stop renewing, and
+   * refuse a later complete/fail with the stale lease.
+   */
+  private noteLeaseLost(activeJob: ActiveJob, error: unknown): void {
+    if (activeJob.leaseLost) return;
+    activeJob.leaseLost = true;
+    if (activeJob.heartbeatTimer) {
+      clearInterval(activeJob.heartbeatTimer);
+      activeJob.heartbeatTimer = undefined;
+    }
+    // A timeout must not fail the job after the lease has been reclaimed.
+    this.clearTimeoutTimer(activeJob);
+    const reason =
+      error instanceof Error ? error : new Error("Job lease expired");
+    activeJob.abortController.abort(reason);
+    this.debug(
+      `Job lease lost for ${activeJob.job.id}; stopping handler`,
+      error,
+    );
+    // Free the slot now. The abort is only a hint: a handler that ignores it
+    // (or whose I/O never returns) would otherwise hold a concurrency slot
+    // forever, since the timeout above no longer settles it. Its late result
+    // is dropped by the leaseLost check in executeHandler.
+    activeJob.settled = true;
+    this.cleanupJob(activeJob);
   }
 
   private async sendWorkerHeartbeat(): Promise<void> {
@@ -656,4 +719,18 @@ export class SpooledWorker {
       };
     });
   }
+}
+
+/**
+ * Heartbeat, complete and fail all answer a lost or mismatched lease with
+ * 409 `LEASE_EXPIRED` (a mismatch uses that same code). Anything else — a
+ * dropped connection, a 5xx — may still succeed on the next beat, so it must
+ * not abort the handler.
+ */
+function isLeaseExpired(error: unknown): boolean {
+  return (
+    error instanceof SpooledError &&
+    error.statusCode === 409 &&
+    error.code.toUpperCase() === "LEASE_EXPIRED"
+  );
 }

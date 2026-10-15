@@ -13,6 +13,7 @@ import type {
   WebSocketCommand,
 } from "./types.js";
 import { convertResponse } from "../utils/casing.js";
+import { parseApiJson } from "../utils/json.js";
 import { mapEventType } from "./event-map.js";
 
 /** Event handler type - simplified for internal use */
@@ -293,7 +294,7 @@ export class WebSocketRealtimeClient {
       // event shapes (jobId, queueName, durationMs, ...). User blobs like
       // `result`/`payload` are preserved via SKIP_CONVERSION_KEYS.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const message = convertResponse(JSON.parse(data)) as any;
+      const message = convertResponse(parseApiJson(data)) as any;
 
       // The backend tags events with the PascalCase enum variant name
       // (`JobCompleted`, `QueueStats`, ...); the SDK's public API dispatches by

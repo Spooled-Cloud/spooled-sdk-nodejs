@@ -68,10 +68,13 @@ export interface JobContext {
   /** Maximum retries */
   maxRetries: number;
   /**
-   * Abort signal. Aborted when the job exceeds its `timeoutSeconds` or when a
-   * stop outlives `shutdownTimeout`; NOT aborted merely because a stop was
-   * requested (the handler gets the grace period to finish and be acked).
-   * `signal.reason` carries the cause.
+   * Abort signal. Aborted when the job exceeds its `timeoutSeconds`, when a
+   * stop outlives `shutdownTimeout`, or when this worker loses the lease
+   * (a heartbeat of 409 `LEASE_EXPIRED`, which is also how a lease mismatch
+   * is reported). NOT aborted merely because a stop was requested (the
+   * handler gets the grace period to finish and be acked). `signal.reason`
+   * carries the cause. A lost lease is not acked: the handler's later result
+   * is discarded, because the scheduler has already given the job away.
    */
   signal: AbortSignal;
   /** Log local job progress (0-100); backend progress persistence is not yet available. */
@@ -136,6 +139,12 @@ export interface ActiveJob {
    * else may ack it. Set when the handler settles or the shutdown fails it.
    */
   settled?: boolean;
+  /**
+   * Heartbeat returned 409 `LEASE_EXPIRED` (the lease timed out or the
+   * `lease_id` no longer matches). The scheduler has reclaimed the job, so
+   * this execution must not complete or fail it.
+   */
+  leaseLost?: boolean;
   /** The complete/fail request for this execution, once started. */
   ack?: Promise<void>;
 }

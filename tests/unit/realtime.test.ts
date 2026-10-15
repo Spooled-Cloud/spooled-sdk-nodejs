@@ -87,6 +87,21 @@ describe("WebSocketRealtimeClient", () => {
       // The catch-all sees the normalized dotted name too.
       expect(genericType).toBe("job.completed");
     });
+
+    it("keeps integers above 2^53 exact in an event result", () => {
+      const client = new WebSocketRealtimeClient(baseOptions);
+      let received: any;
+      client.on("job.completed", (data) => {
+        received = data;
+      });
+
+      (client as any).handleMessage(
+        '{"type":"JobCompleted","data":{"job_id":"job_1","queue_name":"q","result":{"discord_id":1234567890123456789},"duration_ms":42}}',
+      );
+
+      expect(received.durationMs).toBe(42);
+      expect(received.result).toEqual({ discord_id: "1234567890123456789" });
+    });
   });
 
   describe("subscribe/unsubscribe (no ack)", () => {
@@ -405,6 +420,22 @@ describe("SseRealtimeClient", () => {
     expect(received.retryCount).toBe(1);
     expect(received.willRetry).toBe(true);
   });
+
+  it("keeps integers above 2^53 exact in an event payload", () => {
+    const client = new SseRealtimeClient(baseOptions);
+    let received: any;
+    client.on("job.completed", (data) => {
+      received = data;
+    });
+
+    (client as any).handleMessage(
+      '{"type":"JobCompleted","data":{"job_id":"job_1","queue_name":"q","payload":{"discord_id":1234567890123456789},"retry_count":1}}',
+    );
+
+    expect(received.jobId).toBe("job_1");
+    expect(received.retryCount).toBe(1);
+    expect(received.payload).toEqual({ discord_id: "1234567890123456789" });
+  });
 });
 
 describe("SseRealtimeClient named events", () => {
@@ -419,8 +450,10 @@ describe("SseRealtimeClient named events", () => {
       onopen: Listener | null = null;
       onmessage: Listener | null = null;
       onerror: Listener | null = null;
-      constructor(url: string) {
+      init: unknown;
+      constructor(url: string, init?: unknown) {
         this.url = url;
+        this.init = init;
         sources.push(this);
         setTimeout(() => this.onopen?.(), 0);
       }
@@ -441,9 +474,12 @@ describe("SseRealtimeClient named events", () => {
       await client.connect({ queueName: "orders" });
 
       // Queue subscriptions use the event stream, not the stats-only route.
+      // A platform EventSource cannot send Authorization, so the token is on
+      // the URL and no fetch hook is passed.
       expect(sources[0].url).toBe(
-        "https://api.spooled.cloud/api/v1/events?queue=orders",
+        "https://api.spooled.cloud/api/v1/events?queue=orders&token=static_token",
       );
+      expect(sources[0].init).toBeUndefined();
 
       sources[0].emit(
         "job.created",
