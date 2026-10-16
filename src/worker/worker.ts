@@ -723,9 +723,12 @@ export class SpooledWorker {
 
 /**
  * Heartbeat, complete and fail all answer a lost or mismatched lease with
- * 409 `LEASE_EXPIRED` (a mismatch uses that same code). Anything else — a
- * dropped connection, a 5xx — may still succeed on the next beat, so it must
- * not abort the handler.
+ * 409 `LEASE_EXPIRED` (a mismatch uses that same code). A gRPC unary call
+ * reports that same loss as `FAILED_PRECONDITION` with the lease message;
+ * the gRPC client maps it onto this error, so the handler stops and this
+ * execution does not ack. Anything else — a dropped connection, a 5xx, a
+ * plain 409 — may still succeed on the next beat, so it must not abort the
+ * handler.
  */
 function isLeaseExpired(error: unknown): boolean {
   return (

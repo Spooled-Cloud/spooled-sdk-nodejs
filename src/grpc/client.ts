@@ -126,6 +126,24 @@ function promisify<TReq, TRes>(
   });
 }
 
+/**
+ * Text of a unary lease loss. The server sends these exact strings and no
+ * error code (`classify_worker_miss_status`). gRPC's own Error.message is
+ * `"<code> FAILED_PRECONDITION: <details>"`, so a missing `details` still
+ * matches after that prefix is stripped.
+ */
+const LEASE_EXPIRED_MESSAGE = "lease expired";
+const LEASE_MISMATCH_MESSAGE =
+  "lease_id does not match the job's current lease; this worker no longer holds it";
+
+function isLeaseLossMessage(message: string): boolean {
+  const text = message
+    .trim()
+    .toLowerCase()
+    .replace(/^\d+\s+[a-z_]+:\s+/, "");
+  return text === LEASE_EXPIRED_MESSAGE || text === LEASE_MISMATCH_MESSAGE;
+}
+
 function createUnaryCallOptions(timeoutMs?: number): grpc.CallOptions {
   if (timeoutMs === undefined) {
     return {};
@@ -150,8 +168,18 @@ function mapGrpcError(error: grpc.ServiceError, timeoutMs?: number): Error {
       return new ValidationError(message, "VALIDATION_ERROR");
     case grpc.status.ALREADY_EXISTS:
     case grpc.status.ABORTED:
-    case grpc.status.FAILED_PRECONDITION:
       return new ConflictError(message, "CONFLICT");
+    case grpc.status.FAILED_PRECONDITION:
+      // Unary Complete, Fail, and RenewLease report a lost or mismatched
+      // lease as FAILED_PRECONDITION with the message only ("Lease expired",
+      // or the REST lease-mismatch text). REST answers those with 409
+      // LEASE_EXPIRED, which is what makes the worker stop the handler and
+      // skip the ack. Other failed preconditions ("Job is already completed")
+      // stay a plain conflict.
+      return new ConflictError(
+        message,
+        isLeaseLossMessage(message) ? "LEASE_EXPIRED" : "CONFLICT",
+      );
     case grpc.status.RESOURCE_EXHAUSTED:
       return new RateLimitError(message, "RATE_LIMIT_EXCEEDED");
     case grpc.status.UNAVAILABLE:

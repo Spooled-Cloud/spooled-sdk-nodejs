@@ -24,6 +24,15 @@ type EventHandler = (data: any) => void;
 type GenericEventHandler = (event: RealtimeEvent) => void;
 
 /**
+ * How long a socket must stay open before a later close counts as healthy
+ * and gives the next reconnect a fresh attempt budget. A socket the server
+ * accepts and closes at once is not healthy, however quickly `onopen` ran,
+ * and neither is one that only received the Error frame sent before close
+ * 1011. Same window as the SSE client.
+ */
+const STABLE_CONNECTION_MS = 30_000;
+
+/**
  * WebSocket Realtime Client
  *
  * Connects to the Spooled API WebSocket endpoint and emits typed events.
@@ -35,6 +44,8 @@ export class WebSocketRealtimeClient {
   private state: ConnectionState = "disconnected";
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  /** When the current socket opened (for the stable-connection check). */
+  private connectedAt: number | null = null;
   /**
    * Set when the server rejected our token on the upgrade (e.g. HTTP 401/403).
    * The next (re)connect uses it to force the token provider to mint a fresh
@@ -124,7 +135,12 @@ export class WebSocketRealtimeClient {
         this.ws.onopen = () => {
           this.options.debug("WebSocket connected");
           this.setState("connected");
-          this.reconnectAttempts = 0;
+          // The attempt counter is NOT reset here: a socket the server accepts
+          // and then closes at once (the event channel cannot be opened, close
+          // 1011, often after an Error text frame) would otherwise refill the
+          // budget on every cycle and reconnect forever. It resets once the
+          // connection has proved stable (see handleDisconnect).
+          this.connectedAt = Date.now();
           this.resubscribeAll();
           resolve();
         };
@@ -184,6 +200,16 @@ export class WebSocketRealtimeClient {
       this.ws = null;
     }
 
+    // onclose was cleared, so handleDisconnect never runs. A socket that
+    // stayed up would keep its spent reconnect count and the next connect()
+    // would die after one more drop. Refill only after STABLE_CONNECTION_MS,
+    // the same bar as a server-side close. A frame alone is not enough: the
+    // server sends an Error event and then close 1011 when the event channel
+    // cannot be opened.
+    if (this.connectionWasStable()) {
+      this.reconnectAttempts = 0;
+    }
+    this.connectedAt = null;
     this.setState("disconnected");
     this.subscriptions.clear();
   }
@@ -333,8 +359,30 @@ export class WebSocketRealtimeClient {
     }
   }
 
+  /**
+   * The socket has been open long enough to count as healthy. A text frame
+   * does not count: ChannelClosed and AuthUnavailable send an Error event
+   * and then close 1011, so any frame would reset the budget every cycle.
+   */
+  private connectionWasStable(): boolean {
+    return (
+      this.connectedAt !== null &&
+      Date.now() - this.connectedAt >= STABLE_CONNECTION_MS
+    );
+  }
+
   private handleDisconnect(): void {
     this.ws = null;
+
+    // A connection that stayed up long enough was healthy (a quiet hour, or
+    // the server's own cap): give the next reconnect a fresh budget. One the
+    // server accepted and closed at once keeps counting toward
+    // maxReconnectAttempts, and the delay keeps backing off, until the budget
+    // is spent.
+    if (this.connectionWasStable()) {
+      this.reconnectAttempts = 0;
+    }
+    this.connectedAt = null;
 
     if (
       this.options.autoReconnect &&
