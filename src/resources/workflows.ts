@@ -49,9 +49,9 @@ export interface WorkflowJobOperations {
   /**
    * Get the status of all jobs in a workflow.
    *
-   * Returns a summary of each job's status. The API does not store or return
-   * the `key` a job was created with, so `key` is undefined; map keys to job
-   * IDs from the `jobIds` array that `workflows.create()` returns.
+   * Returns a summary of each job's status. `key` is the key the job was
+   * created with (backend 0.1.129+); it is undefined for workflows created
+   * earlier, where the `jobIds` from `workflows.create()` map keys to job IDs.
    *
    * @param workflowId - The workflow ID
    * @example
@@ -295,9 +295,8 @@ function mapWorkflowDetailJobs(detail: WorkflowDetailPayload): WorkflowJob[] {
     return {
       id,
       workflowId: String(job.workflowId ?? workflowId),
-      // The API does not return the creation-time key (jobs store only a
-      // workflow step), so there is nothing to put here unless a future
-      // version sends one. Never fabricate "".
+      // Backend 0.1.129+ sends the creation-time key; workflows created
+      // earlier have none. Never fabricate "".
       ...(typeof job.key === "string" && job.key !== "" && { key: job.key }),
       queueName: String(job.queueName ?? job.queue ?? ""),
       status: job.status as WorkflowJob["status"],

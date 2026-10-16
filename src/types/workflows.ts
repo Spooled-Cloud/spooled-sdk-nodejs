@@ -128,9 +128,9 @@ export interface WorkflowJob {
   /** Workflow ID this job belongs to */
   workflowId: string;
   /**
-   * Job key within the workflow. The API does not return it (a job stores only
-   * its workflow step), so this is undefined today; take the key to job ID
-   * mapping from the `jobIds` of `workflows.create()`.
+   * Job key within the workflow. Backend 0.1.129+ returns it on workflow
+   * details; it is undefined for workflows created earlier (the key was not
+   * stored). The `jobIds` of `workflows.create()` always map keys to job IDs.
    */
   key?: string;
   /** Queue name */
