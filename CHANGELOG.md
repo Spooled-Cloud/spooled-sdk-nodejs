@@ -5,6 +5,48 @@ All notable changes to the Spooled Node.js SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-10-16
+
+A WebSocket client no longer reconnects forever when the server keeps accepting
+and closing the connection, and a lost lease over gRPC is reported with the same
+error code as over REST. One change affects code that checks the error code of a
+gRPC call; read "Changed" before upgrading.
+
+### Changed
+
+- **A lost lease over gRPC is now `ConflictError` with code `LEASE_EXPIRED`.**
+  The gRPC `complete`, `fail` and `renewLease` calls used to report a lost
+  lease (`FAILED_PRECONDITION` with the message "Lease expired", or the message
+  saying that `lease_id` does not match the job's current lease) as a
+  `ConflictError` with code `CONFLICT`. The error class and its `statusCode` are
+  unchanged, so `instanceof ConflictError` checks keep working. Only the `code`
+  differs: it is now `LEASE_EXPIRED`, the code REST has always used for the same
+  event. Code that matched `CONFLICT` to detect a lost lease over gRPC must match
+  `LEASE_EXPIRED` instead. Any other `FAILED_PRECONDITION`, such as completing a
+  job that is already completed, is still a `ConflictError` with code `CONFLICT`.
+  `SpooledWorker` already stops on `LEASE_EXPIRED`, so a worker whose heartbeat,
+  `complete` or `fail` call goes through the gRPC client now handles a lost lease
+  like one reported by REST: it aborts `ctx.signal`, stops renewing the lease,
+  does not ack the job, and does not emit the rejection as a worker `error`.
+
+### Fixed
+
+- **The WebSocket client no longer reconnects forever when the server accepts the
+  connection and closes it at once.** The attempt counter was reset as soon as a
+  socket opened, so a server that accepted the upgrade and then closed it (for
+  example close 1011 after an `Error` frame, when the event channel cannot be
+  opened) refilled the budget on every cycle and the client retried without end.
+  The counter is now reset only after a connection has stayed open for 30
+  seconds, the same window the SSE client uses. A connection that closes sooner
+  keeps counting toward `maxReconnectAttempts` (10 by default), the delay keeps
+  backing off, and the client gives up once the budget is spent. A text frame
+  does not count as proof that the connection is healthy.
+- **`disconnect()` after a stable connection resets the attempt budget.**
+  `disconnect()` removes the close handler, so the counter was never refilled
+  and the next `connect()` on the same client could give up after one more drop.
+  A connection that was open for 30 seconds or longer now resets the counter when
+  you disconnect. One that was closed sooner keeps its count.
+
 ## [1.5.1] - 2026-10-15
 
 ### Fixed
