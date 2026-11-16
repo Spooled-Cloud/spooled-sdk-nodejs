@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-16
+
 A plan quota or an over-size payload over gRPC carries the same error as over
 REST, gRPC queue stats are numbers, cancelling a gRPC stream ends it quietly, and
 worker handlers can type their payload. Four changes alter what existing code
