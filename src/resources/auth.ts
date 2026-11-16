@@ -91,7 +91,13 @@ export class AuthResource {
   }
 
   /**
-   * Check whether an email is registered (GET /auth/check-email)
+   * Check whether email signup is open (GET /auth/check-email).
+   *
+   * Since backend 0.1.130, `exists` and `available` describe the address only
+   * when the request carries the operator's admin key; otherwise they are
+   * always `false` and `true`. Whether an address has an account is learned
+   * from `POST /auth/email/verify` (`type: "login"` or `"signup"`), after the
+   * emailed code.
    */
   async checkEmail(email: string): Promise<CheckEmailResponse> {
     return this.http.get<CheckEmailResponse>("/auth/check-email", {

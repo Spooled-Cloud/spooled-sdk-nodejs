@@ -69,7 +69,10 @@ export interface StartEmailLoginResponse {
   emailSentTo: string;
 }
 
-/** GET /auth/check-email */
+/**
+ * GET /auth/check-email. Since backend 0.1.130, `exists` is always `false` and
+ * `available` always `true` unless the request carries the admin key.
+ */
 export interface CheckEmailResponse {
   exists: boolean;
   available: boolean;
