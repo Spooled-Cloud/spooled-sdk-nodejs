@@ -7,10 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-A plan quota over gRPC carries the same error code as over REST, gRPC queue
-stats are numbers, cancelling a gRPC stream ends it quietly, and worker handlers
-can type their payload. Three changes alter what existing code sees at run time;
-read "Changed" before upgrading.
+A plan quota or an over-size payload over gRPC carries the same error as over
+REST, gRPC queue stats are numbers, cancelling a gRPC stream ends it quietly, and
+worker handlers can type their payload. Four changes alter what existing code
+sees at run time; read "Changed" before upgrading.
 
 ### Added
 
@@ -29,11 +29,20 @@ read "Changed" before upgrading.
   status, and the gRPC client gave both the code `RATE_LIMIT_EXCEEDED`, so
   `error.code === "QUOTA_EXCEEDED"` matched REST quotas only. A `RESOURCE_EXHAUSTED`
   whose message says a limit was reached and that carries no `retry-after` trailer
-  now has code `QUOTA_EXCEEDED`, the code REST uses. `isQuota` was already `true`
+  now has code `QUOTA_EXCEEDED`, the code REST uses (an over-size payload is the
+  exception: see the next entry). `isQuota` was already `true`
   for these errors and stays `true`, and they are still not retried. Code that
   matched `RATE_LIMIT_EXCEEDED` to catch a gRPC quota must match `QUOTA_EXCEEDED`
   or check `error.isQuota`. A `retry-after` trailer, when present, is now read
   into `rateLimitInfo.retryAfter`.
+- **An over-size payload over gRPC is now a `PayloadTooLargeError` with code
+  `PAYLOAD_TOO_LARGE`.** Enqueue rejects a payload over the plan's size limit with
+  `RESOURCE_EXHAUSTED` "payload size limit reached (X/Y) on plan …", which the
+  gRPC client threw as a `RateLimitError` (code `RATE_LIMIT_EXCEEDED`). REST
+  answers the same request with 413 `PAYLOAD_TOO_LARGE`, so the gRPC client now
+  throws the same `PayloadTooLargeError` (`statusCode` 413, not retried). Code
+  that caught it as a `RateLimitError` must catch `PayloadTooLargeError` or match
+  `PAYLOAD_TOO_LARGE`.
 - **`grpcClient.queue.getQueueStats()` returns its counters as numbers.** The
   int64 fields (`pending`, `scheduled`, `processing`, `completed`, `failed`,
   `deadletter`, `total`, `maxAgeMs`) arrived as decimal strings. They are now

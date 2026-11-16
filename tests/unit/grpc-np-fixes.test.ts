@@ -17,7 +17,7 @@ import {
   createJobStream,
   createProcessJobsStream,
 } from "../../src/grpc/streaming.js";
-import { RateLimitError } from "../../src/errors.js";
+import { PayloadTooLargeError, RateLimitError } from "../../src/errors.js";
 
 vi.mock("../../src/grpc/loader.js", () => {
   const unary = (response: unknown) =>
@@ -134,6 +134,20 @@ describe("gRPC RESOURCE_EXHAUSTED", () => {
     expect(error.code).toBe("RATE_LIMIT_EXCEEDED");
     expect(error.isQuota).toBe(false);
     expect(error.isRetryable()).toBe(true);
+  });
+
+  it("an over-size payload is a PayloadTooLargeError, as REST's 413", async () => {
+    const msg =
+      "payload size limit reached (1048577/1048576) on plan free. Upgrade to starter for higher limits.";
+    const error = await enqueueError(resourceExhausted(msg));
+
+    expect(error).toBeInstanceOf(PayloadTooLargeError);
+    expect(error).not.toBeInstanceOf(RateLimitError);
+    const tooLarge = error as PayloadTooLargeError;
+    expect(tooLarge.code).toBe("PAYLOAD_TOO_LARGE");
+    expect(tooLarge.statusCode).toBe(413);
+    expect(tooLarge.isRetryable()).toBe(false);
+    expect(tooLarge.message).toBe(msg);
   });
 
   it("a retry-after trailer makes it a rate limit and sets retryAfter", async () => {

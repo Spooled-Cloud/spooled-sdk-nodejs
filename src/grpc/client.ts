@@ -54,6 +54,7 @@ import {
   ConflictError,
   NetworkError,
   NotFoundError,
+  PayloadTooLargeError,
   RateLimitError,
   ServerError,
   TimeoutError,
@@ -162,6 +163,9 @@ function createUnaryCallOptions(timeoutMs?: number): grpc.CallOptions {
   return { deadline: new Date(Date.now() + timeoutMs) };
 }
 
+/** The server's over-size payload message on Enqueue ("payload size limit reached (X/Y) on plan …"). */
+const PAYLOAD_SIZE_MESSAGE = /\bpayload size limit\b/i;
+
 function mapGrpcError(error: grpc.ServiceError, timeoutMs?: number): Error {
   const message = error.details || error.message || "gRPC request failed";
 
@@ -192,6 +196,12 @@ function mapGrpcError(error: grpc.ServiceError, timeoutMs?: number): Error {
         isLeaseLossMessage(message) ? "LEASE_EXPIRED" : "CONFLICT",
       );
     case grpc.status.RESOURCE_EXHAUSTED: {
+      // An over-size payload ("payload size limit reached (X/Y) on plan
+      // free") is a plan cap too, but REST answers it with 413
+      // PAYLOAD_TOO_LARGE, so it gets that error rather than a quota.
+      if (PAYLOAD_SIZE_MESSAGE.test(message)) {
+        return new PayloadTooLargeError(message, "PAYLOAD_TOO_LARGE");
+      }
       const retryAfter = grpcRetryAfter(error);
       const info = retryAfter === undefined ? {} : { retryAfter };
       // Plan caps ("Daily job limit reached", "queues limit reached (1/1)")
