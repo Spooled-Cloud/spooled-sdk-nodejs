@@ -55,14 +55,19 @@ export type WorkerState =
   | "stopped"
   | "error";
 
-/** Job context passed to handlers */
-export interface JobContext {
+/**
+ * Job context passed to handlers.
+ *
+ * `TPayload` types `payload`; it defaults to `JsonValue` (any JSON). It is a
+ * compile-time promise only: the SDK does not validate the payload at runtime.
+ */
+export interface JobContext<TPayload = JsonValue> {
   /** Job ID */
   jobId: string;
   /** Queue name */
   queueName: string;
-  /** Job payload (any JSON) */
-  payload: JsonValue;
+  /** Job payload (any JSON, typed as `TPayload`) */
+  payload: TPayload;
   /** Current retry count */
   retryCount: number;
   /** Maximum retries */
@@ -87,8 +92,10 @@ export interface JobContext {
   ) => void;
 }
 
-/** Job handler function */
-export type JobHandler = (context: JobContext) => Promise<JsonValue | void>;
+/** Job handler function. `TPayload` types `ctx.payload` (default `JsonValue`). */
+export type JobHandler<TPayload = JsonValue> = (
+  context: JobContext<TPayload>,
+) => Promise<JsonValue | void>;
 
 /** Job processing result */
 export interface JobResult {

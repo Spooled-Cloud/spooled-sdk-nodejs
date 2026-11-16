@@ -5,6 +5,7 @@
  */
 
 import type * as grpc from "@grpc/grpc-js";
+import { status as grpcStatus } from "@grpc/grpc-js";
 import {
   decodeJob,
   decodeProcessResponse,
@@ -30,6 +31,55 @@ export interface StreamOptions {
   onEnd?: () => void;
 }
 
+type CancellableCall = Pick<grpc.ClientReadableStream<unknown>, "cancel"> &
+  Partial<Pick<grpc.ClientReadableStream<unknown>, "on" | "listenerCount">>;
+
+/**
+ * Cancellation the caller asked for, through `cancel()` or the abort `signal`.
+ *
+ * grpc-js ends a cancelled call with an `error` event carrying `CANCELLED`
+ * ("Cancelled on client"). When the cancel came from this side, that is the
+ * requested end of the stream, not a failure, so the iteration just finishes.
+ */
+class LocalCancel {
+  requested = false;
+
+  constructor(
+    private readonly call: CancellableCall,
+    signal?: AbortSignal,
+  ) {
+    if (signal) {
+      if (signal.aborted) {
+        this.cancel();
+      } else {
+        signal.addEventListener("abort", () => this.cancel(), { once: true });
+      }
+    }
+  }
+
+  cancel(): void {
+    this.requested = true;
+    // Cancelled before anyone iterates: grpc-js still emits the CANCELLED
+    // status as an `error` event, and an `error` event with no listener
+    // crashes the process. The iterator, once started, ends at once instead.
+    if (
+      typeof this.call.listenerCount === "function" &&
+      this.call.listenerCount("error") === 0
+    ) {
+      this.call.on?.("error", () => {});
+    }
+    this.call.cancel();
+  }
+
+  /** True for the CANCELLED status our own cancel produced. */
+  explains(error: Error): boolean {
+    return (
+      this.requested &&
+      (error as Partial<grpc.ServiceError>).code === grpcStatus.CANCELLED
+    );
+  }
+}
+
 /**
  * Async iterable wrapper for gRPC readable streams (server streaming).
  */
@@ -38,19 +88,14 @@ export async function* asyncIterableFromStream<T>(
   options?: StreamOptions,
 ): AsyncGenerator<T, void, undefined> {
   const { signal, onConnected, onError, onEnd } = options ?? {};
+  const localCancel = new LocalCancel(stream, signal);
 
-  // Handle abort signal
-  if (signal) {
-    signal.addEventListener("abort", () => {
-      stream.cancel();
-    });
-  }
-
-  return yield* new AsyncIterableStream(stream, {
-    onConnected,
-    onError,
-    onEnd,
-  });
+  return yield* new AsyncIterableStream(
+    stream,
+    { onConnected, onError, onEnd },
+    undefined,
+    localCancel,
+  );
 }
 
 /**
@@ -60,15 +105,18 @@ class AsyncIterableStream<T> implements AsyncIterable<T> {
   private stream: grpc.ClientReadableStream<T>;
   private options: Omit<StreamOptions, "signal">;
   private readonly decode: (item: T) => T;
+  private readonly localCancel?: LocalCancel;
 
   constructor(
     stream: grpc.ClientReadableStream<T>,
     options: Omit<StreamOptions, "signal"> = {},
     decode: (item: T) => T = (item) => item,
+    localCancel?: LocalCancel,
   ) {
     this.stream = stream;
     this.options = options;
     this.decode = decode;
+    this.localCancel = localCancel;
   }
 
   async *[Symbol.asyncIterator](): AsyncGenerator<T, void, undefined> {
@@ -104,10 +152,24 @@ class AsyncIterableStream<T> implements AsyncIterable<T> {
       resolve?.();
     });
 
+    const finish = () => {
+      if (!ended) {
+        ended = true;
+        onEnd?.();
+      }
+      resolve?.();
+    };
+
     this.stream.on("error", (err: Error) => {
       // The CANCELLED error our own cancel() causes must not replace the
       // decode error or reach onError.
       if (decodeFailed) {
+        return;
+      }
+      // A cancel the caller requested (cancel() or the abort signal) ends the
+      // stream normally: no error is thrown and onError is not called.
+      if (this.localCancel?.explains(err)) {
+        finish();
         return;
       }
       error = err;
@@ -115,11 +177,7 @@ class AsyncIterableStream<T> implements AsyncIterable<T> {
       resolve?.();
     });
 
-    this.stream.on("end", () => {
-      ended = true;
-      onEnd?.();
-      resolve?.();
-    });
+    this.stream.on("end", finish);
 
     this.stream.on("status", (status: grpc.StatusObject) => {
       if (status.code === 0) {
@@ -141,6 +199,13 @@ class AsyncIterableStream<T> implements AsyncIterable<T> {
         return;
       }
 
+      // Cancelled before (or while) iterating: the CANCELLED event may already
+      // have been emitted before these listeners existed, so do not wait for it.
+      if (this.localCancel?.requested) {
+        finish();
+        return;
+      }
+
       // Wait for next event
       await new Promise<void>((r) => {
         resolve = r;
@@ -159,7 +224,7 @@ export interface ProcessJobsStream {
   receive(): AsyncIterable<GrpcProcessResponse>;
   /** Signal that no more requests will be sent */
   end(): void;
-  /** Cancel the stream */
+  /** Cancel the stream. A `receive()` loop ends without an error. */
   cancel(): void;
 }
 
@@ -171,13 +236,7 @@ export function createProcessJobsStream(
   options?: StreamOptions,
 ): ProcessJobsStream {
   const { signal, onError, onEnd } = options ?? {};
-
-  // Handle abort signal
-  if (signal) {
-    signal.addEventListener("abort", () => {
-      call.cancel();
-    });
-  }
+  const localCancel = new LocalCancel(call, signal);
 
   return {
     send(request: GrpcProcessRequest): void {
@@ -189,6 +248,7 @@ export function createProcessJobsStream(
         call,
         { onError, onEnd },
         decodeProcessResponse,
+        localCancel,
       );
     },
 
@@ -197,7 +257,7 @@ export function createProcessJobsStream(
     },
 
     cancel(): void {
-      call.cancel();
+      localCancel.cancel();
     },
   };
 }
@@ -206,7 +266,7 @@ export function createProcessJobsStream(
  * Job stream for server-side streaming (StreamJobs)
  */
 export interface JobStream extends AsyncIterable<GrpcJob> {
-  /** Cancel the stream */
+  /** Cancel the stream. A `for await` loop over it ends without an error. */
   cancel(): void;
 }
 
@@ -218,18 +278,13 @@ export function createJobStream(
   options?: StreamOptions,
 ): JobStream {
   const { signal, onConnected, onError, onEnd } = options ?? {};
-
-  // Handle abort signal
-  if (signal) {
-    signal.addEventListener("abort", () => {
-      call.cancel();
-    });
-  }
+  const localCancel = new LocalCancel(call, signal);
 
   const iterable = new AsyncIterableStream<GrpcJob>(
     call,
     { onConnected, onError, onEnd },
     decodeJob,
+    localCancel,
   );
 
   return {
@@ -237,7 +292,7 @@ export function createJobStream(
       return iterable[Symbol.asyncIterator]();
     },
     cancel() {
-      call.cancel();
+      localCancel.cancel();
     },
   };
 }

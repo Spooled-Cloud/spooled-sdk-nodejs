@@ -5,6 +5,75 @@ All notable changes to the Spooled Node.js SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+A plan quota over gRPC carries the same error code as over REST, gRPC queue
+stats are numbers, cancelling a gRPC stream ends it quietly, and worker handlers
+can type their payload. Three changes alter what existing code sees at run time;
+read "Changed" before upgrading.
+
+### Added
+
+- **`worker.process<TPayload>()` types `ctx.payload`.** `JobContext` and
+  `JobHandler` take an optional payload type parameter (default `JsonValue`), so
+  `worker.process<{ to: string }>(async (ctx) => { const { to } = ctx.payload; ... })`
+  compiles without a cast. A handler typed as `(ctx: JobContext<T>) => ...` infers
+  it. The type is not checked at run time. Handlers written without a type
+  argument compile as before.
+
+### Changed
+
+- **A plan quota over gRPC is now a `RateLimitError` with code `QUOTA_EXCEEDED`.**
+  The server reports plan caps ("Daily job limit reached", "active jobs limit
+  reached (10/10)") and per-second rate limits with the same `RESOURCE_EXHAUSTED`
+  status, and the gRPC client gave both the code `RATE_LIMIT_EXCEEDED`, so
+  `error.code === "QUOTA_EXCEEDED"` matched REST quotas only. A `RESOURCE_EXHAUSTED`
+  whose message says a limit was reached and that carries no `retry-after` trailer
+  now has code `QUOTA_EXCEEDED`, the code REST uses. `isQuota` was already `true`
+  for these errors and stays `true`, and they are still not retried. Code that
+  matched `RATE_LIMIT_EXCEEDED` to catch a gRPC quota must match `QUOTA_EXCEEDED`
+  or check `error.isQuota`. A `retry-after` trailer, when present, is now read
+  into `rateLimitInfo.retryAfter`.
+- **`grpcClient.queue.getQueueStats()` returns its counters as numbers.** The
+  int64 fields (`pending`, `scheduled`, `processing`, `completed`, `failed`,
+  `deadletter`, `total`, `maxAgeMs`) arrived as decimal strings. They are now
+  numbers whenever they fit in `Number.MAX_SAFE_INTEGER`; a larger value stays a
+  string, so the type is still `number | string`. Code that compared them with
+  strings must compare with numbers.
+- **Cancelling a gRPC stream from the client ends it without an error.**
+  `stream.cancel()`, or aborting the `signal` passed to `streamJobs()` or
+  `processJobs()`, made the `for await` loop throw `1 CANCELLED: Cancelled on
+client` and called `onError`. A cancel the caller requested now ends the loop
+  normally and calls `onEnd` once. A `CANCELLED` status the client did not request
+  is still thrown. Cancelling a stream before iterating it no longer leaves an
+  unhandled `error` event that crashed the process.
+
+### Documentation
+
+- Every TypeScript snippet in `README.md` and `docs/*.md` now compiles against
+  the built package (`strict`, apart from implicit-`any` callback parameters in the
+  raw `@grpc/grpc-js` examples). Fixed: the README imported a `Queue` type that is
+  not exported (use `QueueConfig`); `docs/getting-started.md` read queue stats as
+  `pending`/`processing` (they are `pendingJobs`/`processingJobs`) and usage as
+  `usage.active_jobs` (it is `usage.usage.activeJobs`); `docs/workflows.md` read
+  `dependsOn`/`dependedOnBy` from `getDependencies()` (they are `dependencies` and
+  `dependents`); `docs/resources.md` gave bulk items a `maxRetries` the API ignores
+  (use `defaultMaxRetries`), showed the wrong bulk result shape (it is
+  `{ succeeded, failed, total, successCount, failureCount }`), wrote `deadLetter`
+  for `deadletter`, omitted the `queueName` that `queues.updateConfig()` requires,
+  passed `enabled` to schedules (use `isActive`, or `pause()`/`resume()`) and
+  called `admin.createApiKey()` without the organization id; `docs/grpc.md`
+  checked `error.code === grpc.status.RESOURCE_EXHAUSTED` on an SDK error, which
+  never matches (check `error instanceof RateLimitError && error.isQuota`).
+- Worker examples use a stable worker id derived from the host name and stop the
+  worker on SIGINT as well as SIGTERM. Worker ids are global across all Spooled
+  accounts, so ids such as `worker-1` are rejected with HTTP 409; the docs now say
+  so. Without a SIGINT handler, Ctrl+C kills the process before `stop()` runs and
+  the worker keeps its slot until its heartbeats are missed.
+- The README says where to get an API key (https://spooled.cloud/signup/).
+- The examples say `npx tsx examples/<name>.ts`; `npx ts-node` fails with
+  `Cannot find module .../src/index.js`.
+
 ## [1.6.0] - 2026-10-16
 
 A WebSocket client no longer reconnects forever when the server keeps accepting

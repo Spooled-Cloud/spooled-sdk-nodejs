@@ -231,7 +231,12 @@ export interface GrpcGetQueueStatsRequest {
   queueName: string;
 }
 
-/** Get queue stats response */
+/**
+ * Get queue stats response.
+ *
+ * The counters are int64 on the wire. The client returns them as numbers; only
+ * a value above `Number.MAX_SAFE_INTEGER` would stay a decimal string.
+ */
 export interface GrpcGetQueueStatsResponse {
   queueName: string;
   pending: number | string;

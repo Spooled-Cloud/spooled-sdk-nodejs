@@ -7,6 +7,7 @@ import type {
   GrpcCompleteRequest,
   GrpcEnqueueRequest,
   GrpcFailRequest,
+  GrpcGetQueueStatsResponse,
   GrpcJob,
   GrpcProcessRequest,
   GrpcProcessResponse,
@@ -170,6 +171,38 @@ export function encodeProcessRequest(
     return { ...request, complete: encodeCompleteRequest(request.complete) };
   }
   return request;
+}
+
+/**
+ * An int64 the proto loader returns as a string (`longs: String`), as a number
+ * when it fits exactly. A value above `Number.MAX_SAFE_INTEGER` stays a string
+ * so no digit is lost.
+ */
+function decodeInt64<T extends number | string | null | undefined>(
+  value: T,
+): T | number {
+  if (typeof value !== "string") {
+    return value;
+  }
+  const parsed = Number(value);
+  return value.trim() !== "" && Number.isSafeInteger(parsed) ? parsed : value;
+}
+
+/** Decode GetQueueStats: the int64 counters as numbers (see `decodeInt64`). */
+export function decodeQueueStats(
+  stats: GrpcGetQueueStatsResponse,
+): GrpcGetQueueStatsResponse {
+  return {
+    ...stats,
+    pending: decodeInt64(stats.pending),
+    scheduled: decodeInt64(stats.scheduled),
+    processing: decodeInt64(stats.processing),
+    completed: decodeInt64(stats.completed),
+    failed: decodeInt64(stats.failed),
+    deadletter: decodeInt64(stats.deadletter),
+    total: decodeInt64(stats.total),
+    maxAgeMs: decodeInt64(stats.maxAgeMs),
+  };
 }
 
 /** Decode a ProcessJobs response: its `job` like a unary Dequeue job. */

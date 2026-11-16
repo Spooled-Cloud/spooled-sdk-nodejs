@@ -51,3 +51,13 @@ See `findings.jsonl`. SDKNP-03/04/11/12/13/29/30 are Python-only; SDKNP-31 (`job
 - SDKNP-35 (P3), fixed: `@spooled/sdk/package.json` is in the `exports` map.
 - SDKNP-36 (P3), fixed: README and docs describe the `X-RateLimit-*` headers, the required `lease_id`, the four new webhook events and `format`, and the gRPC `Struct` payload limits; `docs/grpc.md` raw examples encode `Struct` payloads and use the real `ProcessJobs` messages.
 - SDKNP-37 (P3), fixed: `scripts/test-local.ts` sends `lease_id`, accepts `sp_` keys, expects a token-protected `/metrics`, checks the API 0.1.122 surface and skips org sign-up and email login unless `RUN_UNSAFE=1`; `scripts/test-production.ts` spawns through a shell on Windows.
+
+## Unreleased (tester report against 1.6.0, 2026-11-16)
+
+- SDKNP-40 (P2, NP-8), fixed: a gRPC plan quota (`RESOURCE_EXHAUSTED` "... limit reached", no `retry-after`) had code `RATE_LIMIT_EXCEEDED`; it is now `QUOTA_EXCEEDED` like REST (`src/grpc/client.ts` `mapGrpcError`, detection via `RateLimitError.isQuota`).
+- SDKNP-41 (P3, NP-14), fixed: `getQueueStats` returned the int64 counters as strings (loader `longs: String`); `decodeQueueStats` (`src/grpc/encode.ts`) makes them numbers up to `Number.MAX_SAFE_INTEGER`.
+- SDKNP-42 (P3, NP-13), fixed: a client `cancel()` / aborted `signal` made the stream loop throw `1 CANCELLED: Cancelled on client`; `LocalCancel` (`src/grpc/streaming.ts`) ends the iteration quietly, and a cancel before iterating no longer leaves an unhandled `error` event.
+- SDKNP-43 (P2, NP-7), fixed: `ctx.payload` was `JsonValue` only, so destructuring failed to compile; `process<TPayload>()` / `JobContext<TPayload>` (`src/worker/`). README imported a non-existent `Queue` type (now `QueueConfig`).
+- SDKNP-44 (P2, NP-6/9/10), fixed: doc snippets used wrong field names and shapes (queue stats, usage, dependencies, bulk enqueue result and items, `deadletter`, `updateConfig` `queueName`, schedule `enabled`, `admin.createApiKey`); every TS snippet in `README.md` and `docs/*.md` now compiles against `dist/`.
+- SDKNP-45 (P2, NP-1/NP-2), fixed (docs): worker examples used generic worker ids (global across accounts: 409) and handled only SIGTERM; now host-derived ids and SIGINT + SIGTERM.
+- SDKNP-46 (P2, GH-10), fixed: examples said `npx ts-node`, which cannot resolve `../src/index.js`; now `npx tsx`.

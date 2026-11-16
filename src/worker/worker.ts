@@ -148,13 +148,26 @@ export class SpooledWorker {
   }
 
   /**
-   * Register job handler
+   * Register job handler.
+   *
+   * Pass a payload type to read `ctx.payload` without casting. It is not
+   * checked at runtime, so validate payloads you do not control:
+   *
+   * ```typescript
+   * worker.process<{ to: string; subject: string }>(async (ctx) => {
+   *   const { to, subject } = ctx.payload;
+   *   await sendEmail(to, subject);
+   *   return { sent: true };
+   * });
+   * ```
    */
-  process(handler: JobHandler): void {
+  process<TPayload = JsonValue>(handler: JobHandler<TPayload>): void {
     if (this.state !== "idle") {
       throw new Error("Cannot set handler after worker has started");
     }
-    this.handler = handler;
+    // The handler is called with the claimed job's payload as-is; TPayload is
+    // the caller's compile-time view of it.
+    this.handler = handler as unknown as JobHandler;
   }
 
   /**

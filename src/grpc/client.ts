@@ -9,6 +9,7 @@ import * as grpc from "@grpc/grpc-js";
 import { loadProtoDefinition } from "./loader.js";
 import {
   decodeJob,
+  decodeQueueStats,
   encodeCompleteRequest,
   encodeEnqueueRequest,
   encodeFailRequest,
@@ -144,6 +145,16 @@ function isLeaseLossMessage(message: string): boolean {
   return text === LEASE_EXPIRED_MESSAGE || text === LEASE_MISMATCH_MESSAGE;
 }
 
+/** Seconds from a `retry-after` trailer, if the status carries one. */
+function grpcRetryAfter(error: grpc.ServiceError): number | undefined {
+  const value = error.metadata?.get?.("retry-after")?.[0];
+  if (value === undefined) {
+    return undefined;
+  }
+  const seconds = Number(value.toString());
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined;
+}
+
 function createUnaryCallOptions(timeoutMs?: number): grpc.CallOptions {
   if (timeoutMs === undefined) {
     return {};
@@ -180,8 +191,19 @@ function mapGrpcError(error: grpc.ServiceError, timeoutMs?: number): Error {
         message,
         isLeaseLossMessage(message) ? "LEASE_EXPIRED" : "CONFLICT",
       );
-    case grpc.status.RESOURCE_EXHAUSTED:
-      return new RateLimitError(message, "RATE_LIMIT_EXCEEDED");
+    case grpc.status.RESOURCE_EXHAUSTED: {
+      const retryAfter = grpcRetryAfter(error);
+      const info = retryAfter === undefined ? {} : { retryAfter };
+      // Plan caps ("Daily job limit reached", "queues limit reached (1/1)")
+      // share RESOURCE_EXHAUSTED with per-second rate limits. REST reports a
+      // cap as 429 code QUOTA_EXCEEDED, so give it the same code here
+      // (`isQuota` holds the detection rule: a "limit reached" message and no
+      // retry delay).
+      const limited = new RateLimitError(message, "RATE_LIMIT_EXCEEDED", info);
+      return limited.isQuota
+        ? new RateLimitError(message, "QUOTA_EXCEEDED", info)
+        : limited;
+    }
     case grpc.status.UNAVAILABLE:
     case grpc.status.CANCELLED:
       return new NetworkError(message, error);
@@ -314,13 +336,14 @@ export class GrpcQueueOperations {
    * Get queue statistics
    */
   async getQueueStats(queueName: string): Promise<GrpcGetQueueStatsResponse> {
-    return promisify(
+    const response = await promisify(
       this.client,
       this.client.GetQueueStats,
       { queueName },
       this.metadata,
       this.timeoutMs,
     );
+    return decodeQueueStats(response);
   }
 
   /**
