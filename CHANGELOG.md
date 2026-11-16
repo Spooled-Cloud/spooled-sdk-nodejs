@@ -74,11 +74,15 @@ client` and called `onError`. A cancel the caller requested now ends the loop
   called `admin.createApiKey()` without the organization id; `docs/grpc.md`
   checked `error.code === grpc.status.RESOURCE_EXHAUSTED` on an SDK error, which
   never matches (check `error instanceof RateLimitError && error.isQuota`).
-- Worker examples use a stable worker id derived from the host name and stop the
-  worker on SIGINT as well as SIGTERM. Worker ids are global across all Spooled
-  accounts, so ids such as `worker-1` are rejected with HTTP 409; the docs now say
-  so. Without a SIGINT handler, Ctrl+C kills the process before `stop()` runs and
-  the worker keeps its slot until its heartbeats are missed.
+- Worker examples no longer pin a fixed worker id, and they stop the worker on
+  SIGINT as well as SIGTERM. Worker ids are global across all Spooled accounts, so
+  ids such as `worker-1`, or a bare host name that machines of other accounts
+  share (AWS defaults such as `ip-172-31-5-17`), are rejected with HTTP 409. The
+  examples omit the id (the server generates one) or read `SPOOLED_WORKER_ID`,
+  and `docs/workers.md` builds a stable id from a prefix, the host name and a
+  random suffix generated once and kept. Without a SIGINT handler, Ctrl+C kills
+  the process before `stop()` runs and the worker keeps its slot until its
+  heartbeats are missed.
 - The README says where to get an API key (https://spooled.cloud/signup/).
 - The examples say `npx tsx examples/<name>.ts`; `npx ts-node` fails with
   `Cannot find module .../src/index.js`.

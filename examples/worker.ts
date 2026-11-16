@@ -6,7 +6,6 @@
  * Run with: npx tsx examples/worker.ts
  */
 
-import { hostname } from "node:os";
 import { SpooledClient, SpooledWorker } from "../src/index.js";
 
 async function main() {
@@ -22,9 +21,11 @@ async function main() {
   // Create a worker
   const worker = new SpooledWorker(client, {
     queueName: "email-notifications",
-    // Stable id: restarts reuse one row. Ids are global across all Spooled
-    // accounts, so derive it from this machine ("worker-1" is already taken).
-    workerId: `${hostname()}-email-notifications`,
+    // No workerId unless SPOOLED_WORKER_ID is set: the server generates one.
+    // Ids are global across all Spooled accounts, so a pinned id must be unique
+    // to you: a prefix, the host name and a random suffix generated once and
+    // kept in your config (see "Stable Worker IDs" in docs/workers.md).
+    workerId: process.env.SPOOLED_WORKER_ID || undefined,
     concurrency: 5, // Process up to 5 jobs at a time
     pollInterval: 1000, // Poll every second
     leaseDuration: 30, // 30 second lease

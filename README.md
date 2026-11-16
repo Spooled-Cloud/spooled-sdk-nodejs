@@ -135,15 +135,13 @@ const history = await client.jobs.history(id, { order: "desc" });
 Process jobs with the built-in worker runtime:
 
 ```typescript
-import { hostname } from "node:os";
 import { SpooledClient, SpooledWorker } from "@spooled/sdk";
 
 const client = new SpooledClient({ apiKey: "sp_live_..." });
 
 const worker = new SpooledWorker(client, {
   queueName: "my-queue",
-  // Stable and unique: worker ids are global across all Spooled accounts — see below
-  workerId: `${hostname()}-my-queue`,
+  // No workerId: the server generates one. To keep one id across restarts, see below.
   concurrency: 10,
 });
 
@@ -187,8 +185,11 @@ Give any worker that restarts a stable `workerId` (1-128 chars, `[A-Za-z0-9._-]`
 upserts a single row instead of minting a new UUID each start, which otherwise leaves the previous
 registration counting against your plan's worker limit until the stale-worker reaper clears it
 (~2 minutes). Worker ids are global across all Spooled accounts, so an id another account already
-uses (such as `worker-1`) is rejected with HTTP 409: derive it from something unique you control,
-such as the host or pod name. `workers.get()` and `workers.list()` report `jobsProcessed` and `jobsFailed` per worker
+uses (such as `worker-1`) is rejected with HTTP 409. Build it from a prefix, the host name and a
+random suffix, generate it once and keep it (a file, or `SPOOLED_WORKER_ID` in your deployment
+config): host names alone repeat across accounts (AWS default host names all look like
+`ip-172-31-x-y`). [docs/workers.md](./docs/workers.md#stable-worker-ids) has the code.
+`workers.get()` and `workers.list()` report `jobsProcessed` and `jobsFailed` per worker
 (API 0.1.122+).
 
 If you process jobs without `SpooledWorker` (`jobs.claim()` and then `jobs.complete()`,
@@ -517,13 +518,12 @@ const grpcClient = new SpooledGrpcClient({
   useTls: true,
 });
 
-// Register worker (a stable workerId is reused across restarts; ids are global, so
-// derive it from the host name rather than a generic "worker-1")
+// Register worker. No workerId: the server generates one and returns it. To keep one
+// id across restarts, pass a stable one unique to you (see "Stable Worker IDs" in docs/workers.md).
 const { workerId } = await grpcClient.workers.register({
   queueName: "emails",
   hostname: hostname(),
   maxConcurrency: 10,
-  workerId: `${hostname()}-emails`,
 });
 
 // Enqueue job (enforces plan limits automatically)

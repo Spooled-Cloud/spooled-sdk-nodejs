@@ -73,14 +73,14 @@ const grpcClient = new SpooledGrpcClient({
   apiKey: process.env.SPOOLED_API_KEY!,
 });
 
-// A stable workerId (proto field 7) makes a restart update the same worker
-// instead of adding one that counts against the plan's worker limit. Ids are
-// global across all accounts (another account's id is ALREADY_EXISTS / 409),
-// so derive it from something unique such as the host name.
+// No workerId: the server generates one and returns it. A stable workerId
+// (proto field 7) makes a restart update the same worker instead of adding one
+// that counts against the plan's worker limit, but ids are global across all
+// accounts (another account's id is ALREADY_EXISTS / 409), so it must be unique
+// to you: see "Stable Worker IDs" in workers.md.
 const { workerId } = await grpcClient.workers.register({
   queueName: "emails",
   hostname: hostname(),
-  workerId: `${hostname()}-emails`,
 });
 
 await grpcClient.queue.enqueue({

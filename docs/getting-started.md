@@ -85,7 +85,6 @@ for (const job of jobs) {
 The SDK includes a built-in worker runtime for processing jobs:
 
 ```typescript
-import { hostname } from "node:os";
 import { SpooledClient, SpooledWorker } from "@spooled/sdk";
 
 const client = new SpooledClient({ apiKey: "sp_live_..." });
@@ -93,10 +92,9 @@ const client = new SpooledClient({ apiKey: "sp_live_..." });
 const worker = new SpooledWorker(client, {
   queueName: "my-first-queue",
   concurrency: 5,
-  // Worker ids are global across all Spooled accounts, so a generic id such as
-  // "worker-1" is rejected with 409. Derive a stable one from this machine, or
-  // omit it and the server mints a new id on every start.
-  workerId: `${hostname()}-my-first-queue`,
+  // No workerId: the server generates one on every start. Worker ids are global
+  // across all Spooled accounts; to keep one across restarts, see "Stable Worker
+  // IDs" in workers.md.
 });
 
 // Define how to process each job

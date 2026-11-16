@@ -5,7 +5,6 @@ This guide covers the `SpooledWorker` runtime for processing jobs from queues.
 ## Basic Worker
 
 ```typescript
-import { hostname } from "node:os";
 import { SpooledClient, SpooledWorker } from "@spooled/sdk";
 
 const client = new SpooledClient({ apiKey: "sp_live_..." });
@@ -13,8 +12,7 @@ const client = new SpooledClient({ apiKey: "sp_live_..." });
 const worker = new SpooledWorker(client, {
   queueName: "emails",
   concurrency: 10,
-  // Stable and unique: worker ids are global across all Spooled accounts
-  workerId: `${hostname()}-emails`,
+  // No workerId: the server generates one (see Stable Worker IDs to keep one across restarts)
 });
 
 // The type argument types ctx.payload (it is not validated at runtime)
@@ -42,7 +40,6 @@ annotate the handler's context as `JobContext<T>`.
 ## Configuration Options
 
 ```typescript
-import { hostname } from "node:os";
 import { SpooledWorker } from "@spooled/sdk";
 
 const worker = new SpooledWorker(client, {
@@ -64,7 +61,7 @@ const worker = new SpooledWorker(client, {
   shutdownTimeout: 30000, // How long stop() lets running handlers finish (default: 30000)
 
   // Identification
-  workerId: `${hostname()}-my-queue`, // Stable, globally unique id (default: server-minted UUID)
+  workerId: process.env.SPOOLED_WORKER_ID, // Stable id unique to you, see Stable Worker IDs (default: server-minted UUID)
   hostname: "web-7", // Worker hostname (default: os.hostname())
   workerType: "nodejs", // Worker type identifier
   version: "my-worker/2.3.0", // Optional application version (defaults to the SDK version)
@@ -89,22 +86,38 @@ registration counting against the cap until the stale-worker reaper clears it (~
 that crash-loops on a tight plan can exhaust its own worker limit that way and start failing to
 register with HTTP 429.
 
-Derive the id from something stable about the deployment — a Kubernetes pod name, a systemd instance
-name, a container hostname — rather than generating one per process:
+Worker ids are global across all Spooled accounts, not per organization. An id owned by a different
+organization is rejected with HTTP 409, so a generic id such as `worker-1` or `emails-worker-01` is
+likely taken, and so is a bare host name or pod name (`worker-0`, or an AWS default such as
+`ip-172-31-5-17`). Build the id from a prefix, the host name and a random suffix, generate it once,
+and keep it so every restart sends the same one; the random suffix is what makes it yours, since
+host names repeat across accounts:
 
 ```typescript
+import { randomBytes } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { SpooledWorker } from "@spooled/sdk";
 
+// Generated on the first start, then read back from the file on every restart.
+function stableWorkerId(file = ".spooled-worker-id"): string {
+  try {
+    return readFileSync(file, "utf8").trim();
+  } catch {
+    const id = `myapp-${hostname()}-${randomBytes(6).toString("hex")}`; // e.g. myapp-web-1-3f9a0c12b7e4
+    writeFileSync(file, id);
+    return id;
+  }
+}
+
 const worker = new SpooledWorker(client, {
   queueName: "emails",
-  workerId: `${process.env.HOSTNAME ?? hostname()}-emails`,
+  workerId: process.env.SPOOLED_WORKER_ID ?? stableWorkerId(),
 });
 ```
 
-Worker ids are global across all Spooled accounts, not per organization. An id owned by a different
-organization is rejected with HTTP 409, so a generic id such as `worker-1` or `emails-worker-01` is
-likely taken: include something unique to your deployment.
+A container loses that file on redeploy: generate the id once the same way and set it per replica as
+`SPOOLED_WORKER_ID` in your deployment config instead.
 
 ## Job Context
 
