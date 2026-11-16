@@ -3,9 +3,10 @@
  *
  * This example demonstrates how to process jobs with SpooledWorker.
  *
- * Run with: npx ts-node examples/worker.ts
+ * Run with: npx tsx examples/worker.ts
  */
 
+import { hostname } from "node:os";
 import { SpooledClient, SpooledWorker } from "../src/index.js";
 
 async function main() {
@@ -21,7 +22,9 @@ async function main() {
   // Create a worker
   const worker = new SpooledWorker(client, {
     queueName: "email-notifications",
-    workerId: "email-notifications-worker-01", // Stable id: restarts reuse one row
+    // Stable id: restarts reuse one row. Ids are global across all Spooled
+    // accounts, so derive it from this machine ("worker-1" is already taken).
+    workerId: `${hostname()}-email-notifications`,
     concurrency: 5, // Process up to 5 jobs at a time
     pollInterval: 1000, // Poll every second
     leaseDuration: 30, // 30 second lease

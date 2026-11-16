@@ -14,6 +14,8 @@ Source of truth: `spooled-backend/src/api/mod.rs` (routes) and `spooled-backend/
 For self-hosted deployments, configure the SDK with your custom endpoints:
 
 ```typescript
+import { SpooledClient } from "@spooled/sdk";
+
 const client = new SpooledClient({
   apiKey: "sp_live_...",
   baseUrl: "https://your-server.com", // REST API
@@ -76,21 +78,21 @@ the browser and authenticates by header.
 **Request:**
 
 ```typescript
-{
+type LoginRequest = {
   api_key: string; // min 10 chars
-}
+};
 ```
 
 **Response:**
 
 ```typescript
-{
+type LoginResponse = {
   access_token: string;
   refresh_token: string;
   token_type: "Bearer";
   expires_in: number; // seconds
   refresh_expires_in: number; // seconds
-}
+};
 ```
 
 ### POST /api/v1/auth/refresh
@@ -98,19 +100,19 @@ the browser and authenticates by header.
 **Request:**
 
 ```typescript
-{
+type RefreshRequest = {
   refresh_token: string;
-}
+};
 ```
 
 **Response:**
 
 ```typescript
-{
+type RefreshResponse = {
   access_token: string;
   token_type: "Bearer";
   expires_in: number;
-}
+};
 ```
 
 ### GET /api/v1/auth/me
@@ -118,13 +120,13 @@ the browser and authenticates by header.
 **Response:**
 
 ```typescript
-{
+type MeResponse = {
   organization_id: string;
   api_key_id: string;
   queues: string[];
   issued_at: string; // ISO8601
   expires_at: string; // ISO8601
-}
+};
 ```
 
 ---
@@ -155,7 +157,7 @@ the browser and authenticates by header.
 **Request:**
 
 ```typescript
-{
+type CreateJobRequest = {
   queue_name: string; // 1-100 chars, alphanumeric/-/_/.
   payload: object;
   priority?: number; // -100 to 100, default 0
@@ -167,16 +169,16 @@ the browser and authenticates by header.
   tags?: object;
   parent_job_id?: string;
   completion_webhook?: string; // HTTPS URL
-}
+};
 ```
 
 **Response:**
 
 ```typescript
-{
+type CreateJobResponse = {
   id: string;
   created: boolean; // false if idempotent hit
-}
+};
 ```
 
 ### GET /api/v1/jobs
@@ -288,20 +290,20 @@ interface JobStats {
 **Request:**
 
 ```typescript
-{
+type ClaimJobsRequest = {
   queue_name: string;
   worker_id: string;
   limit?: number; // 1-100, default 1
   lease_duration_secs?: number; // 5-3600, default 30
-}
+};
 ```
 
 **Response:**
 
 ```typescript
-{
+type ClaimJobsResponse = {
   jobs: ClaimedJob[];
-}
+};
 
 interface ClaimedJob {
   id: string;
@@ -323,11 +325,11 @@ interface ClaimedJob {
 **Request:**
 
 ```typescript
-{
+type CompleteJobRequest = {
   worker_id: string;
   lease_id: string; // required (422 without it); stale token => 409 LEASE_EXPIRED
   result?: object;
-}
+};
 ```
 
 **Response:** `{ success: true }`
@@ -337,11 +339,11 @@ interface ClaimedJob {
 **Request:**
 
 ```typescript
-{
+type FailJobRequest = {
   worker_id: string;
   lease_id: string; // required (422 without it); stale token => 409 LEASE_EXPIRED
   error: string; // 1-2048 chars
-}
+};
 ```
 
 **Response:** `{ success: true }` or `{ success: false, error: string }`
@@ -351,11 +353,11 @@ interface ClaimedJob {
 **Request:**
 
 ```typescript
-{
+type JobHeartbeatRequest = {
   worker_id: string;
   lease_id: string; // required (422 without it); stale token => 409 LEASE_EXPIRED
   lease_duration_secs: number; // 5-3600
-}
+};
 ```
 
 **Response:** `{ success: true }`
@@ -365,13 +367,13 @@ interface ClaimedJob {
 **Request:**
 
 ```typescript
-{
+type BulkEnqueueRequest = {
   queue_name: string;
   jobs: BulkJobItem[]; // max 100
   default_priority?: number;
   default_max_retries?: number;
   default_timeout_seconds?: number;
-}
+};
 
 interface BulkJobItem {
   payload: object;
@@ -384,22 +386,20 @@ interface BulkJobItem {
 **Response:**
 
 ```typescript
-{
+type BulkEnqueueResponse = {
   succeeded: {
     index: number;
     job_id: string;
     created: boolean;
-  }
-  [];
+  }[];
   failed: {
     index: number;
     error: string;
-  }
-  [];
+  }[];
   total: number;
   success_count: number;
   failure_count: number;
-}
+};
 ```
 
 ---
@@ -836,14 +836,14 @@ Copy anything you need to keep into your own store.
 **Response:**
 
 ```typescript
-{
+type BillingStatusResponse = {
   plan_tier: string;
   stripe_subscription_id?: string | null;
   stripe_subscription_status?: string | null;
   stripe_current_period_end?: string | null; // ISO8601
   stripe_cancel_at_period_end?: boolean | null;
   has_stripe_customer: boolean;
-}
+};
 ```
 
 ### POST /api/v1/billing/portal
@@ -851,17 +851,17 @@ Copy anything you need to keep into your own store.
 **Request:**
 
 ```typescript
-{
+type BillingPortalRequest = {
   return_url: string;
-}
+};
 ```
 
 **Response:**
 
 ```typescript
-{
+type BillingPortalResponse = {
   url: string;
-}
+};
 ```
 
 ---
@@ -1221,28 +1221,30 @@ All admin endpoints require `X-Admin-Key` header authentication.
 **Client Commands:**
 
 ```typescript
-{ cmd: 'Subscribe', queue?: string, job_id?: string }
-{ cmd: 'Unsubscribe', queue?: string, job_id?: string }
-{ cmd: 'Ping' }
+type ClientCommand =
+  | { cmd: "Subscribe"; queue?: string; job_id?: string }
+  | { cmd: "Unsubscribe"; queue?: string; job_id?: string }
+  | { cmd: "Ping" };
 ```
 
 **Server Events:**
 
 ```typescript
-{
-  type: "JobStatusChange" |
-    "JobCreated" |
-    "JobCompleted" |
-    "JobFailed" |
-    "QueueStats" |
-    "WorkerHeartbeat" |
-    "WorkerRegistered" |
-    "WorkerDeregistered" |
-    "SystemHealth" |
-    "Ping" |
-    "Error";
+type ServerEvent = {
+  type:
+    | "JobStatusChange"
+    | "JobCreated"
+    | "JobCompleted"
+    | "JobFailed"
+    | "QueueStats"
+    | "WorkerHeartbeat"
+    | "WorkerRegistered"
+    | "WorkerDeregistered"
+    | "SystemHealth"
+    | "Ping"
+    | "Error";
   data: object;
-}
+};
 ```
 
 ### Event Type Mapping
@@ -1268,11 +1270,11 @@ All admin endpoints require `X-Admin-Key` header authentication.
 All API errors return JSON:
 
 ```typescript
-{
+type ErrorResponse = {
   code: string;
   message: string;
   details?: object;
-}
+};
 ```
 
 ### HTTP Status Codes

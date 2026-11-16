@@ -103,7 +103,7 @@ await client.jobs.boostPriority("job_id", 10); // Add 10 to priority
 
 ```typescript
 const stats = await client.jobs.getStats();
-// { pending, processing, completed, failed, deadLetter }
+// { pending, scheduled, processing, completed, failed, deadletter, cancelled, total }
 ```
 
 ### Bulk Enqueue
@@ -114,10 +114,19 @@ const result = await client.jobs.bulkEnqueue({
   jobs: [
     { payload: { n: 1 } },
     { payload: { n: 2 }, priority: 10 },
-    { payload: { n: 3 }, maxRetries: 5 },
+    { payload: { n: 3 }, idempotencyKey: "n-3" },
   ],
+  // Retries and timeout apply to the whole batch; a job item has no maxRetries.
+  defaultMaxRetries: 5,
+  defaultTimeoutSeconds: 600,
 });
-// { jobIds: ['job_1', 'job_2', 'job_3'], enqueuedCount: 3 }
+// {
+//   succeeded: [{ index: 0, jobId: "...", created: true }, ...],
+//   failed: [], // [{ index, error }] for items the API rejected
+//   total: 3,
+//   successCount: 3,
+//   failureCount: 0,
+// }
 ```
 
 ### Batch Status
@@ -218,6 +227,7 @@ const config = await client.queues.get("my-queue");
 
 ```typescript
 await client.queues.updateConfig("my-queue", {
+  queueName: "my-queue", // required by the type; the URL's queue name is the one applied
   maxRetries: 5,
   defaultTimeout: 600,
   rateLimit: 100, // stored and returned, but NOT enforced: workers are not throttled by it
@@ -229,7 +239,8 @@ await client.queues.updateConfig("my-queue", {
 
 ```typescript
 const stats = await client.queues.getStats("my-queue");
-// { pending, processing, completed, failed, ... }
+// { queueName, pendingJobs, processingJobs, completedJobs24h, failedJobs24h,
+//   avgProcessingTimeMs, maxJobAgeSeconds, activeWorkers }
 ```
 
 ### Pause Queue
@@ -268,8 +279,8 @@ const schedule = await client.schedules.create({
   timezone: "America/New_York",
   queueName: "reports",
   payloadTemplate: { type: "daily" },
-  enabled: true,
 });
+// A new schedule is active. Use pause()/resume(), or update({ isActive }), to change that.
 ```
 
 ### List Schedules
@@ -289,7 +300,7 @@ const schedule = await client.schedules.get("schedule_id");
 ```typescript
 await client.schedules.update("schedule_id", {
   cronExpression: "0 0 8 * * *",
-  enabled: false,
+  isActive: false,
 });
 ```
 
@@ -640,6 +651,8 @@ const portal = await client.billing.createPortal({
 ### Login with API Key
 
 ```typescript
+import { SpooledClient } from "@spooled/sdk";
+
 const { accessToken, refreshToken } = await client.auth.login({
   apiKey: "sp_live_...",
 });
@@ -762,8 +775,7 @@ const stats = await client.admin.getStats();
 ### Create API Key for Organization
 
 ```typescript
-const { id, key } = await client.admin.createApiKey({
-  organizationId: "org_id",
+const { id, key } = await client.admin.createApiKey("org_id", {
   name: "Admin-created key",
 });
 ```
@@ -824,9 +836,9 @@ import type {
   ListPage,
 
   // Queues
-  Queue,
+  QueueConfig, // queues.get()
+  QueueConfigSummary, // queues.list() items
   QueueStats,
-  QueueConfig,
 
   // Schedules
   Schedule,

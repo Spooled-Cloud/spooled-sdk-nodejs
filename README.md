@@ -7,6 +7,8 @@ Official Node.js/TypeScript SDK for [Spooled Cloud](https://spooled.cloud) - a m
 [![npm version](https://badge.fury.io/js/@spooled%2Fsdk.svg)](https://www.npmjs.com/package/@spooled/sdk)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
+You need an API key: create a free account at https://spooled.cloud/signup/ and copy a key from the dashboard.
+
 ## Features
 
 - **Full TypeScript support** with comprehensive type definitions
@@ -133,27 +135,39 @@ const history = await client.jobs.history(id, { order: "desc" });
 Process jobs with the built-in worker runtime:
 
 ```typescript
+import { hostname } from "node:os";
 import { SpooledClient, SpooledWorker } from "@spooled/sdk";
 
 const client = new SpooledClient({ apiKey: "sp_live_..." });
 
 const worker = new SpooledWorker(client, {
   queueName: "my-queue",
-  workerId: "my-queue-worker-01", // stable id — see below
+  // Stable and unique: worker ids are global across all Spooled accounts — see below
+  workerId: `${hostname()}-my-queue`,
   concurrency: 10,
 });
 
-worker.process(async (ctx) => {
-  console.log(`Processing job ${ctx.jobId}`);
+// Type the payload to destructure it (not validated at runtime)
+worker.process<{ to: string }>(async (ctx) => {
+  console.log(`Processing job ${ctx.jobId} for ${ctx.payload.to}`);
   await doSomething(ctx.payload);
   return { success: true };
 });
 
-await worker.start();
+// Graceful shutdown on Ctrl+C (SIGINT) and SIGTERM: drain, then deregister
+const shutdown = async () => {
+  await worker.stop();
+  process.exit(0);
+};
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 
-// Graceful shutdown
-process.on("SIGTERM", () => worker.stop());
+await worker.start();
 ```
+
+Handle SIGINT as well as SIGTERM. Without a SIGINT handler, Ctrl+C kills the process before
+`stop()` runs, the worker never deregisters, and it keeps its slot against the plan worker limit
+until the server notices that its heartbeats stopped.
 
 `stop()` drains. The worker stops claiming, then lets running handlers finish for up to
 `shutdownTimeout` (default 30 s). A handler that returns is completed and one that throws is
@@ -172,7 +186,9 @@ the server makes them idempotent. If an ack still fails after the retries the wo
 Give any worker that restarts a stable `workerId` (1-128 chars, `[A-Za-z0-9._-]`). Registration then
 upserts a single row instead of minting a new UUID each start, which otherwise leaves the previous
 registration counting against your plan's worker limit until the stale-worker reaper clears it
-(~2 minutes). `workers.get()` and `workers.list()` report `jobsProcessed` and `jobsFailed` per worker
+(~2 minutes). Worker ids are global across all Spooled accounts, so an id another account already
+uses (such as `worker-1`) is rejected with HTTP 409: derive it from something unique you control,
+such as the host or pod name. `workers.get()` and `workers.list()` report `jobsProcessed` and `jobsFailed` per worker
 (API 0.1.122+).
 
 If you process jobs without `SpooledWorker` (`jobs.claim()` and then `jobs.complete()`,
@@ -369,6 +385,8 @@ const { url } = await client.billing.createPortal({
 Email-based passwordless authentication:
 
 ```typescript
+import { SpooledClient } from "@spooled/sdk";
+
 // Start email login flow
 await client.auth.startEmailLogin("user@example.com");
 // User receives email with login link
@@ -420,10 +438,12 @@ import { RateLimitError } from "@spooled/sdk";
 
 try {
   await client.jobs.create({
-    /* ... */
+    queueName: "emails",
+    payload: { to: "user@example.com" },
   });
 } catch (error) {
-  if (error instanceof RateLimitError && error.code === "QUOTA_EXCEEDED") {
+  // isQuota covers REST and gRPC; both report a plan cap with code "QUOTA_EXCEEDED"
+  if (error instanceof RateLimitError && error.isQuota) {
     console.log(`Plan limit: ${error.message}`);
     console.log(`Request ID: ${error.requestId ?? "not provided"}`);
     // Present only if this server response included a nested `details` object.
@@ -485,6 +505,7 @@ try {
 For high-throughput workers, use the native gRPC API with the included gRPC client:
 
 ```typescript
+import { hostname } from "node:os";
 import { SpooledGrpcClient } from "@spooled/sdk";
 
 // Connect to gRPC server (Optimized for Cloudflare Tunnel)
@@ -496,12 +517,13 @@ const grpcClient = new SpooledGrpcClient({
   useTls: true,
 });
 
-// Register worker (a stable workerId is reused across restarts)
+// Register worker (a stable workerId is reused across restarts; ids are global, so
+// derive it from the host name rather than a generic "worker-1")
 const { workerId } = await grpcClient.workers.register({
   queueName: "emails",
-  hostname: "worker-1",
+  hostname: hostname(),
   maxConcurrency: 10,
-  workerId: "emails-worker-1",
+  workerId: `${hostname()}-emails`,
 });
 
 // Enqueue job (enforces plan limits automatically)
@@ -577,7 +599,7 @@ import type {
   Job,
   JobStatus,
   CreateJobParams,
-  Queue,
+  QueueConfig,
   QueueStats,
   Schedule,
   CreateScheduleParams,

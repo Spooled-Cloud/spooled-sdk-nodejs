@@ -11,6 +11,7 @@
  * Run with: npx tsx examples/grpc-streaming.ts [enqueue|batch|stream|stats|dequeue|demo]
  */
 
+import { hostname } from "node:os";
 import { SpooledGrpcClient } from "../src/index.js";
 import type { GrpcJob } from "../src/index.js";
 
@@ -21,7 +22,10 @@ const GRPC_ADDRESS =
 const QUEUE_NAME = process.env.SPOOLED_QUEUE || "grpc-demo";
 // A stable worker id: re-registering after a restart updates the same worker
 // instead of adding one that counts against the plan's worker limit.
-const WORKER_ID = process.env.SPOOLED_WORKER_ID || `${QUEUE_NAME}-worker-1`;
+// Worker ids are global across all Spooled accounts: derive the default from
+// this machine so it does not collide with another account's id (HTTP 409).
+const WORKER_ID =
+  process.env.SPOOLED_WORKER_ID || `${hostname()}-${QUEUE_NAME}`;
 
 // ============================================
 // Example 1: Simple Enqueue via gRPC

@@ -5,7 +5,7 @@ This guide walks you through installing, configuring, and using the Spooled SDK 
 ## Prerequisites
 
 - Node.js 18.0.0 or later
-- An API key from [Spooled Cloud](https://spooled.cloud)
+- An API key from [Spooled Cloud](https://spooled.cloud) (sign up at https://spooled.cloud/signup/)
 
 ## Installation
 
@@ -33,6 +33,8 @@ const client = new SpooledClient({
 For local development or testing:
 
 ```typescript
+import { SpooledClient } from "@spooled/sdk";
+
 const client = new SpooledClient({
   apiKey: process.env.SPOOLED_API_KEY,
   baseUrl: process.env.SPOOLED_API_URL || "https://api.spooled.cloud",
@@ -83,6 +85,7 @@ for (const job of jobs) {
 The SDK includes a built-in worker runtime for processing jobs:
 
 ```typescript
+import { hostname } from "node:os";
 import { SpooledClient, SpooledWorker } from "@spooled/sdk";
 
 const client = new SpooledClient({ apiKey: "sp_live_..." });
@@ -90,6 +93,10 @@ const client = new SpooledClient({ apiKey: "sp_live_..." });
 const worker = new SpooledWorker(client, {
   queueName: "my-first-queue",
   concurrency: 5,
+  // Worker ids are global across all Spooled accounts, so a generic id such as
+  // "worker-1" is rejected with 409. Derive a stable one from this machine, or
+  // omit it and the server mints a new id on every start.
+  workerId: `${hostname()}-my-first-queue`,
 });
 
 // Define how to process each job
@@ -104,11 +111,18 @@ worker.process(async (ctx) => {
   return { success: true };
 });
 
-// Start the worker
-await worker.start();
+// Ctrl+C (SIGINT) and SIGTERM: drain running jobs, then deregister so the
+// worker frees its slot at once. Without a SIGINT handler, Ctrl+C kills the
+// process and the worker holds its slot until the server notices it is gone.
+const shutdown = async () => {
+  await worker.stop();
+  process.exit(0);
+};
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 
-// Graceful shutdown on SIGTERM
-process.on("SIGTERM", () => worker.stop());
+// Start the worker (resolves once it is registered and polling)
+await worker.start();
 ```
 
 ## Key Concepts
@@ -123,7 +137,9 @@ const queues = await client.queues.list();
 
 // Get queue statistics
 const stats = await client.queues.getStats("my-queue");
-console.log(`Pending: ${stats.pending}, Processing: ${stats.processing}`);
+console.log(
+  `Pending: ${stats.pendingJobs}, Processing: ${stats.processingJobs}`,
+);
 ```
 
 ### Priority
@@ -195,7 +211,8 @@ import { RateLimitError } from "@spooled/sdk";
 
 try {
   await client.jobs.create({
-    /* ... */
+    queueName: "emails",
+    payload: { to: "user@example.com" },
   });
 } catch (error) {
   // error.isQuota is true for code "QUOTA_EXCEEDED": a plan limit that the SDK
@@ -233,13 +250,14 @@ Track usage and manage your organization:
 ```typescript
 // Get current usage and limits
 const usage = await client.organizations.getUsage();
+const activeJobs = usage.usage.activeJobs;
 console.log(
-  `Active jobs: ${usage.active_jobs.current}/${usage.active_jobs.limit}`,
+  `Active jobs: ${activeJobs.current}/${activeJobs.limit ?? "unlimited"}`,
 );
-console.log(`Plan: ${usage.plan.tier}`);
+console.log(`Plan: ${usage.planDisplayName} (${usage.plan})`);
 
 // Check if at risk of hitting limits
-if (usage.active_jobs.percentage && usage.active_jobs.percentage > 80) {
+if (activeJobs.percentage != null && activeJobs.percentage > 80) {
   console.warn("Approaching active jobs limit!");
 }
 ```

@@ -234,8 +234,10 @@ for (const job of jobs) {
 ```typescript
 const deps = await client.workflows.jobs.getDependencies(jobId);
 
-console.log("Depends on:", deps.dependsOn);
-console.log("Required by:", deps.dependedOnBy);
+// Each entry is { jobId, queueName, status }
+console.log("Depends on:", deps.dependencies);
+console.log("Required by:", deps.dependents);
+console.log("Ready to run:", deps.dependenciesMet);
 ```
 
 ## Cancelling Workflows
@@ -298,14 +300,23 @@ await client.jobs.retry(jobId);
 Workers process workflow jobs like any other job:
 
 ```typescript
+import { SpooledWorker } from "@spooled/sdk";
+
+interface EtlPayload {
+  step: "extract" | "transform" | "load";
+  source?: string;
+  operations?: string[];
+  destination?: string;
+}
+
 const worker = new SpooledWorker(client, {
   queueName: "etl",
   concurrency: 5,
 });
 
-worker.process(async (ctx) => {
-  // Access workflow context from payload (if needed)
-  const { step, workflowId } = ctx.payload;
+// The type argument types ctx.payload (it is not validated at runtime)
+worker.process<EtlPayload>(async (ctx) => {
+  const { step } = ctx.payload;
 
   switch (step) {
     case "extract":
@@ -331,19 +342,21 @@ Job results are available to downstream jobs via the result field:
 
 ```typescript
 // In the 'transform' job worker:
-worker.process(async (ctx) => {
-  if (ctx.payload.step === "transform") {
-    // Get result from the 'extract' job
-    const extractJobId = ctx.payload.dependencies?.extract;
-    if (extractJobId) {
-      const extractJob = await client.jobs.get(extractJobId);
-      const extractedData = extractJob.result;
+worker.process<{ step: string; dependencies?: Record<string, string> }>(
+  async (ctx) => {
+    if (ctx.payload.step === "transform") {
+      // Get result from the 'extract' job
+      const extractJobId = ctx.payload.dependencies?.extract;
+      if (extractJobId) {
+        const extractJob = await client.jobs.get(extractJobId);
+        const extractedData = extractJob.result;
 
-      // Use the extracted data
-      return transformData(extractedData);
+        // Use the extracted data
+        return transformData(extractedData);
+      }
     }
-  }
-});
+  },
+);
 ```
 
 ## Dynamic Workflow Building
@@ -351,8 +364,10 @@ worker.process(async (ctx) => {
 Create workflows programmatically based on input:
 
 ```typescript
+import type { WorkflowJobDefinition } from "@spooled/sdk";
+
 function createBatchWorkflow(items: string[]) {
-  const jobs = [];
+  const jobs: WorkflowJobDefinition[] = [];
 
   // Create parallel processing jobs
   for (let i = 0; i < items.length; i++) {
@@ -388,13 +403,29 @@ const workflow = await createBatchWorkflow(["a", "b", "c", "d", "e"]);
 Each job should be self-contained and idempotent:
 
 ```typescript
+import type { WorkflowJobDefinition } from "@spooled/sdk";
+
 // Good: Each job has a clear, single responsibility
-{ key: 'download', payload: { url: '...' } }
-{ key: 'parse', payload: { format: 'json' }, dependsOn: ['download'] }
-{ key: 'validate', payload: { schema: '...' }, dependsOn: ['parse'] }
+const atomic: WorkflowJobDefinition[] = [
+  { key: "download", queueName: "etl", payload: { url: "..." } },
+  {
+    key: "parse",
+    queueName: "etl",
+    payload: { format: "json" },
+    dependsOn: ["download"],
+  },
+  {
+    key: "validate",
+    queueName: "etl",
+    payload: { schema: "..." },
+    dependsOn: ["parse"],
+  },
+];
 
 // Avoid: Overloaded jobs that do too much
-{ key: 'download-parse-validate', payload: { ... } } // Too many responsibilities
+const overloaded: WorkflowJobDefinition[] = [
+  { key: "download-parse-validate", queueName: "etl", payload: { url: "..." } },
+];
 ```
 
 ### 2. Use Meaningful Keys
@@ -403,13 +434,10 @@ Job keys should be descriptive and follow a consistent naming convention:
 
 ```typescript
 // Good
-{ key: 'extract-user-data', ... }
-{ key: 'transform-to-csv', ... }
-{ key: 'upload-to-s3', ... }
+const goodKeys = ["extract-user-data", "transform-to-csv", "upload-to-s3"];
 
 // Avoid
-{ key: 'step1', ... }
-{ key: 'job2', ... }
+const vagueKeys = ["step1", "job2"];
 ```
 
 ### 3. Handle Partial Failures

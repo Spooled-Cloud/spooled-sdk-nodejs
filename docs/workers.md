@@ -5,6 +5,7 @@ This guide covers the `SpooledWorker` runtime for processing jobs from queues.
 ## Basic Worker
 
 ```typescript
+import { hostname } from "node:os";
 import { SpooledClient, SpooledWorker } from "@spooled/sdk";
 
 const client = new SpooledClient({ apiKey: "sp_live_..." });
@@ -12,20 +13,38 @@ const client = new SpooledClient({ apiKey: "sp_live_..." });
 const worker = new SpooledWorker(client, {
   queueName: "emails",
   concurrency: 10,
+  // Stable and unique: worker ids are global across all Spooled accounts
+  workerId: `${hostname()}-emails`,
 });
 
-worker.process(async (ctx) => {
+// The type argument types ctx.payload (it is not validated at runtime)
+worker.process<{ to: string; subject: string }>(async (ctx) => {
   console.log(`Processing job ${ctx.jobId}`);
-  await sendEmail(ctx.payload);
+  const { to, subject } = ctx.payload;
+  await sendEmail(to, subject);
   return { sent: true };
 });
+
+// Ctrl+C (SIGINT) and SIGTERM: drain running jobs, then deregister
+const shutdown = async () => {
+  await worker.stop();
+  process.exit(0);
+};
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 
 await worker.start();
 ```
 
+`ctx.payload` is `JsonValue` (any JSON) unless you pass a type argument to `process<T>()` or
+annotate the handler's context as `JobContext<T>`.
+
 ## Configuration Options
 
 ```typescript
+import { hostname } from "node:os";
+import { SpooledWorker } from "@spooled/sdk";
+
 const worker = new SpooledWorker(client, {
   // Required
   queueName: "my-queue",
@@ -45,8 +64,8 @@ const worker = new SpooledWorker(client, {
   shutdownTimeout: 30000, // How long stop() lets running handlers finish (default: 30000)
 
   // Identification
-  workerId: "emails-worker-01", // Stable id (default: server-minted UUID)
-  hostname: "worker-01", // Worker hostname (default: os.hostname())
+  workerId: `${hostname()}-my-queue`, // Stable, globally unique id (default: server-minted UUID)
+  hostname: "web-7", // Worker hostname (default: os.hostname())
   workerType: "nodejs", // Worker type identifier
   version: "my-worker/2.3.0", // Optional application version (defaults to the SDK version)
   metadata: {
@@ -74,13 +93,18 @@ Derive the id from something stable about the deployment — a Kubernetes pod na
 name, a container hostname — rather than generating one per process:
 
 ```typescript
+import { hostname } from "node:os";
+import { SpooledWorker } from "@spooled/sdk";
+
 const worker = new SpooledWorker(client, {
   queueName: "emails",
-  workerId: process.env.HOSTNAME ?? "emails-worker-01",
+  workerId: `${process.env.HOSTNAME ?? hostname()}-emails`,
 });
 ```
 
-An id owned by a different organization is rejected with HTTP 409.
+Worker ids are global across all Spooled accounts, not per organization. An id owned by a different
+organization is rejected with HTTP 409, so a generic id such as `worker-1` or `emails-worker-01` is
+likely taken: include something unique to your deployment.
 
 ## Job Context
 
@@ -187,6 +211,8 @@ worker.off("job:completed", handler);
 Proper shutdown ensures in-progress jobs complete:
 
 ```typescript
+import { SpooledWorker } from "@spooled/sdk";
+
 const worker = new SpooledWorker(client, {
   queueName: "emails",
   shutdownTimeout: 30000, // Wait up to 30 seconds
@@ -275,7 +301,7 @@ worker.process(async (ctx) => {
   });
 
   // Use with async iteration
-  for await (const item of asyncIterator) {
+  for await (const item of loadItems()) {
     if (ctx.signal.aborted) {
       break;
     }
@@ -309,7 +335,7 @@ worker.process(async (ctx) => {
 Throwing an error marks the job as failed:
 
 ```typescript
-worker.process(async (ctx) => {
+worker.process<{ userId: string; template: string }>(async (ctx) => {
   const user = await db.users.find(ctx.payload.userId);
 
   if (!user) {
@@ -357,6 +383,8 @@ console.log("Active jobs:", worker.getActiveJobCount());
 Run multiple workers for different queues:
 
 ```typescript
+import { SpooledWorker } from "@spooled/sdk";
+
 const emailWorker = new SpooledWorker(client, {
   queueName: "emails",
   concurrency: 10,
@@ -385,6 +413,8 @@ process.on("SIGTERM", async () => {
 For CPU-intensive tasks, limit concurrency:
 
 ```typescript
+import { SpooledWorker } from "@spooled/sdk";
+
 const worker = new SpooledWorker(client, {
   queueName: "image-processing",
   concurrency: 2, // Match CPU cores - 2
@@ -396,6 +426,8 @@ const worker = new SpooledWorker(client, {
 For I/O-heavy tasks (HTTP, database), increase concurrency:
 
 ```typescript
+import { SpooledWorker } from "@spooled/sdk";
+
 const worker = new SpooledWorker(client, {
   queueName: "api-calls",
   concurrency: 50, // Many parallel I/O operations
@@ -407,6 +439,7 @@ const worker = new SpooledWorker(client, {
 Adjust based on system load:
 
 ```typescript
+import { SpooledWorker } from "@spooled/sdk";
 import os from "os";
 
 const cpuCount = os.cpus().length;
@@ -438,8 +471,8 @@ worker.process(async (ctx) => {
   } catch (error) {
     ctx.log("error", "Job failed", {
       duration: Date.now() - startTime,
-      error: error.message,
-      stack: error.stack,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
     });
     throw error;
   }

@@ -4,7 +4,7 @@
  * This example demonstrates building complex workflows with job dependencies.
  * It shows a data pipeline (ETL) pattern with fan-out and fan-in.
  *
- * Run with: npx ts-node examples/workflow-dag.ts
+ * Run with: npx tsx examples/workflow-dag.ts
  */
 
 import {

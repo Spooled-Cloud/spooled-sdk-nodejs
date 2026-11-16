@@ -3,7 +3,7 @@
  *
  * This example demonstrates how to use realtime event streaming.
  *
- * Run with: npx ts-node examples/realtime.ts
+ * Run with: npx tsx examples/realtime.ts
  */
 
 import { SpooledClient } from "../src/index.js";

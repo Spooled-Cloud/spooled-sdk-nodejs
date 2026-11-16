@@ -3,7 +3,7 @@
  *
  * This example demonstrates the basic usage of the Spooled SDK.
  *
- * Run with: npx ts-node examples/quick-start.ts
+ * Run with: npx tsx examples/quick-start.ts
  */
 
 import { SpooledClient } from "../src/index.js";

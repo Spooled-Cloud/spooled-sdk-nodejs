@@ -3,7 +3,7 @@
  *
  * This example demonstrates how to handle errors from the SDK.
  *
- * Run with: npx ts-node examples/error-handling.ts
+ * Run with: npx tsx examples/error-handling.ts
  */
 
 import {

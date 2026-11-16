@@ -5,7 +5,7 @@ This guide covers all configuration options for the Spooled SDK.
 ## Client Configuration
 
 ```typescript
-import { SpooledClient } from "@spooled/sdk";
+import { SpooledClient, isRetryableError } from "@spooled/sdk";
 
 const client = new SpooledClient({
   // === Authentication (required - one of these) ===
@@ -32,7 +32,7 @@ const client = new SpooledClient({
     jitter: true, // Add randomness to delays (default: true)
     retryOn: (error, attempt) => {
       // Custom retry logic
-      return error.isRetryable();
+      return isRetryableError(error) && attempt < 3;
     },
   },
 
@@ -75,6 +75,8 @@ SPOOLED_DEBUG=true
 Example usage:
 
 ```typescript
+import { SpooledClient } from "@spooled/sdk";
+
 const client = new SpooledClient({
   apiKey: process.env.SPOOLED_API_KEY!,
   baseUrl: process.env.SPOOLED_API_URL,
@@ -89,6 +91,8 @@ const client = new SpooledClient({
 If you're running your own Spooled instance, configure the SDK to point to your server:
 
 ```typescript
+import { SpooledClient } from "@spooled/sdk";
+
 const client = new SpooledClient({
   apiKey: "sp_live_your_key",
 
@@ -119,6 +123,8 @@ If `wsUrl` is not explicitly set, it's automatically derived from `baseUrl`:
 For local development, you might use:
 
 ```typescript
+import { SpooledClient } from "@spooled/sdk";
+
 const client = new SpooledClient({
   apiKey: "sp_test_local_dev_key",
   baseUrl: "http://localhost:8080",
@@ -163,13 +169,15 @@ Non-retryable errors:
 ### Custom Retry Logic
 
 ```typescript
+import { SpooledClient, ValidationError } from "@spooled/sdk";
+
 const client = new SpooledClient({
   apiKey: "sp_live_...",
   retry: {
     maxRetries: 5,
     retryOn: (error, attempt) => {
       // Don't retry validation errors
-      if (error.code === "VALIDATION_ERROR") {
+      if (error instanceof ValidationError) {
         return false;
       }
       // Retry everything else up to 5 times
@@ -196,6 +204,8 @@ CLOSED → (failures >= threshold) → OPEN → (timeout expires) → HALF_OPEN
 ### Configuration
 
 ```typescript
+import { SpooledClient } from "@spooled/sdk";
+
 const client = new SpooledClient({
   apiKey: "sp_live_...",
   circuitBreaker: {
@@ -243,13 +253,16 @@ const client = new SpooledClient({
 ### Handling Circuit Breaker Errors
 
 ```typescript
-import { CircuitBreakerOpenError } from '@spooled/sdk';
+import { CircuitBreakerOpenError } from "@spooled/sdk";
 
 try {
-  await client.jobs.create({ ... });
+  await client.jobs.create({
+    queueName: "emails",
+    payload: { to: "user@example.com" },
+  });
 } catch (error) {
   if (error instanceof CircuitBreakerOpenError) {
-    console.log('Circuit breaker is open, try again later');
+    console.log("Circuit breaker is open, try again later");
   }
 }
 ```
@@ -259,6 +272,8 @@ try {
 Enable debug mode to see all API requests and responses:
 
 ```typescript
+import { SpooledClient } from "@spooled/sdk";
+
 const client = new SpooledClient({
   apiKey: "sp_live_...",
   debug: true,
@@ -268,6 +283,8 @@ const client = new SpooledClient({
 Or provide a custom logger:
 
 ```typescript
+import { SpooledClient } from "@spooled/sdk";
+
 const client = new SpooledClient({
   apiKey: "sp_live_...",
   debug: (message, meta) => {
@@ -291,9 +308,9 @@ Useful for testing or special runtime environments:
 import { SpooledClient } from "@spooled/sdk";
 
 // Mock fetch for testing
-const mockFetch = async (url: string, options: RequestInit) => {
-  console.log("Fetching:", url);
-  return fetch(url, options);
+const mockFetch: typeof fetch = async (input, init) => {
+  console.log("Fetching:", input);
+  return fetch(input, init);
 };
 
 const client = new SpooledClient({
@@ -307,6 +324,8 @@ const client = new SpooledClient({
 You can create multiple clients for different environments or API keys:
 
 ```typescript
+import { SpooledClient } from "@spooled/sdk";
+
 // Spooled Cloud (production)
 const cloudClient = new SpooledClient({
   apiKey: "sp_live_production_key",

@@ -3,7 +3,7 @@
  *
  * This example demonstrates how to work with cron schedules.
  *
- * Run with: npx ts-node examples/schedules.ts
+ * Run with: npx tsx examples/schedules.ts
  */
 
 import { SpooledClient } from "../src/index.js";

@@ -25,16 +25,23 @@ All gRPC operations automatically enforce tier-based limits:
 - ✅ **Worker registration** enforces worker limits
 - ✅ **Batch operations** validate all jobs in the batch
 
-When limits are exceeded, you'll receive a `RESOURCE_EXHAUSTED` status:
+When a limit is exceeded, the server answers with gRPC status `RESOURCE_EXHAUSTED`. The SDK client
+turns that into a `RateLimitError`, the same class REST uses for a 429. A plan cap carries
+`code: "QUOTA_EXCEEDED"` and `isQuota: true` (it is never retried); per-second rate limiting keeps
+`code: "RATE_LIMIT_EXCEEDED"`:
 
 ```typescript
+import { RateLimitError } from "@spooled/sdk";
+
 try {
   await grpcClient.queue.enqueue({
-    /* ... */
+    queueName: "emails",
+    payload: { to: "user@example.com" },
   });
 } catch (error) {
-  if (error.code === grpc.status.RESOURCE_EXHAUSTED) {
-    console.log("Plan limit exceeded:", error.details);
+  if (error instanceof RateLimitError && error.isQuota) {
+    // error.code === "QUOTA_EXCEEDED"
+    console.log("Plan limit exceeded:", error.message);
     // Example: "active jobs limit reached (10/10). Upgrade to starter for higher limits."
   }
 }
@@ -58,6 +65,7 @@ try {
 deadline and maps gRPC status codes to the SDK's error classes.
 
 ```typescript
+import { hostname } from "node:os";
 import { SpooledGrpcClient } from "@spooled/sdk";
 
 const grpcClient = new SpooledGrpcClient({
@@ -66,11 +74,13 @@ const grpcClient = new SpooledGrpcClient({
 });
 
 // A stable workerId (proto field 7) makes a restart update the same worker
-// instead of adding one that counts against the plan's worker limit.
+// instead of adding one that counts against the plan's worker limit. Ids are
+// global across all accounts (another account's id is ALREADY_EXISTS / 409),
+// so derive it from something unique such as the host name.
 const { workerId } = await grpcClient.workers.register({
   queueName: "emails",
-  hostname: "worker-1",
-  workerId: "emails-worker-01",
+  hostname: hostname(),
+  workerId: `${hostname()}-emails`,
 });
 
 await grpcClient.queue.enqueue({
@@ -133,6 +143,29 @@ with REST (documented server limitation, BEGRPC-05):
 
 Use REST (`client.jobs.*`) for jobs that need non-object payloads or exact large integers.
 
+### Queue Stats and Stream Cancellation
+
+- `queue.getQueueStats()` returns its int64 counters (`pending`, `processing`, `total`, ...) as
+  numbers. A counter above `Number.MAX_SAFE_INTEGER` would stay a decimal string, which is why the
+  type is `number | string`.
+- Cancelling a stream from the client, with `stream.cancel()` or the `signal` option, ends a
+  `for await` loop over `streamJobs()` (or `processJobs().receive()`) normally: nothing is thrown and
+  `onError` is not called. A `CANCELLED` status the client did not ask for is still thrown.
+
+```typescript
+const controller = new AbortController();
+const stream = grpcClient.queue.streamJobs(
+  { queueName: "emails", workerId },
+  { signal: controller.signal },
+);
+process.on("SIGINT", () => controller.abort());
+
+for await (const job of stream) {
+  // handle the job, then complete or fail it with job.leaseId
+}
+// The loop ends here after abort(); no CANCELLED error is thrown.
+```
+
 ### Forward Compatibility
 
 A `Job.status` enum value newer than the SDK's proto arrives as its number in a string (for example
@@ -170,7 +203,8 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
   oneofs: true,
 });
 
-const spooled = grpc.loadPackageDefinition(packageDefinition).spooled.v1 as any;
+const spooled = (grpc.loadPackageDefinition(packageDefinition) as any).spooled
+  .v1;
 
 // Create clients
 // For Spooled Cloud:
@@ -632,8 +666,8 @@ async function main() {
     oneofs: true,
   });
 
-  const spooled = grpc.loadPackageDefinition(packageDefinition).spooled
-    .v1 as any;
+  const spooled = (grpc.loadPackageDefinition(packageDefinition) as any).spooled
+    .v1;
 
   // Create client
   const client = new spooled.QueueService(
