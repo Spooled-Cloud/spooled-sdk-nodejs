@@ -574,7 +574,6 @@ fields several of these now read.
 
 ### Added
 
-- Agent knowledge base under `docs/ai/knowledge/` (+ KB sync Cursor rule).
 
 ## [1.0.37] - 2026-07-14
 
